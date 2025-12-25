@@ -26,7 +26,7 @@ def print_menu():
     print("\033[96m📋 Chọn chức năng:\033[0m")
     print()
     print("  \033[94m--- VTTech Data ---\033[0m")
-    print("  \033[93m1.\033[0m 🌐 Chạy Dashboard Server")
+    print("  \033[93m1.\033[0m 🌐 Chạy Dashboard Server \033[92m(Call Center Dashboard mới!)\033[0m")
     print("  \033[93m2.\033[0m 🔄 Chạy Cron Crawler (hôm qua)")
     print("  \033[93m3.\033[0m 🔄 Chạy Cron Crawler (hôm nay)")
     print("  \033[93m4.\033[0m 🔄 Chạy Cron Crawler (ngày tùy chọn)")

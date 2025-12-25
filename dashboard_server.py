@@ -755,29 +755,8 @@ except ImportError as e:
     print(f"⚠️ Call Center module not available: {e}")
 
 
-@app.route('/api/callcenter/stats')
-def api_callcenter_stats():
-    """Call Center statistics overview"""
-    if not CALLCENTER_ENABLED:
-        return jsonify({'error': 'Call Center module not available'}), 503
-    
-    try:
-        stats = callcenter_repo.get_records_stats()
-        status_stats = callcenter_repo.get_call_stats_by_status()
-        employees = callcenter_repo.get_employees()
-        
-        return jsonify({
-            'total_calls': stats.get('total', 0),
-            'by_direction': stats.get('by_direction', {}),
-            'by_status': status_stats,
-            'date_range': {
-                'min': stats.get('min_date'),
-                'max': stats.get('max_date')
-            },
-            'total_employees': len(employees)
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+# Note: /api/callcenter/stats endpoint is defined earlier in the file (line ~300)
+# Using the existing implementation that queries database directly
 
 
 @app.route('/api/callcenter/employees')
