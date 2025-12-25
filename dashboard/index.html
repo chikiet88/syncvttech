@@ -3,38 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VTTech TMTaza - Dashboard</title>
+    <title>VTTech Dashboard - Doanh thu</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         .card { transition: transform 0.2s, box-shadow 0.2s; }
         .card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
-        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .loading { animation: pulse 2s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .sidebar { transition: width 0.3s; }
+        .main-content { transition: margin-left 0.3s; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
-    <!-- Header -->
-    <nav class="gradient-bg text-white shadow-lg">
-        <div class="container mx-auto px-4 py-4">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center space-x-3">
-                    <i class="fas fa-chart-line text-2xl"></i>
-                    <h1 class="text-xl font-bold">VTTech TMTaza Dashboard</h1>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <span id="lastUpdate" class="text-sm opacity-80"></span>
-                    <button onclick="refreshData()" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition">
-                        <i class="fas fa-sync-alt mr-2"></i>Làm mới
-                    </button>
-                </div>
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar fixed left-0 top-0 h-full w-64 bg-gray-800 text-white z-50">
+        <div class="p-4 border-b border-gray-700">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <i class="fas fa-tooth"></i>
+                VTTech Dashboard
+            </h1>
+        </div>
+        
+        <nav class="p-4">
+            <ul class="space-y-1">
+                <li>
+                    <a href="analytics.html" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-chart-pie w-5"></i>
+                        <span>Tổng quan</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="customers.html" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-users w-5"></i>
+                        <span>Khách hàng</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="index.html" class="flex items-center gap-3 p-3 rounded bg-blue-600">
+                        <i class="fas fa-chart-line w-5"></i>
+                        <span>Doanh thu</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="callcenter.html" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-headset w-5"></i>
+                        <span>Call Center</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="sync-status.html" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-sync w-5"></i>
+                        <span>Sync Status</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="db.html" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-database w-5"></i>
+                        <span>Database</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content ml-64 p-6">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">
+                    <i class="fas fa-chart-line text-green-500 mr-2"></i>Doanh thu
+                </h1>
+                <p class="text-gray-600">Báo cáo doanh thu theo ngày và chi nhánh</p>
+            </div>
+            <div class="flex gap-3">
+                <span id="lastUpdate" class="text-sm text-gray-500"></span>
+                <button onclick="refreshData()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2">
+                    <i class="fas fa-sync"></i> Refresh
+                </button>
             </div>
         </div>
-    </nav>
 
-    <div class="container mx-auto px-4 py-6">
         <!-- Summary Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <!-- Total Revenue Card -->
@@ -196,7 +247,7 @@
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 
     <!-- Footer -->
     <footer class="bg-gray-800 text-gray-400 py-4 mt-8">

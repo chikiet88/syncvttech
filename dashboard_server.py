@@ -51,22 +51,44 @@ def get_available_dates_from_files():
     
     return sorted(dates, reverse=True)
 
-# ============== API ROUTES ==============
+# ============== PAGE ROUTES ==============
 
 @app.route('/')
 def index():
-    """Serve main dashboard with navigation"""
+    """Serve analytics dashboard as homepage"""
     return send_from_directory('dashboard', 'analytics.html')
+
+@app.route('/analytics')
+def analytics():
+    """Tổng quan - Analytics Dashboard"""
+    return send_from_directory('dashboard', 'analytics.html')
+
+@app.route('/customers')
+def customers():
+    """Khách hàng"""
+    return send_from_directory('dashboard', 'customers.html')
+
+@app.route('/callcenter')
+def callcenter():
+    """Call Center Dashboard"""
+    return send_from_directory('dashboard', 'callcenter.html')
+
+@app.route('/sync-status')
+def sync_status():
+    """Sync Status"""
+    return send_from_directory('dashboard', 'sync-status.html')
+
+@app.route('/revenue')
+def revenue():
+    """Doanh thu (trang cũ)"""
+    return send_from_directory('dashboard', 'index.html')
 
 @app.route('/main')
 def main_dashboard():
-    """Serve main dashboard"""
+    """Dashboard all-in-one (legacy)"""
     return send_from_directory('dashboard', 'main.html')
 
-@app.route('/old')
-def old_dashboard():
-    """Serve old dashboard"""
-    return send_from_directory('dashboard', 'index.html')
+# ============== API ROUTES ==============
 
 @app.route('/api/summary')
 def api_summary():
