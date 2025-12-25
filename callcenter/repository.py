@@ -22,7 +22,7 @@ class CallCenterRepository:
     def get_conn(self):
         return get_connection()
     
-    # ============== RECORD METHODS ==============
+    # ============== PBX RECORD METHODS ==============
     
     def record_exists(self, uuid: str) -> bool:
         """Kiểm tra record đã tồn tại chưa"""
@@ -36,8 +36,132 @@ class CallCenterRepository:
         finally:
             conn.close()
     
+    def upsert_pbx_record(self, data: Dict) -> bool:
+        """Insert hoặc update PBX call record với format mới"""
+        conn = self.get_conn()
+        try:
+            raw_data = json.dumps(data, ensure_ascii=False, default=str)
+            
+            # Convert epoch to datetime for legacy fields
+            start_epoch = int(data.get('start_epoch', 0) or 0)
+            end_epoch = int(data.get('end_epoch', 0) or 0)
+            answer_epoch = int(data.get('answer_epoch', 0) or 0)
+            
+            start_time = datetime.fromtimestamp(start_epoch).isoformat() if start_epoch else None
+            end_time = datetime.fromtimestamp(end_epoch).isoformat() if end_epoch else None
+            answer_time = datetime.fromtimestamp(answer_epoch).isoformat() if answer_epoch else None
+            
+            conn.execute("""
+                INSERT OR REPLACE INTO callcenter_records 
+                (uuid, direction, caller_id_number, outbound_caller_id_number, 
+                 destination_number, start_epoch, end_epoch, answer_epoch,
+                 duration, billsec, sip_hangup_disposition, call_status, record_path,
+                 caller_id, destination, start_time, answer_time, end_time, disposition,
+                 raw_data, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                data.get('uuid'),
+                data.get('direction'),
+                data.get('caller_id_number'),
+                data.get('outbound_caller_id_number'),
+                data.get('destination_number'),
+                start_epoch,
+                end_epoch,
+                answer_epoch,
+                int(data.get('duration', 0) or 0),
+                int(data.get('billsec', 0) or 0),
+                data.get('sip_hangup_disposition'),
+                data.get('call_status'),
+                data.get('record_path'),
+                # Legacy fields
+                data.get('caller_id_number'),  # caller_id = extension
+                data.get('destination_number'),  # destination
+                start_time,
+                answer_time,
+                end_time,
+                data.get('call_status'),  # disposition = call_status
+                raw_data,
+                datetime.now().isoformat()
+            ))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"❌ Error upserting PBX record {data.get('uuid')}: {e}")
+            return False
+        finally:
+            conn.close()
+    
+    def upsert_pbx_records_batch(self, records: List[Dict]) -> Dict[str, int]:
+        """Insert nhiều PBX records cùng lúc"""
+        conn = self.get_conn()
+        success_count = 0
+        failed_count = 0
+        
+        try:
+            for data in records:
+                try:
+                    raw_data = json.dumps(data, ensure_ascii=False, default=str)
+                    
+                    start_epoch = int(data.get('start_epoch', 0) or 0)
+                    end_epoch = int(data.get('end_epoch', 0) or 0)
+                    answer_epoch = int(data.get('answer_epoch', 0) or 0)
+                    
+                    start_time = datetime.fromtimestamp(start_epoch).isoformat() if start_epoch else None
+                    end_time = datetime.fromtimestamp(end_epoch).isoformat() if end_epoch else None
+                    answer_time = datetime.fromtimestamp(answer_epoch).isoformat() if answer_epoch else None
+                    
+                    conn.execute("""
+                        INSERT OR REPLACE INTO callcenter_records 
+                        (uuid, direction, caller_id_number, outbound_caller_id_number, 
+                         destination_number, start_epoch, end_epoch, answer_epoch,
+                         duration, billsec, sip_hangup_disposition, call_status, record_path,
+                         caller_id, destination, start_time, answer_time, end_time, disposition,
+                         raw_data, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        data.get('uuid'),
+                        data.get('direction'),
+                        data.get('caller_id_number'),
+                        data.get('outbound_caller_id_number'),
+                        data.get('destination_number'),
+                        start_epoch,
+                        end_epoch,
+                        answer_epoch,
+                        int(data.get('duration', 0) or 0),
+                        int(data.get('billsec', 0) or 0),
+                        data.get('sip_hangup_disposition'),
+                        data.get('call_status'),
+                        data.get('record_path'),
+                        data.get('caller_id_number'),
+                        data.get('destination_number'),
+                        start_time,
+                        answer_time,
+                        end_time,
+                        data.get('call_status'),
+                        raw_data,
+                        datetime.now().isoformat()
+                    ))
+                    success_count += 1
+                except Exception as e:
+                    print(f"❌ Error inserting PBX record {data.get('uuid')}: {e}")
+                    failed_count += 1
+            
+            conn.commit()
+        except Exception as e:
+            print(f"❌ Error in batch insert: {e}")
+        finally:
+            conn.close()
+        
+        return {'success': success_count, 'failed': failed_count}
+    
+    # Legacy method for backward compatibility
     def upsert_record(self, data: Dict) -> bool:
-        """Insert hoặc update call record"""
+        """Legacy: Insert hoặc update call record"""
+        # Check if it's new PBX format
+        if 'caller_id_number' in data or 'call_status' in data:
+            return self.upsert_pbx_record(data)
+        
+        # Old format
         conn = self.get_conn()
         try:
             raw_data = json.dumps(data, ensure_ascii=False, default=str)
@@ -73,7 +197,11 @@ class CallCenterRepository:
             conn.close()
     
     def upsert_records_batch(self, records: List[Dict]) -> Dict[str, int]:
-        """Insert nhiều records cùng lúc"""
+        """Batch insert - auto detect format"""
+        if records and ('caller_id_number' in records[0] or 'call_status' in records[0]):
+            return self.upsert_pbx_records_batch(records)
+        
+        # Legacy batch insert
         conn = self.get_conn()
         success_count = 0
         failed_count = 0
@@ -82,7 +210,6 @@ class CallCenterRepository:
             for data in records:
                 try:
                     raw_data = json.dumps(data, ensure_ascii=False, default=str)
-                    
                     conn.execute("""
                         INSERT OR REPLACE INTO callcenter_records 
                         (uuid, caller_id, caller_name, destination, direction,
@@ -107,12 +234,9 @@ class CallCenterRepository:
                     ))
                     success_count += 1
                 except Exception as e:
-                    print(f"❌ Error inserting record {data.get('uuid')}: {e}")
+                    print(f"❌ Error inserting record: {e}")
                     failed_count += 1
-            
             conn.commit()
-        except Exception as e:
-            print(f"❌ Error in batch insert: {e}")
         finally:
             conn.close()
         
@@ -210,6 +334,274 @@ class CallCenterRepository:
                 'by_disposition': by_disposition,
                 'min_date': row['min_date'],
                 'max_date': row['max_date']
+            }
+        finally:
+            conn.close()
+    
+    def get_records_by_extension(self, extension: str, date_from: date = None, date_to: date = None) -> List[Dict]:
+        """Lấy records theo extension"""
+        conn = self.get_conn()
+        try:
+            sql = "SELECT * FROM callcenter_records WHERE caller_id_number = ?"
+            params = [extension]
+            
+            if date_from:
+                start_epoch = int(datetime.combine(date_from, datetime.min.time()).timestamp())
+                sql += " AND start_epoch >= ?"
+                params.append(start_epoch)
+            
+            if date_to:
+                end_epoch = int(datetime.combine(date_to, datetime.max.time()).timestamp())
+                sql += " AND start_epoch <= ?"
+                params.append(end_epoch)
+            
+            sql += " ORDER BY start_epoch DESC"
+            
+            cursor = conn.execute(sql, params)
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+    
+    def get_call_stats_by_status(self) -> Dict:
+        """Thống kê cuộc gọi theo call_status"""
+        conn = self.get_conn()
+        try:
+            cursor = conn.execute("""
+                SELECT call_status, COUNT(*) as count,
+                       SUM(duration) as total_duration,
+                       SUM(billsec) as total_billsec
+                FROM callcenter_records 
+                GROUP BY call_status
+            """)
+            return {row['call_status']: {
+                'count': row['count'],
+                'total_duration': row['total_duration'] or 0,
+                'total_billsec': row['total_billsec'] or 0
+            } for row in cursor.fetchall()}
+        finally:
+            conn.close()
+    
+    # ============== EMPLOYEE METHODS ==============
+    
+    def upsert_employee(self, data: Dict) -> bool:
+        """Insert hoặc update employee"""
+        conn = self.get_conn()
+        try:
+            raw_data = json.dumps(data, ensure_ascii=False, default=str)
+            
+            conn.execute("""
+                INSERT OR REPLACE INTO callcenter_employees 
+                (vttech_id, name, code, email, phone, extension,
+                 group_id, group_name, department, position, is_active,
+                 raw_data, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                data.get('vttech_id') or data.get('Id'),
+                data.get('name') or data.get('Name'),
+                data.get('code') or data.get('Code'),
+                data.get('email') or data.get('Email'),
+                data.get('phone') or data.get('Phone'),
+                data.get('extension') or data.get('Extension'),
+                data.get('group_id') or data.get('GroupId'),
+                data.get('group_name') or data.get('GroupName'),
+                data.get('department') or data.get('Department'),
+                data.get('position') or data.get('Position'),
+                1 if data.get('is_active', True) else 0,
+                raw_data,
+                datetime.now().isoformat()
+            ))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"❌ Error upserting employee {data.get('name')}: {e}")
+            return False
+        finally:
+            conn.close()
+    
+    def upsert_employees_batch(self, employees: List[Dict]) -> Dict[str, int]:
+        """Batch insert employees"""
+        conn = self.get_conn()
+        success_count = 0
+        failed_count = 0
+        
+        try:
+            for data in employees:
+                try:
+                    raw_data = json.dumps(data, ensure_ascii=False, default=str)
+                    
+                    conn.execute("""
+                        INSERT OR REPLACE INTO callcenter_employees 
+                        (vttech_id, name, code, email, phone, extension,
+                         group_id, group_name, department, position, is_active,
+                         raw_data, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        data.get('vttech_id') or data.get('Id'),
+                        data.get('name') or data.get('Name'),
+                        data.get('code') or data.get('Code'),
+                        data.get('email') or data.get('Email'),
+                        data.get('phone') or data.get('Phone'),
+                        data.get('extension') or data.get('Extension'),
+                        data.get('group_id') or data.get('GroupId'),
+                        data.get('group_name') or data.get('GroupName'),
+                        data.get('department') or data.get('Department'),
+                        data.get('position') or data.get('Position'),
+                        1 if data.get('is_active', True) else 0,
+                        raw_data,
+                        datetime.now().isoformat()
+                    ))
+                    success_count += 1
+                except Exception as e:
+                    print(f"❌ Error inserting employee: {e}")
+                    failed_count += 1
+            conn.commit()
+        finally:
+            conn.close()
+        
+        return {'success': success_count, 'failed': failed_count}
+    
+    def get_employees(self, active_only: bool = True) -> List[Dict]:
+        """Lấy danh sách nhân viên"""
+        conn = self.get_conn()
+        try:
+            sql = "SELECT * FROM callcenter_employees"
+            if active_only:
+                sql += " WHERE is_active = 1"
+            sql += " ORDER BY name"
+            
+            cursor = conn.execute(sql)
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+    
+    def get_employee_by_extension(self, extension: str) -> Optional[Dict]:
+        """Lấy nhân viên theo extension"""
+        conn = self.get_conn()
+        try:
+            cursor = conn.execute(
+                "SELECT * FROM callcenter_employees WHERE extension = ?",
+                (extension,)
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+    
+    def get_employee_call_stats(self, extension: str = None, 
+                                date_from: date = None, date_to: date = None) -> List[Dict]:
+        """Lấy thống kê cuộc gọi theo nhân viên"""
+        conn = self.get_conn()
+        try:
+            sql = """
+                SELECT 
+                    e.id as employee_id,
+                    e.vttech_id,
+                    e.name as employee_name,
+                    e.extension,
+                    e.group_name,
+                    COUNT(r.id) as total_calls,
+                    SUM(CASE WHEN r.direction = 'outbound' THEN 1 ELSE 0 END) as outbound_calls,
+                    SUM(CASE WHEN r.direction = 'inbound' THEN 1 ELSE 0 END) as inbound_calls,
+                    SUM(CASE WHEN r.call_status = 'ANSWERED' THEN 1 ELSE 0 END) as answered_calls,
+                    SUM(CASE WHEN r.call_status = 'CANCELED' THEN 1 ELSE 0 END) as canceled_calls,
+                    SUM(CASE WHEN r.call_status = 'NO_ANSWER' THEN 1 ELSE 0 END) as no_answer_calls,
+                    SUM(CASE WHEN r.call_status = 'BUSY' THEN 1 ELSE 0 END) as busy_calls,
+                    COALESCE(SUM(r.duration), 0) as total_duration,
+                    COALESCE(SUM(r.billsec), 0) as total_billsec,
+                    COALESCE(AVG(r.billsec), 0) as avg_billsec
+                FROM callcenter_employees e
+                LEFT JOIN callcenter_records r ON e.extension = r.caller_id_number
+            """
+            
+            where_clauses = ["e.is_active = 1"]
+            params = []
+            
+            if extension:
+                where_clauses.append("e.extension = ?")
+                params.append(extension)
+            
+            if date_from:
+                start_epoch = int(datetime.combine(date_from, datetime.min.time()).timestamp())
+                where_clauses.append("(r.start_epoch >= ? OR r.id IS NULL)")
+                params.append(start_epoch)
+            
+            if date_to:
+                end_epoch = int(datetime.combine(date_to, datetime.max.time()).timestamp())
+                where_clauses.append("(r.start_epoch <= ? OR r.id IS NULL)")
+                params.append(end_epoch)
+            
+            if where_clauses:
+                sql += " WHERE " + " AND ".join(where_clauses)
+            
+            sql += " GROUP BY e.id, e.extension ORDER BY total_calls DESC"
+            
+            cursor = conn.execute(sql, params)
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+    
+    def get_employee_detail_calls(self, extension: str, 
+                                   date_from: date = None, date_to: date = None,
+                                   limit: int = 100) -> Dict:
+        """Lấy chi tiết cuộc gọi của một nhân viên"""
+        conn = self.get_conn()
+        try:
+            # Get employee info
+            cursor = conn.execute(
+                "SELECT * FROM callcenter_employees WHERE extension = ?",
+                (extension,)
+            )
+            employee = cursor.fetchone()
+            employee_data = dict(employee) if employee else None
+            
+            # Get calls
+            sql = "SELECT * FROM callcenter_records WHERE caller_id_number = ?"
+            params = [extension]
+            
+            if date_from:
+                start_epoch = int(datetime.combine(date_from, datetime.min.time()).timestamp())
+                sql += " AND start_epoch >= ?"
+                params.append(start_epoch)
+            
+            if date_to:
+                end_epoch = int(datetime.combine(date_to, datetime.max.time()).timestamp())
+                sql += " AND start_epoch <= ?"
+                params.append(end_epoch)
+            
+            sql += " ORDER BY start_epoch DESC LIMIT ?"
+            params.append(limit)
+            
+            cursor = conn.execute(sql, params)
+            calls = [dict(row) for row in cursor.fetchall()]
+            
+            # Get stats
+            stats_sql = """
+                SELECT 
+                    COUNT(*) as total_calls,
+                    SUM(CASE WHEN direction = 'outbound' THEN 1 ELSE 0 END) as outbound_calls,
+                    SUM(CASE WHEN direction = 'inbound' THEN 1 ELSE 0 END) as inbound_calls,
+                    SUM(CASE WHEN call_status = 'ANSWERED' THEN 1 ELSE 0 END) as answered_calls,
+                    SUM(CASE WHEN call_status = 'CANCELED' THEN 1 ELSE 0 END) as canceled_calls,
+                    SUM(duration) as total_duration,
+                    SUM(billsec) as total_billsec
+                FROM callcenter_records WHERE caller_id_number = ?
+            """
+            params_stats = [extension]
+            
+            if date_from:
+                stats_sql += " AND start_epoch >= ?"
+                params_stats.append(start_epoch)
+            if date_to:
+                stats_sql += " AND start_epoch <= ?"
+                params_stats.append(end_epoch)
+            
+            cursor = conn.execute(stats_sql, params_stats)
+            stats = dict(cursor.fetchone())
+            
+            return {
+                'employee': employee_data,
+                'calls': calls,
+                'stats': stats
             }
         finally:
             conn.close()

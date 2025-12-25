@@ -738,6 +738,149 @@ def api_sync_logs():
         return jsonify([])
 
 
+# ============== CALL CENTER API ROUTES ==============
+
+# Import callcenter repository
+try:
+    sys.path.insert(0, str(BASE_DIR / 'callcenter'))
+    from callcenter.repository import repo as callcenter_repo
+    from callcenter.init_callcenter_db import init_callcenter_database, migrate_database
+    CALLCENTER_ENABLED = True
+    # Init database on startup
+    init_callcenter_database()
+    migrate_database()
+except ImportError as e:
+    CALLCENTER_ENABLED = False
+    callcenter_repo = None
+    print(f"⚠️ Call Center module not available: {e}")
+
+
+@app.route('/api/callcenter/stats')
+def api_callcenter_stats():
+    """Call Center statistics overview"""
+    if not CALLCENTER_ENABLED:
+        return jsonify({'error': 'Call Center module not available'}), 503
+    
+    try:
+        stats = callcenter_repo.get_records_stats()
+        status_stats = callcenter_repo.get_call_stats_by_status()
+        employees = callcenter_repo.get_employees()
+        
+        return jsonify({
+            'total_calls': stats.get('total', 0),
+            'by_direction': stats.get('by_direction', {}),
+            'by_status': status_stats,
+            'date_range': {
+                'min': stats.get('min_date'),
+                'max': stats.get('max_date')
+            },
+            'total_employees': len(employees)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/callcenter/employees')
+def api_callcenter_employees():
+    """Get all call center employees with call stats"""
+    if not CALLCENTER_ENABLED:
+        return jsonify({'error': 'Call Center module not available', 'employees': []}), 503
+    
+    try:
+        # Get date filters
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        
+        from datetime import date as dt_date
+        df = dt_date.fromisoformat(date_from) if date_from else None
+        dt = dt_date.fromisoformat(date_to) if date_to else None
+        
+        employees = callcenter_repo.get_employee_call_stats(date_from=df, date_to=dt)
+        
+        return jsonify({
+            'employees': employees,
+            'total': len(employees)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'employees': []}), 200
+
+
+@app.route('/api/callcenter/employees/<extension>')
+def api_callcenter_employee_detail(extension):
+    """Get employee detail with call history"""
+    if not CALLCENTER_ENABLED:
+        return jsonify({'error': 'Call Center module not available'}), 503
+    
+    try:
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        limit = request.args.get('limit', 100, type=int)
+        
+        from datetime import date as dt_date
+        df = dt_date.fromisoformat(date_from) if date_from else None
+        dt = dt_date.fromisoformat(date_to) if date_to else None
+        
+        result = callcenter_repo.get_employee_detail_calls(
+            extension, date_from=df, date_to=dt, limit=limit
+        )
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/callcenter/calls')
+def api_callcenter_calls():
+    """Get call records with filters"""
+    if not CALLCENTER_ENABLED:
+        return jsonify({'error': 'Call Center module not available', 'calls': []}), 503
+    
+    try:
+        extension = request.args.get('extension')
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        limit = request.args.get('limit', 100, type=int)
+        
+        from datetime import date as dt_date
+        
+        if extension:
+            df = dt_date.fromisoformat(date_from) if date_from else None
+            dt = dt_date.fromisoformat(date_to) if date_to else None
+            calls = callcenter_repo.get_records_by_extension(extension, df, dt)[:limit]
+        else:
+            # Get recent calls
+            conn = callcenter_repo.get_conn()
+            cursor = conn.execute("""
+                SELECT * FROM callcenter_records 
+                ORDER BY start_epoch DESC 
+                LIMIT ?
+            """, (limit,))
+            calls = [dict(row) for row in cursor.fetchall()]
+            conn.close()
+        
+        return jsonify({
+            'calls': calls,
+            'total': len(calls)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'calls': []}), 200
+
+
+@app.route('/api/callcenter/calls/<uuid>')
+def api_callcenter_call_detail(uuid):
+    """Get single call detail"""
+    if not CALLCENTER_ENABLED:
+        return jsonify({'error': 'Call Center module not available'}), 503
+    
+    try:
+        call = callcenter_repo.get_record_by_uuid(uuid)
+        if not call:
+            return jsonify({'error': 'Call not found'}), 404
+        return jsonify(call)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ============== MAIN ==============
 
 if __name__ == '__main__':
@@ -750,6 +893,7 @@ if __name__ == '__main__':
     print("=" * 50)
     print(f"📁 Data directory: {DATA_DAILY_DIR}")
     print(f"💾 Database mode: {'ENABLED' if USE_DATABASE else 'DISABLED'}")
+    print(f"📞 Call Center: {'ENABLED' if CALLCENTER_ENABLED else 'DISABLED'}")
     print(f"🌐 Dashboard: http://localhost:5000")
     print(f"🗄️  DB Viewer: http://localhost:5000/db")
     print("=" * 50)
