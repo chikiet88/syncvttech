@@ -1,0 +1,113 @@
+{
+  "generated_at": "2025-12-25T10:11:48.833464",
+  "user": "ittest123",
+  "working_endpoints": [
+    {
+      "type": "handler",
+      "url": "/Appointment/AppointmentByDay/?handler=LoadCombo",
+      "data_type": "dict",
+      "count": 12
+    },
+    {
+      "type": "api",
+      "url": "/api/Home/SessionData",
+      "data_type": "dict",
+      "count": 11
+    },
+    {
+      "type": "api",
+      "url": "/api/Author/Login",
+      "data_type": "dict",
+      "count": 18
+    }
+  ],
+  "restricted_endpoints": [
+    {
+      "type": "handler",
+      "url": "/Appointment/AppointmentByDay/?handler=Loadata",
+      "reason": "HTML redirect"
+    },
+    {
+      "type": "handler",
+      "url": "/Appointment/AppointmentByDay/?handler=Initialize",
+      "reason": "HTML redirect"
+    },
+    {
+      "type": "handler",
+      "url": "/Service/ServiceList/?handler=LoadData",
+      "reason": "HTML redirect"
+    },
+    {
+      "type": "handler",
+      "url": "/Service/ServiceList/?handler=LoadList",
+      "reason": "HTML redirect"
+    }
+  ],
+  "not_found_endpoints": [
+    {
+      "type": "page",
+      "url": "/Revenue/RevenueByBranch/",
+      "reason": "HTTP 404"
+    },
+    {
+      "type": "page",
+      "url": "/Revenue/RevenueByDay/",
+      "reason": "HTTP 404"
+    },
+    {
+      "type": "page",
+      "url": "/Revenue/RevenueByService/",
+      "reason": "HTTP 404"
+    },
+    {
+      "type": "page",
+      "url": "/Revenue/RevenueByEmployee/",
+      "reason": "HTTP 404"
+    },
+    {
+      "type": "page",
+      "url": "/Master/Branch/",
+      "reason": "HTTP 404"
+    },
+    {
+      "type": "page",
+      "url": "/Master/Service/",
+      "reason": "HTTP 404"
+    },
+    {
+      "type": "page",
+      "url": "/Master/ServiceGroup/",
+      "reason": "HTTP 404"
+    },
+    {
+      "type": "page",
+      "url": "/Master/Employee/",
+      "reason": "HTTP 404"
+    },
+    {
+      "type": "page",
+      "url": "/Customer/CustomerList/",
+      "reason": "HTTP 404"
+    },
+    {
+      "type": "page",
+      "url": "/Customer/Index/",
+      "reason": "HTTP 404"
+    },
+    {
+      "type": "page",
+      "url": "/Appointment/AppointmentList/",
+      "reason": "HTTP 404"
+    },
+    {
+      "type": "page",
+      "url": "/Appointment/Index/",
+      "reason": "HTTP 404"
+    },
+    {
+      "type": "page",
+      "url": "/Treatment/TreatmentList/",
+      "reason": "HTTP 404"
+    }
+  ]
+}

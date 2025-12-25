@@ -1,0 +1,1342 @@
+{
+  "scan_date": "2025-12-24T16:01:18.134673",
+  "base_url": "https://tmtaza.vttechsolution.com",
+  "known_endpoints": {
+    "api": [
+      {
+        "path": "/api/Author/Login",
+        "method": "POST",
+        "auth": false,
+        "status": "✅ WORKING",
+        "body": {
+          "username": "string",
+          "password": "string",
+          "passwordcrypt": "",
+          "from": "",
+          "sso": "",
+          "ssotoken": ""
+        },
+        "returns": "JWT token, user info (ID, UserName, FullName)"
+      },
+      {
+        "path": "/api/Home/SessionData",
+        "method": "POST",
+        "auth": true,
+        "status": "✅ WORKING",
+        "body": {},
+        "returns": "Master data: branches, services, employees, users, cities, wards, etc."
+      }
+    ],
+    "handlers": [
+      {
+        "page": "/Customer/ListCustomer/",
+        "handler": "Initialize",
+        "method": "POST",
+        "auth": true,
+        "status": "✅ WORKING",
+        "body": {},
+        "returns": "Branch list, Membership levels"
+      },
+      {
+        "page": "/Customer/ListCustomer/",
+        "handler": "LoadDataTotal",
+        "method": "POST",
+        "auth": true,
+        "status": "✅ WORKING",
+        "body": {
+          "dateFrom": "datetime",
+          "dateTo": "datetime",
+          "branchID": "int"
+        },
+        "returns": "Revenue summary per branch (Paid, PaidNew, PaidNumCust, Raise, Profile, App, AppChecked)"
+      },
+      {
+        "page": "/Customer/ListCustomer/",
+        "handler": "LoadData",
+        "method": "POST",
+        "auth": true,
+        "status": "✅ WORKING",
+        "body": {
+          "dateFrom": "datetime",
+          "dateTo": "datetime",
+          "branchID": "int",
+          "start": "int",
+          "length": "int"
+        },
+        "returns": "Customer list with pagination"
+      },
+      {
+        "page": "/Master/Master_Top/",
+        "handler": "NotiItemCount",
+        "method": "POST",
+        "auth": true,
+        "status": "✅ WORKING",
+        "body": {},
+        "returns": "Notification counts"
+      }
+    ]
+  },
+  "discovered_api_endpoints": [
+    {
+      "path": "/api/Home/SessionData",
+      "status_code": 200,
+      "size": 146700,
+      "content_type": "text/plain; charset=utf-8",
+      "working": true
+    }
+  ],
+  "discovered_handlers": [
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Initialize",
+      "status_code": 200,
+      "size": 1244,
+      "content_type": "text/plain; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Init",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "LoadData",
+      "status_code": 200,
+      "size": 2,
+      "content_type": "text/plain; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "LoadList",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "LoadAll",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "LoadDataTotal",
+      "status_code": 200,
+      "size": 188,
+      "content_type": "text/plain; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "LoadDataDetail",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "LoadDataGrid",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Create",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Save",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Update",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Delete",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Remove",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "GetData",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "GetDetail",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "GetList",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "GetById",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "GetAll",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Search",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Filter",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Query",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "AutoComplete",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "CheckIn",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "CheckOut",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Approve",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Reject",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Cancel",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Confirm",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Export",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "ExportExcel",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "ExportPdf",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Print",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "NotiItemCount",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "GetNotifications",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "MarkRead",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Refresh",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Reload",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Submit",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Customer/ListCustomer/",
+      "handler": "Process",
+      "status_code": 200,
+      "size": 157595,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Initialize",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Init",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "LoadData",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "LoadList",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "LoadAll",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "LoadDataTotal",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "LoadDataDetail",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "LoadDataGrid",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Create",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Save",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Update",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Delete",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Remove",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "GetData",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "GetDetail",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "GetList",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "GetById",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "GetAll",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Search",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Filter",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Query",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "AutoComplete",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "CheckIn",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "CheckOut",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Approve",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Reject",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Cancel",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Confirm",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Export",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "ExportExcel",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "ExportPdf",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Print",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "NotiItemCount",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "GetNotifications",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "MarkRead",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Refresh",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Reload",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Submit",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Appointment/AppointmentInDay/",
+      "handler": "Process",
+      "status_code": 200,
+      "size": 81030,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Initialize",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Init",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "LoadData",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "LoadList",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "LoadAll",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "LoadDataTotal",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "LoadDataDetail",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "LoadDataGrid",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Create",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Save",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Update",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Delete",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Remove",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "GetData",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "GetDetail",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "GetList",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "GetById",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "GetAll",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Search",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Filter",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Query",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "AutoComplete",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "CheckIn",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "CheckOut",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Approve",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Reject",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Cancel",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Confirm",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Export",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "ExportExcel",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "ExportPdf",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Print",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "NotiItemCount",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "GetNotifications",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "MarkRead",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Refresh",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Reload",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Submit",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Service/ServiceList/",
+      "handler": "Process",
+      "status_code": 200,
+      "size": 142390,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Initialize",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Init",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "LoadData",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "LoadList",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "LoadAll",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "LoadDataTotal",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "LoadDataDetail",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "LoadDataGrid",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Create",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Save",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Update",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Delete",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Remove",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "GetData",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "GetDetail",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "GetList",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "GetById",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "GetAll",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Search",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Filter",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Query",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "AutoComplete",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "CheckIn",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "CheckOut",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Approve",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Reject",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Cancel",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Confirm",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Export",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "ExportExcel",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "ExportPdf",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Print",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "NotiItemCount",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "GetNotifications",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "MarkRead",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Refresh",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Reload",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Submit",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    },
+    {
+      "page": "/Employee/EmployeeList/",
+      "handler": "Process",
+      "status_code": 200,
+      "size": 128844,
+      "content_type": "text/html; charset=utf-8",
+      "working": true
+    }
+  ],
+  "summary": {
+    "total_api_endpoints": 1,
+    "total_handlers": 156
+  }
+}

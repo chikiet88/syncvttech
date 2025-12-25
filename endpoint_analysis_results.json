@@ -1,0 +1,62 @@
+{
+  "/Customer/ListCustomer/": {
+    "Initialize": {
+      "type": "dict",
+      "keys": [
+        "Branch",
+        "Membership"
+      ],
+      "sample": {
+        "Branch": "[{'ID': 1, 'Name': 'Taza Skin Clinic Thủ Đức', 'ShortName': 'TAZA Thủ Đức', 'SMSBrandName': 'TAZA', ",
+        "Membership": "[{'ID': 17, 'ColorCode': '#ff00ff', 'Name': 'Normal', 'AmountFrom': 1, 'AmountTo': 49999999, 'PointT"
+      }
+    },
+    "LoadDataTotal": {
+      "type": "list",
+      "count": 1,
+      "sample": {
+        "Paid": 0.0,
+        "PaidNew": 0.0,
+        "PaidNumCust": 0,
+        "PaidNumCust_New": 0,
+        "Raise": 0.0,
+        "RaiseNew": 0.0,
+        "RaiseNumCust": 0,
+        "RaiseNumCust_New": 0,
+        "Profile": 0,
+        "AppChecked": 0,
+        "App": 0
+      }
+    }
+  },
+  "/Appointment/AppointmentInDay/": {
+    "Initialize": {
+      "type": "str",
+      "preview": "<!DOCTYPE html>\r\n<html lang=\"en\" class=\"scrollbar-gutter-y\">\r\n<head runat=\"server\">\r\n    <title>VTTech Solution</title>\r\n    <meta charset=\"utf-8\" />\r\n    <meta name=\"viewport\" content=\"width=device-w"
+    },
+    "LoadData": {
+      "type": "str",
+      "preview": "<!DOCTYPE html>\r\n<html lang=\"en\" class=\"scrollbar-gutter-y\">\r\n<head runat=\"server\">\r\n    <title>VTTech Solution</title>\r\n    <meta charset=\"utf-8\" />\r\n    <meta name=\"viewport\" content=\"width=device-w"
+    }
+  },
+  "/Service/ServiceList/": {
+    "Initialize": {
+      "type": "str",
+      "preview": "<!DOCTYPE html>\r\n<html lang=\"en\" class=\"scrollbar-gutter-y\">\r\n<head runat=\"server\">\r\n    <title>VTTech Solution</title>\r\n    <meta charset=\"utf-8\" />\r\n    <meta name=\"viewport\" content=\"width=device-w"
+    },
+    "LoadData": {
+      "type": "str",
+      "preview": "<!DOCTYPE html>\r\n<html lang=\"en\" class=\"scrollbar-gutter-y\">\r\n<head runat=\"server\">\r\n    <title>VTTech Solution</title>\r\n    <meta charset=\"utf-8\" />\r\n    <meta name=\"viewport\" content=\"width=device-w"
+    }
+  },
+  "/Employee/EmployeeList/": {
+    "Initialize": {
+      "type": "str",
+      "preview": "<!DOCTYPE html>\r\n<html lang=\"en\" class=\"scrollbar-gutter-y\">\r\n<head runat=\"server\">\r\n    <title>VTTech Solution</title>\r\n    <meta charset=\"utf-8\" />\r\n    <meta name=\"viewport\" content=\"width=device-w"
+    },
+    "LoadData": {
+      "type": "str",
+      "preview": "<!DOCTYPE html>\r\n<html lang=\"en\" class=\"scrollbar-gutter-y\">\r\n<head runat=\"server\">\r\n    <title>VTTech Solution</title>\r\n    <meta charset=\"utf-8\" />\r\n    <meta name=\"viewport\" content=\"width=device-w"
+    }
+  }
+}

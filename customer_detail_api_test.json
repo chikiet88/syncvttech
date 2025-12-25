@@ -1,0 +1,73 @@
+[
+  {
+    "desc": "Tab Dịch vụ - LoadInitialize",
+    "status": "NO_XSRF"
+  },
+  {
+    "desc": "Tab Dịch vụ - LoadataTab",
+    "status": "NO_XSRF"
+  },
+  {
+    "desc": "Tab Dịch vụ - LoadServiceTab",
+    "status": "NO_XSRF"
+  },
+  {
+    "desc": "Tab Dịch vụ - Treatment Plant",
+    "status": "NO_XSRF"
+  },
+  {
+    "desc": "Tab Điều trị - LoadComboMain",
+    "status": "NO_XSRF"
+  },
+  {
+    "desc": "Tab Điều trị - LoadataTreatment",
+    "status": "NO_XSRF"
+  },
+  {
+    "desc": "Thanh toán",
+    "status": "NO_XSRF"
+  },
+  {
+    "desc": "Hình ảnh - LoadImageByFolder",
+    "status": "NO_XSRF"
+  },
+  {
+    "desc": "Hình ảnh - LoadTemplateForm",
+    "status": "NO_XSRF"
+  },
+  {
+    "desc": "Trả góp",
+    "status": "NO_XSRF"
+  },
+  {
+    "desc": "Lịch sử",
+    "status": "NO_XSRF"
+  },
+  {
+    "desc": "Lịch hẹn - LoadCombo",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Type",
+      "Employee",
+      "Branch",
+      "Status",
+      "Doctor",
+      "Membership",
+      "SchedulerType",
+      "CustomerGroup",
+      "ReasonCancel",
+      "Tele",
+      "Tag",
+      "ServiceAll"
+    ]
+  },
+  {
+    "desc": "Lịch hẹn - Schedule",
+    "status": "NO_XSRF"
+  },
+  {
+    "desc": "Complaint",
+    "status": "NO_XSRF"
+  }
+]

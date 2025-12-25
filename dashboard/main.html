@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTTech & Call Center Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .sidebar { transition: width 0.3s; }
+        .card { transition: transform 0.2s, box-shadow 0.2s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+        .nav-item { transition: all 0.2s; }
+        .nav-item:hover { background: rgba(255,255,255,0.1); }
+        .nav-item.active { background: rgba(255,255,255,0.2); border-left: 3px solid #fff; }
+        .gradient-bg { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); }
+        .loading { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .badge { font-size: 0.65rem; padding: 2px 6px; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex">
+    <!-- Sidebar -->
+    <aside class="sidebar gradient-bg text-white w-64 min-h-screen fixed left-0 top-0 z-50">
+        <!-- Logo -->
+        <div class="p-4 border-b border-white/20">
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-chart-pie text-2xl"></i>
+                <div>
+                    <h1 class="font-bold text-lg">Sync Dashboard</h1>
+                    <p class="text-xs text-white/70">VTTech & Call Center</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Navigation -->
+        <nav class="py-4">
+            <p class="px-4 text-xs text-white/50 uppercase tracking-wider mb-2">Tổng quan</p>
+            <a href="#" onclick="showTab('overview')" class="nav-item active flex items-center px-4 py-3" data-tab="overview">
+                <i class="fas fa-home w-6"></i>
+                <span>Dashboard</span>
+            </a>
+            
+            <p class="px-4 text-xs text-white/50 uppercase tracking-wider mt-6 mb-2">VTTech Data</p>
+            <a href="#" onclick="showTab('vttech-branches')" class="nav-item flex items-center px-4 py-3" data-tab="vttech-branches">
+                <i class="fas fa-store w-6"></i>
+                <span>Chi nhánh</span>
+                <span id="badge-branches" class="badge bg-blue-500 rounded-full ml-auto">--</span>
+            </a>
+            <a href="#" onclick="showTab('vttech-services')" class="nav-item flex items-center px-4 py-3" data-tab="vttech-services">
+                <i class="fas fa-spa w-6"></i>
+                <span>Dịch vụ</span>
+                <span id="badge-services" class="badge bg-purple-500 rounded-full ml-auto">--</span>
+            </a>
+            <a href="#" onclick="showTab('vttech-employees')" class="nav-item flex items-center px-4 py-3" data-tab="vttech-employees">
+                <i class="fas fa-users w-6"></i>
+                <span>Nhân viên</span>
+                <span id="badge-employees" class="badge bg-orange-500 rounded-full ml-auto">--</span>
+            </a>
+            <a href="#" onclick="showTab('vttech-revenue')" class="nav-item flex items-center px-4 py-3" data-tab="vttech-revenue">
+                <i class="fas fa-dollar-sign w-6"></i>
+                <span>Doanh thu</span>
+            </a>
+            
+            <p class="px-4 text-xs text-white/50 uppercase tracking-wider mt-6 mb-2">Call Center</p>
+            <a href="#" onclick="showTab('callcenter-overview')" class="nav-item flex items-center px-4 py-3" data-tab="callcenter-overview">
+                <i class="fas fa-phone-alt w-6"></i>
+                <span>Tổng quan</span>
+                <span id="badge-calls" class="badge bg-green-500 rounded-full ml-auto">--</span>
+            </a>
+            <a href="#" onclick="showTab('callcenter-records')" class="nav-item flex items-center px-4 py-3" data-tab="callcenter-records">
+                <i class="fas fa-list w-6"></i>
+                <span>Danh sách cuộc gọi</span>
+            </a>
+            <a href="#" onclick="showTab('callcenter-stats')" class="nav-item flex items-center px-4 py-3" data-tab="callcenter-stats">
+                <i class="fas fa-chart-bar w-6"></i>
+                <span>Thống kê</span>
+            </a>
+            
+            <p class="px-4 text-xs text-white/50 uppercase tracking-wider mt-6 mb-2">Công cụ</p>
+            <a href="#" onclick="showTab('sync-logs')" class="nav-item flex items-center px-4 py-3" data-tab="sync-logs">
+                <i class="fas fa-sync w-6"></i>
+                <span>Sync Logs</span>
+            </a>
+            <a href="/db" class="nav-item flex items-center px-4 py-3">
+                <i class="fas fa-database w-6"></i>
+                <span>DB Viewer</span>
+            </a>
+        </nav>
+        
+        <!-- Footer -->
+        <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-white/20 text-xs text-white/50">
+            <div class="flex items-center justify-between">
+                <span>Last sync:</span>
+                <span id="lastSyncTime">--</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="ml-64 flex-1 p-6">
+        <!-- Header -->
+        <header class="flex items-center justify-between mb-6">
+            <div>
+                <h2 id="pageTitle" class="text-2xl font-bold text-gray-800">Dashboard</h2>
+                <p id="pageSubtitle" class="text-gray-500 text-sm">Tổng quan dữ liệu đồng bộ</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span id="currentTime" class="text-sm text-gray-500"></span>
+                <button onclick="refreshAllData()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">
+                    <i class="fas fa-sync-alt mr-2"></i>Làm mới
+                </button>
+            </div>
+        </header>
+
+        <!-- Tab: Overview -->
+        <div id="tab-overview" class="tab-content active">
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <div class="card bg-white rounded-xl p-6 shadow-lg border-l-4 border-blue-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">VTTech Records</p>
+                            <p id="vttech-total" class="text-3xl font-bold text-gray-800">--</p>
+                        </div>
+                        <div class="bg-blue-100 p-3 rounded-full">
+                            <i class="fas fa-database text-blue-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card bg-white rounded-xl p-6 shadow-lg border-l-4 border-green-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Call Center Records</p>
+                            <p id="callcenter-total" class="text-3xl font-bold text-gray-800">--</p>
+                        </div>
+                        <div class="bg-green-100 p-3 rounded-full">
+                            <i class="fas fa-phone text-green-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card bg-white rounded-xl p-6 shadow-lg border-l-4 border-purple-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Doanh thu hôm nay</p>
+                            <p id="today-revenue" class="text-3xl font-bold text-gray-800">--</p>
+                        </div>
+                        <div class="bg-purple-100 p-3 rounded-full">
+                            <i class="fas fa-dollar-sign text-purple-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card bg-white rounded-xl p-6 shadow-lg border-l-4 border-orange-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Cuộc gọi hôm nay</p>
+                            <p id="today-calls" class="text-3xl font-bold text-gray-800">--</p>
+                        </div>
+                        <div class="bg-orange-100 p-3 rounded-full">
+                            <i class="fas fa-headset text-orange-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sync Status -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="card bg-white rounded-xl p-6 shadow-lg">
+                    <h3 class="font-semibold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-server text-blue-500 mr-2"></i>
+                        VTTech Sync Status
+                    </h3>
+                    <div id="vttech-sync-status" class="space-y-3">
+                        <div class="loading text-gray-400">Đang tải...</div>
+                    </div>
+                </div>
+                <div class="card bg-white rounded-xl p-6 shadow-lg">
+                    <h3 class="font-semibold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-phone-volume text-green-500 mr-2"></i>
+                        Call Center Sync Status
+                    </h3>
+                    <div id="callcenter-sync-status" class="space-y-3">
+                        <div class="loading text-gray-400">Đang tải...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="card bg-white rounded-xl p-6 shadow-lg">
+                    <h3 class="font-semibold text-gray-800 mb-4">Doanh thu 7 ngày gần nhất</h3>
+                    <canvas id="revenueChart" height="200"></canvas>
+                </div>
+                <div class="card bg-white rounded-xl p-6 shadow-lg">
+                    <h3 class="font-semibold text-gray-800 mb-4">Cuộc gọi theo ngày</h3>
+                    <canvas id="callsChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: VTTech Branches -->
+        <div id="tab-vttech-branches" class="tab-content">
+            <div class="card bg-white rounded-xl p-6 shadow-lg">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-semibold text-gray-800">Danh sách Chi nhánh</h3>
+                    <input type="text" id="search-branches" placeholder="Tìm kiếm..." 
+                           class="border rounded-lg px-3 py-2 text-sm" onkeyup="filterTable('branches-table', this.value)">
+                </div>
+                <div class="overflow-x-auto">
+                    <table id="branches-table" class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left">ID</th>
+                                <th class="px-4 py-3 text-left">Tên chi nhánh</th>
+                                <th class="px-4 py-3 text-left">Địa chỉ</th>
+                                <th class="px-4 py-3 text-left">Điện thoại</th>
+                                <th class="px-4 py-3 text-left">Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody id="branches-tbody" class="divide-y">
+                            <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">Đang tải...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: VTTech Services -->
+        <div id="tab-vttech-services" class="tab-content">
+            <div class="card bg-white rounded-xl p-6 shadow-lg">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-semibold text-gray-800">Danh sách Dịch vụ</h3>
+                    <input type="text" id="search-services" placeholder="Tìm kiếm..." 
+                           class="border rounded-lg px-3 py-2 text-sm" onkeyup="filterTable('services-table', this.value)">
+                </div>
+                <div class="overflow-x-auto">
+                    <table id="services-table" class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left">ID</th>
+                                <th class="px-4 py-3 text-left">Tên dịch vụ</th>
+                                <th class="px-4 py-3 text-left">Nhóm</th>
+                                <th class="px-4 py-3 text-right">Giá</th>
+                                <th class="px-4 py-3 text-left">Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody id="services-tbody" class="divide-y">
+                            <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">Đang tải...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: VTTech Employees -->
+        <div id="tab-vttech-employees" class="tab-content">
+            <div class="card bg-white rounded-xl p-6 shadow-lg">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-semibold text-gray-800">Danh sách Nhân viên</h3>
+                    <input type="text" id="search-employees" placeholder="Tìm kiếm..." 
+                           class="border rounded-lg px-3 py-2 text-sm" onkeyup="filterTable('employees-table', this.value)">
+                </div>
+                <div class="overflow-x-auto">
+                    <table id="employees-table" class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left">ID</th>
+                                <th class="px-4 py-3 text-left">Họ tên</th>
+                                <th class="px-4 py-3 text-left">Chi nhánh</th>
+                                <th class="px-4 py-3 text-left">Điện thoại</th>
+                                <th class="px-4 py-3 text-left">Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody id="employees-tbody" class="divide-y">
+                            <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">Đang tải...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: VTTech Revenue -->
+        <div id="tab-vttech-revenue" class="tab-content">
+            <div class="card bg-white rounded-xl p-6 shadow-lg mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-semibold text-gray-800">Doanh thu theo ngày</h3>
+                    <input type="date" id="revenue-date" class="border rounded-lg px-3 py-2 text-sm" onchange="loadRevenueByDate()">
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Chi nhánh</th>
+                                <th class="px-4 py-3 text-right">Doanh thu</th>
+                                <th class="px-4 py-3 text-right">KH mới</th>
+                                <th class="px-4 py-3 text-right">Tăng</th>
+                                <th class="px-4 py-3 text-right">Số KH</th>
+                                <th class="px-4 py-3 text-right">Lịch hẹn</th>
+                            </tr>
+                        </thead>
+                        <tbody id="revenue-tbody" class="divide-y">
+                            <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">Chọn ngày để xem</td></tr>
+                        </tbody>
+                        <tfoot id="revenue-tfoot" class="bg-gray-100 font-semibold"></tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Call Center Overview -->
+        <div id="tab-callcenter-overview" class="tab-content">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div class="card bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-green-100 text-sm">Tổng cuộc gọi</p>
+                            <p id="cc-total-calls" class="text-3xl font-bold mt-1">--</p>
+                        </div>
+                        <i class="fas fa-phone text-4xl opacity-50"></i>
+                    </div>
+                </div>
+                <div class="card bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-blue-100 text-sm">Gọi đi</p>
+                            <p id="cc-outbound" class="text-3xl font-bold mt-1">--</p>
+                        </div>
+                        <i class="fas fa-phone-volume text-4xl opacity-50"></i>
+                    </div>
+                </div>
+                <div class="card bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-purple-100 text-sm">Nội bộ</p>
+                            <p id="cc-local" class="text-3xl font-bold mt-1">--</p>
+                        </div>
+                        <i class="fas fa-building text-4xl opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card bg-white rounded-xl p-6 shadow-lg">
+                <h3 class="font-semibold text-gray-800 mb-4">Thống kê theo hướng gọi</h3>
+                <canvas id="directionChart" height="150"></canvas>
+            </div>
+        </div>
+
+        <!-- Tab: Call Center Records -->
+        <div id="tab-callcenter-records" class="tab-content">
+            <div class="card bg-white rounded-xl p-6 shadow-lg">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-semibold text-gray-800">Danh sách cuộc gọi gần đây</h3>
+                    <div class="flex space-x-2">
+                        <input type="text" id="search-calls" placeholder="Tìm SĐT..." 
+                               class="border rounded-lg px-3 py-2 text-sm w-40">
+                        <input type="date" id="filter-calls-date" class="border rounded-lg px-3 py-2 text-sm">
+                        <button onclick="loadCallRecords()" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Thời gian</th>
+                                <th class="px-4 py-3 text-left">Số gọi</th>
+                                <th class="px-4 py-3 text-left">Số nhận</th>
+                                <th class="px-4 py-3 text-left">Hướng</th>
+                                <th class="px-4 py-3 text-right">Thời lượng</th>
+                                <th class="px-4 py-3 text-left">Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody id="calls-tbody" class="divide-y">
+                            <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">Đang tải...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="calls-pagination" class="flex items-center justify-between mt-4">
+                    <span class="text-sm text-gray-500">Hiển thị <span id="calls-showing">0</span> cuộc gọi</span>
+                    <div class="flex space-x-2">
+                        <button onclick="loadCallRecords(currentCallPage - 1)" class="px-3 py-1 border rounded text-sm" id="calls-prev">Trước</button>
+                        <button onclick="loadCallRecords(currentCallPage + 1)" class="px-3 py-1 border rounded text-sm" id="calls-next">Sau</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Call Center Stats -->
+        <div id="tab-callcenter-stats" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="card bg-white rounded-xl p-6 shadow-lg">
+                    <h3 class="font-semibold text-gray-800 mb-4">Cuộc gọi theo ngày (30 ngày)</h3>
+                    <canvas id="callsDailyChart" height="200"></canvas>
+                </div>
+                <div class="card bg-white rounded-xl p-6 shadow-lg">
+                    <h3 class="font-semibold text-gray-800 mb-4">Thời lượng trung bình</h3>
+                    <canvas id="durationChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Sync Logs -->
+        <div id="tab-sync-logs" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="card bg-white rounded-xl p-6 shadow-lg">
+                    <h3 class="font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-server text-blue-500 mr-2"></i>VTTech Crawl Logs
+                    </h3>
+                    <div id="vttech-logs" class="space-y-2 max-h-96 overflow-y-auto">
+                        <div class="text-gray-400">Đang tải...</div>
+                    </div>
+                </div>
+                <div class="card bg-white rounded-xl p-6 shadow-lg">
+                    <h3 class="font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-phone text-green-500 mr-2"></i>Call Center Sync Logs
+                    </h3>
+                    <div id="callcenter-logs" class="space-y-2 max-h-96 overflow-y-auto">
+                        <div class="text-gray-400">Đang tải...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_BASE = '';
+        let currentCallPage = 1;
+        let revenueChart, callsChart, directionChart, callsDailyChart, durationChart;
+
+        // Format number
+        function formatNumber(num) {
+            if (num === null || num === undefined) return '--';
+            return new Intl.NumberFormat('vi-VN').format(num);
+        }
+
+        // Format currency
+        function formatCurrency(num) {
+            if (num === null || num === undefined) return '--';
+            return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
+        }
+
+        // Format duration (seconds to mm:ss)
+        function formatDuration(seconds) {
+            if (!seconds) return '0:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Filter table
+        function filterTable(tableId, query) {
+            const table = document.getElementById(tableId);
+            const rows = table.querySelectorAll('tbody tr');
+            query = query.toLowerCase();
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(query) ? '' : 'none';
+            });
+        }
+
+        // Show tab
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            // Show selected tab
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            
+            // Update nav
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            document.querySelector(`[data-tab="${tabName}"]`)?.classList.add('active');
+            
+            // Update title
+            const titles = {
+                'overview': ['Dashboard', 'Tổng quan dữ liệu đồng bộ'],
+                'vttech-branches': ['Chi nhánh', 'Danh sách chi nhánh VTTech'],
+                'vttech-services': ['Dịch vụ', 'Danh sách dịch vụ spa'],
+                'vttech-employees': ['Nhân viên', 'Danh sách nhân viên'],
+                'vttech-revenue': ['Doanh thu', 'Doanh thu theo ngày'],
+                'callcenter-overview': ['Call Center', 'Tổng quan cuộc gọi'],
+                'callcenter-records': ['Cuộc gọi', 'Danh sách cuộc gọi'],
+                'callcenter-stats': ['Thống kê', 'Thống kê cuộc gọi'],
+                'sync-logs': ['Sync Logs', 'Lịch sử đồng bộ dữ liệu']
+            };
+            
+            const [title, subtitle] = titles[tabName] || ['Dashboard', ''];
+            document.getElementById('pageTitle').textContent = title;
+            document.getElementById('pageSubtitle').textContent = subtitle;
+            
+            // Load data for specific tabs
+            if (tabName === 'vttech-branches') loadBranches();
+            if (tabName === 'vttech-services') loadServices();
+            if (tabName === 'vttech-employees') loadEmployees();
+            if (tabName === 'callcenter-overview') loadCallCenterOverview();
+            if (tabName === 'callcenter-records') loadCallRecords();
+            if (tabName === 'callcenter-stats') loadCallStats();
+            if (tabName === 'sync-logs') loadSyncLogs();
+        }
+
+        // Load overview data
+        async function loadOverview() {
+            try {
+                // VTTech summary
+                const summaryRes = await fetch(`${API_BASE}/api/summary`);
+                const summary = await summaryRes.json();
+                
+                document.getElementById('badge-branches').textContent = summary.master_counts?.branches || 0;
+                document.getElementById('badge-services').textContent = summary.master_counts?.services || 0;
+                document.getElementById('badge-employees').textContent = summary.master_counts?.employees || 0;
+                document.getElementById('today-revenue').textContent = formatCurrency(summary.total_revenue);
+                
+                // Calculate VTTech total records
+                let vttechTotal = 0;
+                Object.values(summary.master_counts || {}).forEach(v => vttechTotal += v);
+                document.getElementById('vttech-total').textContent = formatNumber(vttechTotal);
+                
+                // VTTech sync status
+                const vttechStatus = document.getElementById('vttech-sync-status');
+                vttechStatus.innerHTML = `
+                    <div class="flex items-center justify-between py-2 border-b">
+                        <span class="text-gray-600">Chi nhánh</span>
+                        <span class="font-semibold">${formatNumber(summary.master_counts?.branches)}</span>
+                    </div>
+                    <div class="flex items-center justify-between py-2 border-b">
+                        <span class="text-gray-600">Dịch vụ</span>
+                        <span class="font-semibold">${formatNumber(summary.master_counts?.services)}</span>
+                    </div>
+                    <div class="flex items-center justify-between py-2 border-b">
+                        <span class="text-gray-600">Nhân viên</span>
+                        <span class="font-semibold">${formatNumber(summary.master_counts?.employees)}</span>
+                    </div>
+                    <div class="flex items-center justify-between py-2">
+                        <span class="text-gray-600">Users</span>
+                        <span class="font-semibold">${formatNumber(summary.master_counts?.users)}</span>
+                    </div>
+                `;
+                
+                // Load revenue chart
+                const revenueRes = await fetch(`${API_BASE}/api/revenue/range`);
+                const revenueData = await revenueRes.json();
+                updateRevenueChart(revenueData.slice(-7));
+                
+            } catch (err) {
+                console.error('Error loading overview:', err);
+            }
+            
+            // Call Center summary
+            try {
+                const ccRes = await fetch(`${API_BASE}/api/callcenter/stats`);
+                const ccStats = await ccRes.json();
+                
+                document.getElementById('callcenter-total').textContent = formatNumber(ccStats.total_records);
+                document.getElementById('badge-calls').textContent = formatNumber(ccStats.total_records);
+                document.getElementById('today-calls').textContent = formatNumber(ccStats.today_calls || 0);
+                
+                // Call Center sync status
+                const ccStatus = document.getElementById('callcenter-sync-status');
+                ccStatus.innerHTML = `
+                    <div class="flex items-center justify-between py-2 border-b">
+                        <span class="text-gray-600">Tổng records</span>
+                        <span class="font-semibold">${formatNumber(ccStats.total_records)}</span>
+                    </div>
+                    <div class="flex items-center justify-between py-2 border-b">
+                        <span class="text-gray-600">Gọi đi (outbound)</span>
+                        <span class="font-semibold">${formatNumber(ccStats.by_direction?.outbound)}</span>
+                    </div>
+                    <div class="flex items-center justify-between py-2 border-b">
+                        <span class="text-gray-600">Nội bộ (local)</span>
+                        <span class="font-semibold">${formatNumber(ccStats.by_direction?.local)}</span>
+                    </div>
+                    <div class="flex items-center justify-between py-2">
+                        <span class="text-gray-600">Last sync</span>
+                        <span class="font-semibold text-sm">${ccStats.last_sync?.date_range || '--'}</span>
+                    </div>
+                `;
+                
+                // Update calls chart
+                if (ccStats.by_date) {
+                    updateCallsChart(ccStats.by_date.slice(-7));
+                }
+                
+            } catch (err) {
+                console.error('Error loading call center:', err);
+                document.getElementById('callcenter-total').textContent = '0';
+            }
+        }
+
+        // Update revenue chart
+        function updateRevenueChart(data) {
+            const ctx = document.getElementById('revenueChart').getContext('2d');
+            if (revenueChart) revenueChart.destroy();
+            
+            revenueChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.date),
+                    datasets: [{
+                        label: 'Doanh thu',
+                        data: data.map(d => d.total),
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { 
+                            beginAtZero: true,
+                            ticks: { callback: v => formatNumber(v / 1000000) + 'M' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update calls chart
+        function updateCallsChart(data) {
+            const ctx = document.getElementById('callsChart').getContext('2d');
+            if (callsChart) callsChart.destroy();
+            
+            callsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d.date),
+                    datasets: [{
+                        label: 'Cuộc gọi',
+                        data: data.map(d => d.count),
+                        backgroundColor: '#10b981'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        // Load branches
+        async function loadBranches() {
+            try {
+                const res = await fetch(`${API_BASE}/api/branches`);
+                const data = await res.json();
+                
+                const tbody = document.getElementById('branches-tbody');
+                tbody.innerHTML = data.map(b => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3">${b.id || b.BranchID || '--'}</td>
+                        <td class="px-4 py-3 font-medium">${b.name || b.BranchName || '--'}</td>
+                        <td class="px-4 py-3 text-gray-500">${b.address || b.Address || '--'}</td>
+                        <td class="px-4 py-3">${b.phone || b.Phone || '--'}</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 text-xs rounded-full ${b.is_active || b.IsActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                ${b.is_active || b.IsActive ? 'Hoạt động' : 'Ngừng'}
+                            </span>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Error loading branches:', err);
+            }
+        }
+
+        // Load services
+        async function loadServices() {
+            try {
+                const res = await fetch(`${API_BASE}/api/services`);
+                const data = await res.json();
+                
+                const tbody = document.getElementById('services-tbody');
+                tbody.innerHTML = data.map(s => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3">${s.id || s.ServiceID || '--'}</td>
+                        <td class="px-4 py-3 font-medium">${s.name || s.ServiceName || '--'}</td>
+                        <td class="px-4 py-3 text-gray-500">${s.group_name || s.GroupName || '--'}</td>
+                        <td class="px-4 py-3 text-right">${formatCurrency(s.price || s.Price || 0)}</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 text-xs rounded-full ${s.is_active || s.IsActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                ${s.is_active || s.IsActive ? 'Hoạt động' : 'Ngừng'}
+                            </span>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Error loading services:', err);
+            }
+        }
+
+        // Load employees
+        async function loadEmployees() {
+            try {
+                const res = await fetch(`${API_BASE}/api/employees`);
+                const data = await res.json();
+                
+                const tbody = document.getElementById('employees-tbody');
+                tbody.innerHTML = data.map(e => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3">${e.id || e.EmployeeID || '--'}</td>
+                        <td class="px-4 py-3 font-medium">${e.name || e.EmployeeName || '--'}</td>
+                        <td class="px-4 py-3 text-gray-500">${e.branch_name || e.BranchName || '--'}</td>
+                        <td class="px-4 py-3">${e.phone || e.Phone || '--'}</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 text-xs rounded-full ${e.is_active || e.IsActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                ${e.is_active || e.IsActive ? 'Hoạt động' : 'Ngừng'}
+                            </span>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Error loading employees:', err);
+            }
+        }
+
+        // Load revenue by date
+        async function loadRevenueByDate() {
+            const date = document.getElementById('revenue-date').value;
+            if (!date) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/api/revenue/${date}`);
+                const data = await res.json();
+                
+                if (data.error) {
+                    document.getElementById('revenue-tbody').innerHTML = 
+                        `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">${data.error}</td></tr>`;
+                    return;
+                }
+                
+                let totalPaid = 0, totalNew = 0, totalRaise = 0, totalCust = 0, totalApp = 0;
+                
+                const tbody = document.getElementById('revenue-tbody');
+                tbody.innerHTML = data.map(r => {
+                    totalPaid += r.Paid || 0;
+                    totalNew += r.PaidNew || 0;
+                    totalRaise += r.Raise || 0;
+                    totalCust += r.PaidNumCust || 0;
+                    totalApp += r.App || 0;
+                    return `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3 font-medium">${r.BranchName || '--'}</td>
+                            <td class="px-4 py-3 text-right">${formatCurrency(r.Paid)}</td>
+                            <td class="px-4 py-3 text-right">${formatCurrency(r.PaidNew)}</td>
+                            <td class="px-4 py-3 text-right">${formatCurrency(r.Raise)}</td>
+                            <td class="px-4 py-3 text-right">${formatNumber(r.PaidNumCust)}</td>
+                            <td class="px-4 py-3 text-right">${formatNumber(r.App)}</td>
+                        </tr>
+                    `;
+                }).join('');
+                
+                document.getElementById('revenue-tfoot').innerHTML = `
+                    <tr>
+                        <td class="px-4 py-3">TỔNG</td>
+                        <td class="px-4 py-3 text-right">${formatCurrency(totalPaid)}</td>
+                        <td class="px-4 py-3 text-right">${formatCurrency(totalNew)}</td>
+                        <td class="px-4 py-3 text-right">${formatCurrency(totalRaise)}</td>
+                        <td class="px-4 py-3 text-right">${formatNumber(totalCust)}</td>
+                        <td class="px-4 py-3 text-right">${formatNumber(totalApp)}</td>
+                    </tr>
+                `;
+            } catch (err) {
+                console.error('Error loading revenue:', err);
+            }
+        }
+
+        // Load call center overview
+        async function loadCallCenterOverview() {
+            try {
+                const res = await fetch(`${API_BASE}/api/callcenter/stats`);
+                const stats = await res.json();
+                
+                document.getElementById('cc-total-calls').textContent = formatNumber(stats.total_records);
+                document.getElementById('cc-outbound').textContent = formatNumber(stats.by_direction?.outbound || 0);
+                document.getElementById('cc-local').textContent = formatNumber(stats.by_direction?.local || 0);
+                
+                // Direction chart
+                const ctx = document.getElementById('directionChart').getContext('2d');
+                if (directionChart) directionChart.destroy();
+                
+                const directions = stats.by_direction || {};
+                directionChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(directions).map(k => k || 'Không xác định'),
+                        datasets: [{
+                            data: Object.values(directions),
+                            backgroundColor: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444']
+                        }]
+                    },
+                    options: { responsive: true }
+                });
+            } catch (err) {
+                console.error('Error loading call center overview:', err);
+            }
+        }
+
+        // Load call records
+        async function loadCallRecords(page = 1) {
+            currentCallPage = page;
+            const search = document.getElementById('search-calls').value;
+            const date = document.getElementById('filter-calls-date').value;
+            
+            try {
+                let url = `${API_BASE}/api/callcenter/records?page=${page}&limit=20`;
+                if (search) url += `&search=${encodeURIComponent(search)}`;
+                if (date) url += `&date=${date}`;
+                
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                const tbody = document.getElementById('calls-tbody');
+                if (!data.records || data.records.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">Không có dữ liệu</td></tr>`;
+                    return;
+                }
+                
+                tbody.innerHTML = data.records.map(r => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-gray-500">${r.start_time || '--'}</td>
+                        <td class="px-4 py-3 font-medium">${r.caller_id || '--'}</td>
+                        <td class="px-4 py-3">${r.destination || '--'}</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 text-xs rounded-full ${r.direction === 'outbound' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}">
+                                ${r.direction || '--'}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-right">${formatDuration(r.duration)}</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 text-xs rounded-full ${r.disposition === 'ANSWERED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                ${r.disposition || '--'}
+                            </span>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                document.getElementById('calls-showing').textContent = data.records.length;
+                document.getElementById('calls-prev').disabled = page <= 1;
+                document.getElementById('calls-next').disabled = data.records.length < 20;
+            } catch (err) {
+                console.error('Error loading call records:', err);
+            }
+        }
+
+        // Load call stats
+        async function loadCallStats() {
+            try {
+                const res = await fetch(`${API_BASE}/api/callcenter/stats`);
+                const stats = await res.json();
+                
+                // Daily calls chart
+                if (stats.by_date) {
+                    const ctx = document.getElementById('callsDailyChart').getContext('2d');
+                    if (callsDailyChart) callsDailyChart.destroy();
+                    
+                    callsDailyChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: stats.by_date.map(d => d.date),
+                            datasets: [{
+                                label: 'Cuộc gọi',
+                                data: stats.by_date.map(d => d.count),
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: { responsive: true }
+                    });
+                }
+            } catch (err) {
+                console.error('Error loading call stats:', err);
+            }
+        }
+
+        // Load sync logs
+        async function loadSyncLogs() {
+            // VTTech logs
+            try {
+                const res = await fetch(`${API_BASE}/api/crawl-logs`);
+                const logs = await res.json();
+                
+                const container = document.getElementById('vttech-logs');
+                if (logs.error) {
+                    container.innerHTML = `<div class="text-gray-400">${logs.error}</div>`;
+                } else {
+                    container.innerHTML = logs.slice(0, 20).map(log => `
+                        <div class="p-3 bg-gray-50 rounded-lg text-sm">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="font-medium">${log.data_type || 'unknown'}</span>
+                                <span class="px-2 py-0.5 text-xs rounded ${log.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                    ${log.status}
+                                </span>
+                            </div>
+                            <div class="text-gray-500 text-xs">${log.created_at || '--'}</div>
+                            <div class="text-gray-600 mt-1">${log.records_count || 0} records</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                document.getElementById('vttech-logs').innerHTML = `<div class="text-red-400">Error: ${err.message}</div>`;
+            }
+            
+            // Call Center logs
+            try {
+                const res = await fetch(`${API_BASE}/api/callcenter/sync-logs`);
+                const logs = await res.json();
+                
+                const container = document.getElementById('callcenter-logs');
+                if (!logs || logs.length === 0) {
+                    container.innerHTML = `<div class="text-gray-400">Không có log</div>`;
+                } else {
+                    container.innerHTML = logs.slice(0, 20).map(log => `
+                        <div class="p-3 bg-gray-50 rounded-lg text-sm">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="font-medium">${log.sync_type || 'manual'}</span>
+                                <span class="px-2 py-0.5 text-xs rounded ${log.status === 'completed' ? 'bg-green-100 text-green-700' : log.status === 'running' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}">
+                                    ${log.status}
+                                </span>
+                            </div>
+                            <div class="text-gray-500 text-xs">${log.date_from} → ${log.date_to}</div>
+                            <div class="text-gray-600 mt-1">${formatNumber(log.total_records)} records</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                document.getElementById('callcenter-logs').innerHTML = `<div class="text-gray-400">Chưa có dữ liệu</div>`;
+            }
+        }
+
+        // Refresh all data
+        function refreshAllData() {
+            loadOverview();
+            const activeTab = document.querySelector('.tab-content.active')?.id?.replace('tab-', '');
+            if (activeTab) showTab(activeTab);
+        }
+
+        // Update time
+        function updateTime() {
+            document.getElementById('currentTime').textContent = new Date().toLocaleString('vi-VN');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateTime();
+            setInterval(updateTime, 1000);
+            loadOverview();
+            
+            // Set default date
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('revenue-date').value = today;
+            document.getElementById('filter-calls-date').value = today;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+
+# Cookies & Sessions
+cookies.txt
+cookies2.txt
+
+# Logs
+logs/
+*.log
+
+# Database
+database/*.db
+
+# Data outputs (large files)
+data_daily/
+data_export/
+data_output/
+data_scan/
+data_sync/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.tmp
+/tmp/

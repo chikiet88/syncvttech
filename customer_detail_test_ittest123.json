@@ -1,0 +1,139 @@
+[
+  {
+    "desc": "Tab Dịch vụ - LoadInitialize",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Status",
+      "PatientRecord"
+    ],
+    "total": 0
+  },
+  {
+    "desc": "Tab Dịch vụ - LoadataTab",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Table",
+      "Table1"
+    ],
+    "total": 0
+  },
+  {
+    "desc": "Tab Dịch vụ - LoadServiceTab",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Service",
+      "ServiceType"
+    ],
+    "total": 1156
+  },
+  {
+    "desc": "Tab Dịch vụ - Treatment Plant",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Table"
+    ],
+    "total": 1
+  },
+  {
+    "desc": "Tab Điều trị - LoadComboMain",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "PatientRecord",
+      "TreatmentPlan",
+      "ServiceTab",
+      "ServiceCatTab"
+    ],
+    "total": 0
+  },
+  {
+    "desc": "Tab Điều trị - LoadataTreatment",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "DataTotal",
+      "Table",
+      "Table1"
+    ],
+    "total": 1
+  },
+  {
+    "desc": "Thanh toán",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Table",
+      "Table1",
+      "Table2"
+    ],
+    "total": 1
+  },
+  {
+    "desc": "Hình ảnh - LoadImageByFolder",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Table",
+      "Table1"
+    ],
+    "total": 0
+  },
+  {
+    "desc": "Hình ảnh - LoadTemplateForm",
+    "status": "SUCCESS",
+    "type": "list",
+    "count": 0
+  },
+  {
+    "desc": "Trả góp",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Table",
+      "Table1"
+    ],
+    "total": 0
+  },
+  {
+    "desc": "Lịch sử",
+    "status": "SUCCESS",
+    "type": "list",
+    "count": 0
+  },
+  {
+    "desc": "Lịch hẹn - LoadCombo",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Type",
+      "Employee",
+      "Branch",
+      "Status",
+      "Doctor",
+      "Membership",
+      "SchedulerType",
+      "CustomerGroup",
+      "ReasonCancel",
+      "Tele",
+      "Tag",
+      "ServiceAll"
+    ],
+    "total": 3763
+  },
+  {
+    "desc": "Lịch hẹn - Schedule",
+    "status": "SUCCESS",
+    "type": "list",
+    "count": 0
+  },
+  {
+    "desc": "Complaint",
+    "status": "SUCCESS",
+    "type": "list",
+    "count": 0
+  }
+]

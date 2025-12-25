@@ -1,0 +1,129 @@
+[
+  {
+    "desc": "Tab Dịch vụ - LoadInitialize",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Status",
+      "PatientRecord"
+    ]
+  },
+  {
+    "desc": "Tab Dịch vụ - LoadataTab",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Table",
+      "Table1"
+    ]
+  },
+  {
+    "desc": "Tab Dịch vụ - LoadServiceTab",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Service",
+      "ServiceType"
+    ]
+  },
+  {
+    "desc": "Tab Dịch vụ - Treatment Plant",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Table"
+    ]
+  },
+  {
+    "desc": "Tab Điều trị - LoadComboMain",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "PatientRecord",
+      "TreatmentPlan",
+      "ServiceTab",
+      "ServiceCatTab"
+    ]
+  },
+  {
+    "desc": "Tab Điều trị - LoadataTreatment",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "DataTotal",
+      "Table",
+      "Table1"
+    ]
+  },
+  {
+    "desc": "Thanh toán",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Table",
+      "Table1",
+      "Table2"
+    ]
+  },
+  {
+    "desc": "Hình ảnh - LoadImageByFolder",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Table",
+      "Table1"
+    ]
+  },
+  {
+    "desc": "Hình ảnh - LoadTemplateForm",
+    "status": "SUCCESS",
+    "type": "list",
+    "count": 0
+  },
+  {
+    "desc": "Trả góp",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Table",
+      "Table1"
+    ]
+  },
+  {
+    "desc": "Lịch sử",
+    "status": "SUCCESS",
+    "type": "list",
+    "count": 0
+  },
+  {
+    "desc": "Lịch hẹn - LoadCombo",
+    "status": "SUCCESS",
+    "type": "dict",
+    "keys": [
+      "Type",
+      "Employee",
+      "Branch",
+      "Status",
+      "Doctor",
+      "Membership",
+      "SchedulerType",
+      "CustomerGroup",
+      "ReasonCancel",
+      "Tele",
+      "Tag",
+      "ServiceAll"
+    ]
+  },
+  {
+    "desc": "Lịch hẹn - Schedule",
+    "status": "SUCCESS",
+    "type": "list",
+    "count": 0
+  },
+  {
+    "desc": "Complaint",
+    "status": "SUCCESS",
+    "type": "list",
+    "count": 0
+  }
+]

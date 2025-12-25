@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTTech TMTaza - Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .card { transition: transform 0.2s, box-shadow 0.2s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .loading { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Header -->
+    <nav class="gradient-bg text-white shadow-lg">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-chart-line text-2xl"></i>
+                    <h1 class="text-xl font-bold">VTTech TMTaza Dashboard</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="lastUpdate" class="text-sm opacity-80"></span>
+                    <button onclick="refreshData()" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition">
+                        <i class="fas fa-sync-alt mr-2"></i>Làm mới
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 py-6">
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Total Revenue Card -->
+            <div class="card bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-green-100 text-sm">Doanh thu hôm nay</p>
+                        <p id="totalRevenue" class="text-3xl font-bold mt-1">--</p>
+                        <p id="revenueDate" class="text-green-200 text-xs mt-2"></p>
+                    </div>
+                    <div class="bg-white/20 p-4 rounded-full">
+                        <i class="fas fa-dollar-sign text-3xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Branches Card -->
+            <div class="card bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-blue-100 text-sm">Chi nhánh</p>
+                        <p id="branchCount" class="text-3xl font-bold mt-1">--</p>
+                        <p class="text-blue-200 text-xs mt-2">Đang hoạt động</p>
+                    </div>
+                    <div class="bg-white/20 p-4 rounded-full">
+                        <i class="fas fa-store text-3xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Services Card -->
+            <div class="card bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-purple-100 text-sm">Dịch vụ</p>
+                        <p id="serviceCount" class="text-3xl font-bold mt-1">--</p>
+                        <p class="text-purple-200 text-xs mt-2">Loại dịch vụ</p>
+                    </div>
+                    <div class="bg-white/20 p-4 rounded-full">
+                        <i class="fas fa-spa text-3xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Employees Card -->
+            <div class="card bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-6 text-white shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-orange-100 text-sm">Nhân viên</p>
+                        <p id="employeeCount" class="text-3xl font-bold mt-1">--</p>
+                        <p class="text-orange-200 text-xs mt-2">Tổng số</p>
+                    </div>
+                    <div class="bg-white/20 p-4 rounded-full">
+                        <i class="fas fa-users text-3xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Revenue Trend Chart -->
+            <div class="card bg-white rounded-xl p-6 shadow-lg">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800">
+                        <i class="fas fa-chart-area text-blue-500 mr-2"></i>
+                        Xu hướng doanh thu
+                    </h2>
+                    <select id="chartRange" onchange="loadRevenueChart()" class="border rounded px-3 py-1 text-sm">
+                        <option value="7">7 ngày</option>
+                        <option value="14">14 ngày</option>
+                        <option value="30" selected>30 ngày</option>
+                    </select>
+                </div>
+                <canvas id="revenueChart" height="250"></canvas>
+            </div>
+
+            <!-- Branch Revenue Chart -->
+            <div class="card bg-white rounded-xl p-6 shadow-lg">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800">
+                        <i class="fas fa-chart-pie text-purple-500 mr-2"></i>
+                        Doanh thu theo chi nhánh
+                    </h2>
+                    <select id="branchDate" onchange="loadBranchChart()" class="border rounded px-3 py-1 text-sm">
+                    </select>
+                </div>
+                <canvas id="branchChart" height="250"></canvas>
+            </div>
+        </div>
+
+        <!-- Branch Details Table -->
+        <div class="card bg-white rounded-xl p-6 shadow-lg mb-8">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">
+                <i class="fas fa-table text-green-500 mr-2"></i>
+                Chi tiết doanh thu theo chi nhánh
+            </h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left font-semibold text-gray-600">Chi nhánh</th>
+                            <th class="px-4 py-3 text-right font-semibold text-gray-600">Doanh thu</th>
+                            <th class="px-4 py-3 text-right font-semibold text-gray-600">Khách mới</th>
+                            <th class="px-4 py-3 text-right font-semibold text-gray-600">Số khách</th>
+                            <th class="px-4 py-3 text-right font-semibold text-gray-600">Lịch hẹn</th>
+                            <th class="px-4 py-3 text-right font-semibold text-gray-600">Check-in</th>
+                        </tr>
+                    </thead>
+                    <tbody id="branchTable" class="divide-y divide-gray-100">
+                        <tr><td colspan="6" class="text-center py-8 text-gray-400">Đang tải...</td></tr>
+                    </tbody>
+                    <tfoot class="bg-gray-50 font-semibold">
+                        <tr id="branchTotal">
+                            <td class="px-4 py-3">Tổng cộng</td>
+                            <td class="px-4 py-3 text-right text-green-600">--</td>
+                            <td class="px-4 py-3 text-right">--</td>
+                            <td class="px-4 py-3 text-right">--</td>
+                            <td class="px-4 py-3 text-right">--</td>
+                            <td class="px-4 py-3 text-right">--</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Top Branches -->
+            <div class="card bg-white rounded-xl p-6 shadow-lg">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                    <i class="fas fa-trophy text-yellow-500 mr-2"></i>
+                    Top Chi nhánh
+                </h3>
+                <div id="topBranches" class="space-y-3">
+                    <div class="text-center py-4 text-gray-400">Đang tải...</div>
+                </div>
+            </div>
+
+            <!-- Recent Days -->
+            <div class="card bg-white rounded-xl p-6 shadow-lg">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                    <i class="fas fa-calendar-alt text-blue-500 mr-2"></i>
+                    Doanh thu gần đây
+                </h3>
+                <div id="recentDays" class="space-y-3">
+                    <div class="text-center py-4 text-gray-400">Đang tải...</div>
+                </div>
+            </div>
+
+            <!-- System Info -->
+            <div class="card bg-white rounded-xl p-6 shadow-lg">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                    <i class="fas fa-database text-gray-500 mr-2"></i>
+                    Dữ liệu hệ thống
+                </h3>
+                <div id="systemInfo" class="space-y-3">
+                    <div class="text-center py-4 text-gray-400">Đang tải...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-gray-400 py-4 mt-8">
+        <div class="container mx-auto px-4 text-center text-sm">
+            <p>VTTech TMTaza Dashboard &copy; 2025 | Cập nhật tự động từ Cron Job</p>
+        </div>
+    </footer>
+
+    <script>
+        const API_BASE = '';
+        let revenueChart, branchChart;
+        let revenueData = [];
+        let availableDates = [];
+
+        // Format số tiền
+        function formatMoney(num) {
+            if (!num) return '0.00';
+            if (num >= 1e9) return (num / 1e9).toFixed(2) + ' tỷ';
+            if (num >= 1e6) return (num / 1e6).toFixed(2) + ' tr';
+            return num.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // Load summary data
+        async function loadSummary() {
+            try {
+                const res = await fetch(`${API_BASE}/api/summary`);
+                const data = await res.json();
+                
+                document.getElementById('totalRevenue').textContent = formatMoney(data.total_revenue) + ' đ';
+                document.getElementById('revenueDate').textContent = data.latest_date ? `Ngày ${data.latest_date}` : '';
+                document.getElementById('branchCount').textContent = data.branch_count || '--';
+                document.getElementById('serviceCount').textContent = data.master_counts?.services || '--';
+                document.getElementById('employeeCount').textContent = data.master_counts?.employees || '--';
+                document.getElementById('lastUpdate').textContent = `Cập nhật: ${new Date().toLocaleString('vi-VN')}`;
+                
+                availableDates = data.available_dates || [];
+                
+                // Populate date select
+                const dateSelect = document.getElementById('branchDate');
+                dateSelect.innerHTML = availableDates.slice(0, 10).map(d => 
+                    `<option value="${d}">${d}</option>`
+                ).join('');
+                
+            } catch (e) {
+                console.error('Error loading summary:', e);
+            }
+        }
+
+        // Load revenue chart
+        async function loadRevenueChart() {
+            try {
+                const res = await fetch(`${API_BASE}/api/revenue/range`);
+                revenueData = await res.json();
+                
+                const range = parseInt(document.getElementById('chartRange').value);
+                const chartData = revenueData.slice(-range);
+                
+                const ctx = document.getElementById('revenueChart').getContext('2d');
+                
+                if (revenueChart) revenueChart.destroy();
+                
+                revenueChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.map(d => d.date.slice(5)),
+                        datasets: [{
+                            label: 'Doanh thu',
+                            data: chartData.map(d => d.total),
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }, {
+                            label: 'Khách mới',
+                            data: chartData.map(d => d.total_new),
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'top' },
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => `${ctx.dataset.label}: ${formatMoney(ctx.raw)} đ`
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: v => formatMoney(v)
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Update recent days
+                updateRecentDays(chartData.slice(-5).reverse());
+                
+            } catch (e) {
+                console.error('Error loading revenue chart:', e);
+            }
+        }
+
+        // Load branch chart
+        async function loadBranchChart() {
+            try {
+                const date = document.getElementById('branchDate').value;
+                if (!date) return;
+                
+                const res = await fetch(`${API_BASE}/api/revenue/${date}`);
+                const data = await res.json();
+                
+                // Sort by revenue
+                const sorted = [...data].sort((a, b) => b.Paid - a.Paid);
+                
+                const ctx = document.getElementById('branchChart').getContext('2d');
+                
+                if (branchChart) branchChart.destroy();
+                
+                const colors = [
+                    '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+                    '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
+                    '#14b8a6', '#a855f7', '#eab308', '#22c55e', '#0ea5e9',
+                    '#d946ef', '#64748b'
+                ];
+                
+                branchChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: sorted.map(d => d.BranchName?.replace('Taza Skin Clinic ', 'TAZA ').replace('Timona ', 'TM ')),
+                        datasets: [{
+                            data: sorted.map(d => d.Paid),
+                            backgroundColor: colors,
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { 
+                                position: 'right',
+                                labels: { boxWidth: 12, font: { size: 10 } }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => `${ctx.label}: ${formatMoney(ctx.raw)} đ`
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Update table
+                updateBranchTable(sorted);
+                
+                // Update top branches
+                updateTopBranches(sorted.slice(0, 5));
+                
+            } catch (e) {
+                console.error('Error loading branch chart:', e);
+            }
+        }
+
+        // Update branch table
+        function updateBranchTable(data) {
+            const tbody = document.getElementById('branchTable');
+            const totalRow = document.getElementById('branchTotal');
+            
+            let totalPaid = 0, totalNew = 0, totalCust = 0, totalApp = 0, totalChecked = 0;
+            
+            tbody.innerHTML = data.map(d => {
+                totalPaid += d.Paid || 0;
+                totalNew += d.PaidNew || 0;
+                totalCust += d.PaidNumCust || 0;
+                totalApp += d.App || 0;
+                totalChecked += d.AppChecked || 0;
+                
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 font-medium">${d.BranchName}</td>
+                        <td class="px-4 py-3 text-right text-green-600 font-semibold">${formatMoney(d.Paid)} đ</td>
+                        <td class="px-4 py-3 text-right text-blue-600">${formatMoney(d.PaidNew)} đ</td>
+                        <td class="px-4 py-3 text-right">${d.PaidNumCust || 0}</td>
+                        <td class="px-4 py-3 text-right">${d.App || 0}</td>
+                        <td class="px-4 py-3 text-right">${d.AppChecked || 0}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            totalRow.innerHTML = `
+                <td class="px-4 py-3 font-bold">Tổng cộng</td>
+                <td class="px-4 py-3 text-right text-green-600 font-bold">${formatMoney(totalPaid)} đ</td>
+                <td class="px-4 py-3 text-right text-blue-600 font-bold">${formatMoney(totalNew)} đ</td>
+                <td class="px-4 py-3 text-right font-bold">${totalCust}</td>
+                <td class="px-4 py-3 text-right font-bold">${totalApp}</td>
+                <td class="px-4 py-3 text-right font-bold">${totalChecked}</td>
+            `;
+        }
+
+        // Update top branches
+        function updateTopBranches(data) {
+            const container = document.getElementById('topBranches');
+            container.innerHTML = data.map((d, i) => `
+                <div class="flex items-center justify-between p-2 rounded ${i === 0 ? 'bg-yellow-50' : 'bg-gray-50'}">
+                    <div class="flex items-center">
+                        <span class="w-6 h-6 rounded-full ${i === 0 ? 'bg-yellow-500' : i === 1 ? 'bg-gray-400' : i === 2 ? 'bg-orange-400' : 'bg-gray-300'} text-white text-xs flex items-center justify-center mr-2">${i + 1}</span>
+                        <span class="text-sm truncate max-w-32">${d.BranchName?.replace('Taza Skin Clinic ', '').replace('Timona ', 'TM ')}</span>
+                    </div>
+                    <span class="text-sm font-semibold text-green-600">${formatMoney(d.Paid)}</span>
+                </div>
+            `).join('');
+        }
+
+        // Update recent days
+        function updateRecentDays(data) {
+            const container = document.getElementById('recentDays');
+            container.innerHTML = data.map(d => `
+                <div class="flex items-center justify-between p-2 rounded bg-gray-50">
+                    <span class="text-sm text-gray-600">${d.date}</span>
+                    <span class="text-sm font-semibold text-green-600">${formatMoney(d.total)} đ</span>
+                </div>
+            `).join('');
+        }
+
+        // Load system info
+        async function loadSystemInfo() {
+            try {
+                const res = await fetch(`${API_BASE}/api/summary`);
+                const data = await res.json();
+                
+                const container = document.getElementById('systemInfo');
+                const counts = data.master_counts || {};
+                
+                container.innerHTML = `
+                    <div class="flex items-center justify-between p-2 rounded bg-gray-50">
+                        <span class="text-sm"><i class="fas fa-store text-blue-500 mr-2"></i>Chi nhánh</span>
+                        <span class="text-sm font-semibold">${counts.branches || 0}</span>
+                    </div>
+                    <div class="flex items-center justify-between p-2 rounded bg-gray-50">
+                        <span class="text-sm"><i class="fas fa-spa text-purple-500 mr-2"></i>Dịch vụ</span>
+                        <span class="text-sm font-semibold">${counts.services || 0}</span>
+                    </div>
+                    <div class="flex items-center justify-between p-2 rounded bg-gray-50">
+                        <span class="text-sm"><i class="fas fa-users text-orange-500 mr-2"></i>Nhân viên</span>
+                        <span class="text-sm font-semibold">${counts.employees || 0}</span>
+                    </div>
+                    <div class="flex items-center justify-between p-2 rounded bg-gray-50">
+                        <span class="text-sm"><i class="fas fa-user-circle text-green-500 mr-2"></i>Users</span>
+                        <span class="text-sm font-semibold">${counts.users || 0}</span>
+                    </div>
+                    <div class="flex items-center justify-between p-2 rounded bg-blue-50">
+                        <span class="text-sm"><i class="fas fa-calendar text-blue-500 mr-2"></i>Ngày có data</span>
+                        <span class="text-sm font-semibold">${data.available_dates?.length || 0}</span>
+                    </div>
+                `;
+            } catch (e) {
+                console.error('Error loading system info:', e);
+            }
+        }
+
+        // Refresh all data
+        async function refreshData() {
+            document.getElementById('totalRevenue').textContent = '...';
+            await loadSummary();
+            await loadRevenueChart();
+            await loadBranchChart();
+            await loadSystemInfo();
+        }
+
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshData();
+        });
+    </script>
+</body>
+</html>

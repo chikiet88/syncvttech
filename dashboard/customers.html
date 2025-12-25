@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTTech - Customers</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .sidebar { transition: width 0.3s; }
+        .main-content { transition: margin-left 0.3s; }
+        .submenu { max-height: 0; overflow: hidden; transition: max-height 0.3s; }
+        .submenu.open { max-height: 500px; }
+        .modal { transition: opacity 0.3s; }
+        .table-hover tbody tr:hover { background-color: #f3f4f6; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar fixed left-0 top-0 h-full w-64 bg-gray-800 text-white z-50">
+        <div class="p-4 border-b border-gray-700">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <i class="fas fa-tooth"></i>
+                VTTech Dashboard
+            </h1>
+        </div>
+        
+        <nav class="p-4">
+            <ul class="space-y-2">
+                <li>
+                    <a href="analytics.html" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-home w-5"></i>
+                        <span>Tổng quan</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="customers.html" class="flex items-center gap-3 p-3 rounded bg-blue-600">
+                        <i class="fas fa-users w-5"></i>
+                        <span>Khách hàng</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="analytics.html#revenue" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-chart-line w-5"></i>
+                        <span>Doanh thu</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="analytics.html#branches" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-building w-5"></i>
+                        <span>Chi nhánh</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="analytics.html#services" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-concierge-bell w-5"></i>
+                        <span>Dịch vụ</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="sync-status.html" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-sync w-5"></i>
+                        <span>Sync Status</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="db.html" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-database w-5"></i>
+                        <span>Database</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content ml-64 p-6">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Quản lý Khách hàng</h1>
+                <p class="text-gray-600">Danh sách khách hàng đã sync từ VTTech</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="loadCustomers()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2">
+                    <i class="fas fa-sync"></i> Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Tổng khách hàng</p>
+                        <p id="totalCustomers" class="text-3xl font-bold text-blue-600">-</p>
+                    </div>
+                    <div class="bg-blue-100 p-3 rounded-full">
+                        <i class="fas fa-users text-blue-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Dịch vụ đã dùng</p>
+                        <p id="totalServices" class="text-3xl font-bold text-green-600">-</p>
+                    </div>
+                    <div class="bg-green-100 p-3 rounded-full">
+                        <i class="fas fa-concierge-bell text-green-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Lịch hẹn</p>
+                        <p id="totalAppointments" class="text-3xl font-bold text-purple-600">-</p>
+                    </div>
+                    <div class="bg-purple-100 p-3 rounded-full">
+                        <i class="fas fa-calendar text-purple-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Thanh toán</p>
+                        <p id="totalPayments" class="text-3xl font-bold text-orange-600">-</p>
+                    </div>
+                    <div class="bg-orange-100 p-3 rounded-full">
+                        <i class="fas fa-credit-card text-orange-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white rounded-lg shadow p-4 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tìm kiếm</label>
+                    <input type="text" id="searchInput" placeholder="Tên, SĐT, Mã KH..." 
+                           class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           onkeypress="if(event.key==='Enter') loadCustomers()">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Chi nhánh</label>
+                    <select id="branchFilter" class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Tất cả chi nhánh</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Số lượng</label>
+                    <select id="limitFilter" class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="20">20 bản ghi</option>
+                        <option value="50" selected>50 bản ghi</option>
+                        <option value="100">100 bản ghi</option>
+                        <option value="200">200 bản ghi</option>
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <button onclick="loadCustomers()" class="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                        <i class="fas fa-search mr-2"></i> Tìm kiếm
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customer Table -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="font-semibold text-gray-700">Danh sách khách hàng</h3>
+                <span id="recordInfo" class="text-sm text-gray-500"></span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full table-hover">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mã KH</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tên</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SĐT</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Chi nhánh</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ngày tạo</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="customerTable" class="divide-y divide-gray-200">
+                        <tr>
+                            <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                <p>Đang tải dữ liệu...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="p-4 border-t flex justify-between items-center">
+                <div id="paginationInfo" class="text-sm text-gray-500"></div>
+                <div id="pagination" class="flex gap-2"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Customer Detail Modal -->
+    <div id="customerModal" class="modal fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+                <h3 id="modalTitle" class="font-semibold text-lg">Chi tiết khách hàng</h3>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="modalContent" class="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+                <!-- Content loaded dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+        let branches = [];
+
+        // Load branches for filter
+        async function loadBranches() {
+            try {
+                const res = await fetch('/api/branches');
+                const data = await res.json();
+                branches = data.branches || data || [];
+                
+                const select = document.getElementById('branchFilter');
+                branches.forEach(b => {
+                    const opt = document.createElement('option');
+                    opt.value = b.id;
+                    opt.textContent = b.name;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('Error loading branches:', e);
+            }
+        }
+
+        // Load stats
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/customers/stats');
+                const data = await res.json();
+                
+                document.getElementById('totalCustomers').textContent = (data.total_customers || 0).toLocaleString();
+                document.getElementById('totalServices').textContent = (data.detail_stats?.services || 0).toLocaleString();
+                document.getElementById('totalAppointments').textContent = (data.detail_stats?.appointments || 0).toLocaleString();
+                document.getElementById('totalPayments').textContent = (data.detail_stats?.payments || 0).toLocaleString();
+            } catch (e) {
+                console.error('Error loading stats:', e);
+            }
+        }
+
+        // Load customers
+        async function loadCustomers(page = 1) {
+            currentPage = page;
+            const search = document.getElementById('searchInput').value;
+            const branchId = document.getElementById('branchFilter').value;
+            const limit = document.getElementById('limitFilter').value;
+
+            const tbody = document.getElementById('customerTable');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                        <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                        <p>Đang tải dữ liệu...</p>
+                    </td>
+                </tr>
+            `;
+
+            try {
+                const params = new URLSearchParams({
+                    page: page,
+                    limit: limit,
+                    search: search
+                });
+                if (branchId) params.append('branch_id', branchId);
+
+                const res = await fetch(`/api/customers?${params}`);
+                const data = await res.json();
+
+                if (data.records && data.records.length > 0) {
+                    tbody.innerHTML = data.records.map(c => `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3 text-sm">${c.id}</td>
+                            <td class="px-4 py-3 text-sm font-mono">${c.code || '-'}</td>
+                            <td class="px-4 py-3 text-sm font-medium">${c.name || '-'}</td>
+                            <td class="px-4 py-3 text-sm">${c.phone || '-'}</td>
+                            <td class="px-4 py-3 text-sm">${c.branch_name || '-'}</td>
+                            <td class="px-4 py-3 text-sm">${formatDate(c.created_date)}</td>
+                            <td class="px-4 py-3 text-center">
+                                <button onclick="showCustomerDetail(${c.id})" 
+                                        class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                                    <i class="fas fa-eye mr-1"></i> Chi tiết
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                    
+                    // Update info
+                    document.getElementById('recordInfo').textContent = `Hiển thị ${data.records.length} / ${data.total} khách hàng`;
+                    document.getElementById('paginationInfo').textContent = `Trang ${data.page} / ${data.total_pages}`;
+                    
+                    // Build pagination
+                    buildPagination(data.page, data.total_pages);
+                } else {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                                <i class="fas fa-inbox text-4xl mb-2"></i>
+                                <p>Không tìm thấy khách hàng nào</p>
+                            </td>
+                        </tr>
+                    `;
+                    document.getElementById('recordInfo').textContent = '0 khách hàng';
+                    document.getElementById('paginationInfo').textContent = '';
+                    document.getElementById('pagination').innerHTML = '';
+                }
+            } catch (e) {
+                console.error('Error:', e);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="px-4 py-8 text-center text-red-500">
+                            <i class="fas fa-exclamation-circle text-4xl mb-2"></i>
+                            <p>Lỗi tải dữ liệu: ${e.message}</p>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        // Build pagination
+        function buildPagination(current, total) {
+            const container = document.getElementById('pagination');
+            let html = '';
+
+            if (total <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+
+            // Prev
+            if (current > 1) {
+                html += `<button onclick="loadCustomers(${current - 1})" class="px-3 py-1 border rounded hover:bg-gray-100">
+                    <i class="fas fa-chevron-left"></i>
+                </button>`;
+            }
+
+            // Page numbers
+            const start = Math.max(1, current - 2);
+            const end = Math.min(total, current + 2);
+
+            if (start > 1) {
+                html += `<button onclick="loadCustomers(1)" class="px-3 py-1 border rounded hover:bg-gray-100">1</button>`;
+                if (start > 2) html += `<span class="px-2">...</span>`;
+            }
+
+            for (let i = start; i <= end; i++) {
+                html += `<button onclick="loadCustomers(${i})" class="px-3 py-1 border rounded ${i === current ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}">${i}</button>`;
+            }
+
+            if (end < total) {
+                if (end < total - 1) html += `<span class="px-2">...</span>`;
+                html += `<button onclick="loadCustomers(${total})" class="px-3 py-1 border rounded hover:bg-gray-100">${total}</button>`;
+            }
+
+            // Next
+            if (current < total) {
+                html += `<button onclick="loadCustomers(${current + 1})" class="px-3 py-1 border rounded hover:bg-gray-100">
+                    <i class="fas fa-chevron-right"></i>
+                </button>`;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Show customer detail
+        async function showCustomerDetail(customerId) {
+            const modal = document.getElementById('customerModal');
+            const content = document.getElementById('modalContent');
+            
+            modal.classList.remove('hidden');
+            content.innerHTML = `
+                <div class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-4xl text-blue-500 mb-4"></i>
+                    <p>Đang tải chi tiết khách hàng...</p>
+                </div>
+            `;
+
+            try {
+                const res = await fetch(`/api/customers/${customerId}`);
+                const data = await res.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                const c = data.customer;
+                document.getElementById('modalTitle').textContent = `Chi tiết: ${c.name} (${c.code || 'N/A'})`;
+
+                content.innerHTML = `
+                    <!-- Customer Info -->
+                    <div class="mb-6">
+                        <h4 class="font-semibold text-lg mb-3 flex items-center gap-2">
+                            <i class="fas fa-user text-blue-500"></i> Thông tin khách hàng
+                        </h4>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded">
+                            <div><span class="text-gray-500">ID:</span> <strong>${c.id}</strong></div>
+                            <div><span class="text-gray-500">Mã KH:</span> <strong>${c.code || '-'}</strong></div>
+                            <div><span class="text-gray-500">Tên:</span> <strong>${c.name || '-'}</strong></div>
+                            <div><span class="text-gray-500">SĐT:</span> <strong>${c.phone || '-'}</strong></div>
+                            <div><span class="text-gray-500">Email:</span> <strong>${c.email || '-'}</strong></div>
+                            <div><span class="text-gray-500">Chi nhánh:</span> <strong>${c.branch_name || '-'}</strong></div>
+                            <div><span class="text-gray-500">Giới tính:</span> <strong>${c.gender || '-'}</strong></div>
+                            <div><span class="text-gray-500">Ngày sinh:</span> <strong>${formatDate(c.birthday)}</strong></div>
+                            <div><span class="text-gray-500">Ngày tạo:</span> <strong>${formatDate(c.created_date)}</strong></div>
+                        </div>
+                    </div>
+
+                    <!-- Services -->
+                    <div class="mb-6">
+                        <h4 class="font-semibold text-lg mb-3 flex items-center gap-2">
+                            <i class="fas fa-concierge-bell text-green-500"></i> Dịch vụ đã sử dụng
+                            <span class="text-sm font-normal text-gray-500">(${data.services.length} bản ghi)</span>
+                        </h4>
+                        ${data.services.length > 0 ? `
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm border">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left">Dịch vụ</th>
+                                            <th class="px-3 py-2 text-left">SL</th>
+                                            <th class="px-3 py-2 text-right">Giá</th>
+                                            <th class="px-3 py-2 text-left">Ngày</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.services.map(s => `
+                                            <tr class="border-t">
+                                                <td class="px-3 py-2">${s.service_name || '-'}</td>
+                                                <td class="px-3 py-2">${s.quantity || 1}</td>
+                                                <td class="px-3 py-2 text-right">${formatCurrency(s.price)}</td>
+                                                <td class="px-3 py-2">${formatDate(s.service_date)}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ` : '<p class="text-gray-500 italic">Chưa có dịch vụ nào</p>'}
+                    </div>
+
+                    <!-- Treatments -->
+                    <div class="mb-6">
+                        <h4 class="font-semibold text-lg mb-3 flex items-center gap-2">
+                            <i class="fas fa-tooth text-purple-500"></i> Điều trị
+                            <span class="text-sm font-normal text-gray-500">(${data.treatments.length} bản ghi)</span>
+                        </h4>
+                        ${data.treatments.length > 0 ? `
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm border">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left">Tên điều trị</th>
+                                            <th class="px-3 py-2 text-left">Bác sĩ</th>
+                                            <th class="px-3 py-2 text-left">Trạng thái</th>
+                                            <th class="px-3 py-2 text-left">Ngày</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.treatments.map(t => `
+                                            <tr class="border-t">
+                                                <td class="px-3 py-2">${t.treatment_name || '-'}</td>
+                                                <td class="px-3 py-2">${t.doctor_name || '-'}</td>
+                                                <td class="px-3 py-2">${t.status || '-'}</td>
+                                                <td class="px-3 py-2">${formatDate(t.treatment_date)}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ` : '<p class="text-gray-500 italic">Chưa có điều trị nào</p>'}
+                    </div>
+
+                    <!-- Appointments -->
+                    <div class="mb-6">
+                        <h4 class="font-semibold text-lg mb-3 flex items-center gap-2">
+                            <i class="fas fa-calendar text-orange-500"></i> Lịch hẹn
+                            <span class="text-sm font-normal text-gray-500">(${data.appointments.length} bản ghi)</span>
+                        </h4>
+                        ${data.appointments.length > 0 ? `
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm border">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left">Ngày hẹn</th>
+                                            <th class="px-3 py-2 text-left">Giờ</th>
+                                            <th class="px-3 py-2 text-left">Ghi chú</th>
+                                            <th class="px-3 py-2 text-left">Trạng thái</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.appointments.map(a => `
+                                            <tr class="border-t">
+                                                <td class="px-3 py-2">${formatDate(a.appointment_date)}</td>
+                                                <td class="px-3 py-2">${a.appointment_time || '-'}</td>
+                                                <td class="px-3 py-2">${a.notes || '-'}</td>
+                                                <td class="px-3 py-2">${a.status || '-'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ` : '<p class="text-gray-500 italic">Chưa có lịch hẹn nào</p>'}
+                    </div>
+
+                    <!-- Payments -->
+                    <div class="mb-6">
+                        <h4 class="font-semibold text-lg mb-3 flex items-center gap-2">
+                            <i class="fas fa-credit-card text-red-500"></i> Thanh toán
+                            <span class="text-sm font-normal text-gray-500">(${data.payments.length} bản ghi)</span>
+                        </h4>
+                        ${data.payments.length > 0 ? `
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm border">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="px-3 py-2 text-right">Số tiền</th>
+                                            <th class="px-3 py-2 text-left">PT Thanh toán</th>
+                                            <th class="px-3 py-2 text-left">Ghi chú</th>
+                                            <th class="px-3 py-2 text-left">Ngày</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.payments.map(p => `
+                                            <tr class="border-t">
+                                                <td class="px-3 py-2 text-right font-semibold">${formatCurrency(p.amount)}</td>
+                                                <td class="px-3 py-2">${p.payment_method || '-'}</td>
+                                                <td class="px-3 py-2">${p.notes || '-'}</td>
+                                                <td class="px-3 py-2">${formatDate(p.payment_date)}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ` : '<p class="text-gray-500 italic">Chưa có thanh toán nào</p>'}
+                    </div>
+
+                    <!-- History -->
+                    <div>
+                        <h4 class="font-semibold text-lg mb-3 flex items-center gap-2">
+                            <i class="fas fa-history text-gray-500"></i> Lịch sử
+                            <span class="text-sm font-normal text-gray-500">(${data.history.length} bản ghi)</span>
+                        </h4>
+                        ${data.history.length > 0 ? `
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm border">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left">Hành động</th>
+                                            <th class="px-3 py-2 text-left">Chi tiết</th>
+                                            <th class="px-3 py-2 text-left">Ngày</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.history.map(h => `
+                                            <tr class="border-t">
+                                                <td class="px-3 py-2">${h.action || '-'}</td>
+                                                <td class="px-3 py-2">${h.details || '-'}</td>
+                                                <td class="px-3 py-2">${formatDate(h.action_date)}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ` : '<p class="text-gray-500 italic">Chưa có lịch sử nào</p>'}
+                    </div>
+                `;
+            } catch (e) {
+                content.innerHTML = `
+                    <div class="text-center py-8 text-red-500">
+                        <i class="fas fa-exclamation-circle text-4xl mb-4"></i>
+                        <p>Lỗi: ${e.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('customerModal').classList.add('hidden');
+        }
+
+        // Format date
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            try {
+                const d = new Date(dateStr);
+                if (isNaN(d)) return dateStr;
+                return d.toLocaleDateString('vi-VN');
+            } catch {
+                return dateStr;
+            }
+        }
+
+        // Format currency
+        function formatCurrency(amount) {
+            if (amount == null) return '-';
+            return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+        }
+
+        // Close modal on outside click
+        document.getElementById('customerModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        // Close modal on ESC
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // Init
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBranches();
+            loadStats();
+            loadCustomers();
+        });
+    </script>
+</body>
+</html>

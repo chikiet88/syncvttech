@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTTech - Sync Status</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .sidebar { transition: width 0.3s; }
+        .main-content { transition: margin-left 0.3s; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar fixed left-0 top-0 h-full w-64 bg-gray-800 text-white z-50">
+        <div class="p-4 border-b border-gray-700">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <i class="fas fa-tooth"></i>
+                VTTech Dashboard
+            </h1>
+        </div>
+        
+        <nav class="p-4">
+            <ul class="space-y-2">
+                <li>
+                    <a href="analytics.html" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-home w-5"></i>
+                        <span>Tổng quan</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="customers.html" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-users w-5"></i>
+                        <span>Khách hàng</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="analytics.html#revenue" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-chart-line w-5"></i>
+                        <span>Doanh thu</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="analytics.html#branches" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-building w-5"></i>
+                        <span>Chi nhánh</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="analytics.html#services" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-concierge-bell w-5"></i>
+                        <span>Dịch vụ</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="sync-status.html" class="flex items-center gap-3 p-3 rounded bg-blue-600">
+                        <i class="fas fa-sync w-5"></i>
+                        <span>Sync Status</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="db.html" class="flex items-center gap-3 p-3 rounded hover:bg-gray-700">
+                        <i class="fas fa-database w-5"></i>
+                        <span>Database</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content ml-64 p-6">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Sync Status</h1>
+                <p class="text-gray-600">Trạng thái đồng bộ dữ liệu từ VTTech API</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="loadData()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2">
+                    <i class="fas fa-sync"></i> Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Customers</p>
+                        <p id="statCustomers" class="text-2xl font-bold text-blue-600">-</p>
+                    </div>
+                    <div class="bg-blue-100 p-3 rounded-full">
+                        <i class="fas fa-users text-blue-600"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Services</p>
+                        <p id="statServices" class="text-2xl font-bold text-green-600">-</p>
+                    </div>
+                    <div class="bg-green-100 p-3 rounded-full">
+                        <i class="fas fa-concierge-bell text-green-600"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Treatments</p>
+                        <p id="statTreatments" class="text-2xl font-bold text-purple-600">-</p>
+                    </div>
+                    <div class="bg-purple-100 p-3 rounded-full">
+                        <i class="fas fa-tooth text-purple-600"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Appointments</p>
+                        <p id="statAppointments" class="text-2xl font-bold text-orange-600">-</p>
+                    </div>
+                    <div class="bg-orange-100 p-3 rounded-full">
+                        <i class="fas fa-calendar text-orange-600"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Payments</p>
+                        <p id="statPayments" class="text-2xl font-bold text-red-600">-</p>
+                    </div>
+                    <div class="bg-red-100 p-3 rounded-full">
+                        <i class="fas fa-credit-card text-red-600"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <!-- Customers by Branch -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="font-semibold text-gray-700 mb-4">Khách hàng theo Chi nhánh</h3>
+                <div class="h-64">
+                    <canvas id="branchChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Sync History -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="font-semibold text-gray-700 mb-4">Lịch sử Sync theo ngày</h3>
+                <div class="h-64">
+                    <canvas id="syncHistoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sync Logs Table -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="font-semibold text-gray-700">Sync Logs</h3>
+                <select id="logTypeFilter" onchange="loadLogs()" class="border rounded px-3 py-1 text-sm">
+                    <option value="">Tất cả</option>
+                    <option value="customer">Customer Sync</option>
+                    <option value="detail">Detail Sync</option>
+                </select>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Loại</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ngày Sync</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Chi tiết</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Records</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Thời gian</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTable" class="divide-y divide-gray-200">
+                        <tr>
+                            <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                <p>Đang tải...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let branchChart = null;
+        let syncHistoryChart = null;
+
+        // Load all data
+        async function loadData() {
+            await Promise.all([
+                loadStats(),
+                loadLogs()
+            ]);
+        }
+
+        // Load stats
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/customers/stats');
+                const data = await res.json();
+
+                document.getElementById('statCustomers').textContent = (data.total_customers || 0).toLocaleString();
+                document.getElementById('statServices').textContent = (data.detail_stats?.services || 0).toLocaleString();
+                document.getElementById('statTreatments').textContent = (data.detail_stats?.treatments || 0).toLocaleString();
+                document.getElementById('statAppointments').textContent = (data.detail_stats?.appointments || 0).toLocaleString();
+                document.getElementById('statPayments').textContent = (data.detail_stats?.payments || 0).toLocaleString();
+
+                // Branch chart
+                updateBranchChart(data.by_branch || []);
+
+                // Sync history chart
+                updateSyncHistoryChart(data.sync_history || []);
+
+            } catch (e) {
+                console.error('Error loading stats:', e);
+            }
+        }
+
+        // Load logs
+        async function loadLogs() {
+            const logType = document.getElementById('logTypeFilter').value;
+            const tbody = document.getElementById('logsTable');
+
+            try {
+                const res = await fetch(`/api/sync-logs?type=${logType}&limit=100`);
+                const logs = await res.json();
+
+                if (logs.length > 0) {
+                    tbody.innerHTML = logs.map(log => {
+                        let details = '';
+                        let records = '';
+
+                        if (log.log_type === 'customer') {
+                            details = log.branch_name || '-';
+                            records = log.records_count || 0;
+                        } else {
+                            details = `Customer ${log.customer_id}`;
+                            records = `S:${log.services_count || 0} T:${log.treatments_count || 0} P:${log.payments_count || 0} A:${log.appointments_count || 0}`;
+                        }
+
+                        const statusClass = log.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+
+                        return `
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 text-sm">
+                                    <span class="px-2 py-1 rounded text-xs ${log.log_type === 'customer' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}">
+                                        ${log.log_type === 'customer' ? 'Customer' : 'Detail'}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-sm">${log.sync_date || '-'}</td>
+                                <td class="px-4 py-3 text-sm">${details}</td>
+                                <td class="px-4 py-3 text-sm font-mono">${records}</td>
+                                <td class="px-4 py-3 text-sm">
+                                    <span class="px-2 py-1 rounded text-xs ${statusClass}">
+                                        ${log.status || 'unknown'}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-500">${formatDateTime(log.created_at)}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                                <i class="fas fa-inbox text-4xl mb-2"></i>
+                                <p>Chưa có sync logs</p>
+                            </td>
+                        </tr>
+                    `;
+                }
+            } catch (e) {
+                console.error('Error loading logs:', e);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-4 py-8 text-center text-red-500">
+                            <i class="fas fa-exclamation-circle text-4xl mb-2"></i>
+                            <p>Lỗi: ${e.message}</p>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        // Update branch chart
+        function updateBranchChart(data) {
+            const ctx = document.getElementById('branchChart').getContext('2d');
+
+            if (branchChart) {
+                branchChart.destroy();
+            }
+
+            const filteredData = data.filter(d => d.customer_count > 0).slice(0, 10);
+
+            branchChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: filteredData.map(d => d.name || 'N/A'),
+                    datasets: [{
+                        label: 'Khách hàng',
+                        data: filteredData.map(d => d.customer_count),
+                        backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        // Update sync history chart
+        function updateSyncHistoryChart(data) {
+            const ctx = document.getElementById('syncHistoryChart').getContext('2d');
+
+            if (syncHistoryChart) {
+                syncHistoryChart.destroy();
+            }
+
+            const sortedData = data.sort((a, b) => a.sync_date.localeCompare(b.sync_date)).slice(-14);
+
+            syncHistoryChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: sortedData.map(d => d.sync_date),
+                    datasets: [{
+                        label: 'Số sync',
+                        data: sortedData.map(d => d.count),
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }, {
+                        label: 'Tổng records',
+                        data: sortedData.map(d => d.total_records),
+                        borderColor: 'rgb(34, 197, 94)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        // Format datetime
+        function formatDateTime(dateStr) {
+            if (!dateStr) return '-';
+            try {
+                const d = new Date(dateStr);
+                if (isNaN(d)) return dateStr;
+                return d.toLocaleString('vi-VN');
+            } catch {
+                return dateStr;
+            }
+        }
+
+        // Init
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>
