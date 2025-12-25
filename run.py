@@ -45,11 +45,13 @@ def print_menu():
     print("  \033[93m25.\033[0m 📊 Xem thống kê Customer Sync")
     print()
     print("  \033[94m--- Call Center ---\033[0m")
-    print("  \033[93m10.\033[0m 📞 Sync Call Center (hôm qua)")
-    print("  \033[93m11.\033[0m 📞 Sync Call Center (ngày tùy chọn)")
-    print("  \033[93m12.\033[0m 📞 Sync Call Center (khoảng thời gian)")
-    print("  \033[93m13.\033[0m 📊 Xem thống kê Call Center")
-    print("  \033[93m14.\033[0m 🔧 Cài đặt Cron Job Call Center")
+    print("  \033[93m10.\033[0m 📞 Sync PBX Calls (hôm qua)")
+    print("  \033[93m11.\033[0m 📞 Sync PBX Calls (ngày tùy chọn)")
+    print("  \033[93m12.\033[0m 📞 Sync PBX Calls (khoảng thời gian)")
+    print("  \033[93m13.\033[0m 👤 Sync Nhân viên từ VTTech")
+    print("  \033[93m14.\033[0m 📊 Xem thống kê Call Center")
+    print("  \033[93m15.\033[0m 🔄 Full Sync: PBX + Nhân viên")
+    print("  \033[93m16.\033[0m 🔧 Cài đặt Cron Job Call Center")
     print()
     print("  \033[91m0.\033[0m ❌ Thoát")
     print()
@@ -171,26 +173,6 @@ def run_callcenter_sync(date_from=None, date_to=None):
     input("\nNhấn Enter để tiếp tục...")
 
 
-def show_callcenter_stats():
-    """Hiển thị thống kê Call Center"""
-    print("\n\033[92m📊 Thống kê Call Center:\033[0m\n")
-    
-    try:
-        venv_python = BASE_DIR / "venv" / "bin" / "python"
-        python_cmd = str(venv_python) if venv_python.exists() else sys.executable
-        
-        subprocess.run([python_cmd, "-m", "callcenter.cli", "status"], cwd=str(BASE_DIR))
-        
-        print("\n\033[96m📋 Sync Logs gần đây:\033[0m")
-        subprocess.run([python_cmd, "-m", "callcenter.cli", "logs", "--limit", "5"], cwd=str(BASE_DIR))
-        
-    except Exception as e:
-        print(f"\033[91m❌ Lỗi: {e}\033[0m")
-        print("\033[90m   Hãy chắc chắn đã cài đặt: pip install httpx apscheduler\033[0m")
-    
-    input("\nNhấn Enter để tiếp tục...")
-
-
 def setup_callcenter_cron():
     """Cài đặt cron job cho Call Center"""
     print("\n\033[92m🔧 Cài đặt Cron Job Call Center:\033[0m\n")
@@ -200,6 +182,190 @@ def setup_callcenter_cron():
         subprocess.run(["bash", str(cron_script)])
     else:
         print("\033[91m❌ File callcenter/setup_cron.sh không tồn tại\033[0m")
+    
+    input("\nNhấn Enter để tiếp tục...")
+
+
+def run_employee_sync():
+    """Sync nhân viên từ VTTech"""
+    print("\n\033[92m👤 Đang sync nhân viên từ VTTech...\033[0m")
+    print("\033[90m   API: /Marketing/TicketGroupList/?handler=LoadData\033[0m\n")
+    
+    try:
+        cmd = [sys.executable, str(BASE_DIR / "callcenter" / "sync_employees.py")]
+        result = subprocess.run(cmd, cwd=str(BASE_DIR))
+        
+        if result.returncode == 0:
+            print("\n\033[92m✅ Sync nhân viên hoàn tất!\033[0m")
+        else:
+            print("\n\033[91m❌ Có lỗi khi sync nhân viên!\033[0m")
+            
+    except Exception as e:
+        print(f"\033[91m❌ Lỗi: {e}\033[0m")
+    
+    input("\nNhấn Enter để tiếp tục...")
+
+
+def run_full_callcenter_sync(date_from=None, date_to=None):
+    """Chạy Full Sync: PBX + Nhân viên"""
+    print("\n\033[92m🔄 FULL SYNC CALL CENTER\033[0m")
+    print("=" * 50)
+    
+    # Step 1: Sync Employees
+    print("\n\033[96m📍 BƯỚC 1: Sync Nhân viên từ VTTech\033[0m")
+    print("-" * 40)
+    
+    try:
+        cmd1 = [sys.executable, str(BASE_DIR / "callcenter" / "sync_employees.py")]
+        result1 = subprocess.run(cmd1, cwd=str(BASE_DIR))
+        
+        if result1.returncode == 0:
+            print("\033[92m✅ Bước 1 hoàn thành!\033[0m")
+        else:
+            print("\033[93m⚠️  Bước 1 có lỗi (tiếp tục sync PBX)...\033[0m")
+    except Exception as e:
+        print(f"\033[91m❌ Lỗi bước 1: {e}\033[0m")
+    
+    # Step 2: Sync PBX
+    print("\n\033[96m📞 BƯỚC 2: Sync PBX Calls\033[0m")
+    print("-" * 40)
+    
+    try:
+        venv_python = BASE_DIR / "venv" / "bin" / "python"
+        python_cmd = str(venv_python) if venv_python.exists() else sys.executable
+        
+        if date_from:
+            if date_to:
+                print(f"\033[90m   Khoảng thời gian: {date_from} -> {date_to}\033[0m")
+                cmd2 = [python_cmd, "-m", "callcenter.cli", "sync", "--date", date_from, "--to-date", date_to]
+            else:
+                print(f"\033[90m   Ngày: {date_from}\033[0m")
+                cmd2 = [python_cmd, "-m", "callcenter.cli", "sync", "--date", date_from]
+        else:
+            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            print(f"\033[90m   Ngày: {yesterday} (hôm qua)\033[0m")
+            cmd2 = [python_cmd, "-m", "callcenter.cli", "sync"]
+        
+        print()
+        result2 = subprocess.run(cmd2, cwd=str(BASE_DIR))
+        
+        if result2.returncode == 0:
+            print("\033[92m✅ Bước 2 hoàn thành!\033[0m")
+        else:
+            print("\033[91m❌ Bước 2 có lỗi!\033[0m")
+    except Exception as e:
+        print(f"\033[91m❌ Lỗi bước 2: {e}\033[0m")
+    
+    print("\n" + "=" * 50)
+    print("\033[92m🎉 FULL SYNC CALL CENTER HOÀN TẤT!\033[0m")
+    print("=" * 50)
+    
+    input("\nNhấn Enter để tiếp tục...")
+
+
+def show_callcenter_stats_detail():
+    """Hiển thị thống kê Call Center chi tiết với nhân viên"""
+    print("\n\033[92m📊 Thống kê Call Center (Chi tiết):\033[0m\n")
+    
+    try:
+        import sqlite3
+        db_path = BASE_DIR / "database" / "callcenter.db"
+        
+        if not db_path.exists():
+            print("\033[91m❌ Database chưa được tạo!\033[0m")
+            print("\033[90m   Hãy chạy sync trước.\033[0m")
+            input("\nNhấn Enter để tiếp tục...")
+            return
+        
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        
+        # Tổng quan
+        print("\033[96m📞 Tổng quan Cuộc gọi:\033[0m")
+        
+        cursor = conn.execute("SELECT COUNT(*) as count FROM callcenter_records")
+        total_calls = cursor.fetchone()['count']
+        print(f"   • Tổng cuộc gọi: {total_calls:,}")
+        
+        # Thống kê theo direction
+        cursor = conn.execute("""
+            SELECT direction, COUNT(*) as count 
+            FROM callcenter_records 
+            GROUP BY direction
+        """)
+        for row in cursor.fetchall():
+            direction = row['direction'] or 'unknown'
+            print(f"   • {direction}: {row['count']:,}")
+        
+        # Thống kê theo status
+        cursor = conn.execute("""
+            SELECT call_status, COUNT(*) as count 
+            FROM callcenter_records 
+            WHERE call_status IS NOT NULL
+            GROUP BY call_status
+            ORDER BY count DESC
+            LIMIT 5
+        """)
+        print("\n\033[96m📈 Theo trạng thái:\033[0m")
+        for row in cursor.fetchall():
+            status = row['call_status'] or 'unknown'
+            print(f"   • {status}: {row['count']:,}")
+        
+        # Thống kê nhân viên
+        cursor = conn.execute("SELECT COUNT(*) as count FROM callcenter_employees")
+        emp_count = cursor.fetchone()['count']
+        print(f"\n\033[96m👥 Nhân viên: {emp_count:,}\033[0m")
+        
+        if emp_count > 0:
+            # Top nhân viên có nhiều cuộc gọi
+            cursor = conn.execute("""
+                SELECT 
+                    e.name,
+                    e.extension,
+                    COUNT(p.id) as call_count,
+                    SUM(CASE WHEN p.direction = 'outbound' THEN 1 ELSE 0 END) as outbound_count,
+                    SUM(CASE WHEN p.direction = 'inbound' THEN 1 ELSE 0 END) as inbound_count
+                FROM callcenter_employees e
+                LEFT JOIN callcenter_records p ON e.extension = p.caller_id_number 
+                    OR e.extension = p.destination_number
+                GROUP BY e.id, e.name, e.extension
+                HAVING call_count > 0
+                ORDER BY call_count DESC
+                LIMIT 10
+            """)
+            
+            print("\n\033[96m🏆 Top nhân viên (theo số cuộc gọi):\033[0m")
+            for row in cursor.fetchall():
+                print(f"   • {row['name']} (ext: {row['extension']}): {row['call_count']} cuộc")
+                print(f"     └─ Gọi ra: {row['outbound_count']} | Gọi vào: {row['inbound_count']}")
+        
+        # Cuộc gọi gần đây
+        cursor = conn.execute("""
+            SELECT 
+                caller_id_number,
+                destination_number,
+                direction,
+                call_status,
+                duration,
+                created_at
+            FROM callcenter_records
+            ORDER BY created_at DESC
+            LIMIT 5
+        """)
+        
+        print("\n\033[96m📜 Cuộc gọi gần đây:\033[0m")
+        for row in cursor.fetchall():
+            direction_icon = "📤" if row['direction'] == 'outbound' else "📥"
+            status_icon = "✅" if row['call_status'] == 'ANSWERED' else "❌"
+            duration = row['duration'] or 0
+            print(f"   {direction_icon} {row['caller_id_number']} → {row['destination_number']} {status_icon} ({duration}s)")
+        
+        conn.close()
+        
+    except Exception as e:
+        print(f"\033[91m❌ Lỗi: {e}\033[0m")
+        import traceback
+        traceback.print_exc()
     
     input("\nNhấn Enter để tiếp tục...")
 
@@ -612,9 +778,33 @@ def main():
                 )
         
         elif choice == "13":
-            show_callcenter_stats()
+            run_employee_sync()
         
         elif choice == "14":
+            show_callcenter_stats_detail()
+        
+        elif choice == "15":
+            print("\n\033[96m🔄 Full Sync Call Center:\033[0m")
+            print("  1. Sync hôm qua")
+            print("  2. Sync ngày tùy chọn")
+            print("  3. Sync khoảng thời gian")
+            sub_choice = input("\n   Chọn (1-3): ").strip()
+            
+            if sub_choice == "1":
+                run_full_callcenter_sync()
+            elif sub_choice == "2":
+                date = get_custom_date()
+                if date:
+                    run_full_callcenter_sync(date_from=date)
+            elif sub_choice == "3":
+                start_date, end_date = get_date_range()
+                if start_date and end_date:
+                    run_full_callcenter_sync(
+                        date_from=start_date.strftime("%Y-%m-%d"),
+                        date_to=end_date.strftime("%Y-%m-%d")
+                    )
+        
+        elif choice == "16":
             setup_callcenter_cron()
         
         # Customer Sync options (NEW)
