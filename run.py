@@ -427,55 +427,160 @@ def run_customer_detail_sync(date_str=None, limit=None):
     input("\nNhấn Enter để tiếp tục...")
 
 
-def run_full_customer_sync(date_str=None):
+def run_full_customer_sync(date_str=None, date_from=None, date_to=None):
     """Chạy full sync: Branch → Customers → Details"""
-    if not date_str:
-        date_str = datetime.now().strftime("%Y-%m-%d")
-    
-    print("\n\033[92m🔄 FULL SYNC: Branch → Customers → Details\033[0m")
-    print(f"\033[90m   Ngày: {date_str}\033[0m")
-    print()
-    
-    # Confirm
-    confirm = input("\033[93m⚠️  Tiếp tục? (y/n): \033[0m").strip().lower()
-    if confirm != 'y':
-        print("\033[93m⏹️  Đã hủy.\033[0m")
-        input("\nNhấn Enter để tiếp tục...")
-        return
-    
-    print("\n" + "=" * 60)
-    
-    # Step 1: Sync customers by branch
-    print("\n\033[96m📍 BƯỚC 1: Sync Customers by Branch\033[0m")
-    print("-" * 40)
-    
-    try:
-        cmd1 = [sys.executable, str(BASE_DIR / "sync_customer_by_branch.py"), "--date", date_str]
-        result1 = subprocess.run(cmd1, capture_output=False)
+    if date_from and date_to:
+        # Sync theo khoảng thời gian - CHIA TỪNG NGÀY
+        print("\n\033[92m🔄 FULL SYNC: Branch → Customers → Details\033[0m")
+        print(f"\033[90m   Khoảng thời gian: {date_from} → {date_to}\033[0m")
+        print()
         
-        if result1.returncode == 0:
-            print("\033[92m✅ Bước 1 hoàn thành!\033[0m")
-        else:
-            print("\033[91m❌ Bước 1 có lỗi!\033[0m")
-    except Exception as e:
-        print(f"\033[91m❌ Lỗi bước 1: {e}\033[0m")
-    
-    print()
-    
-    # Step 2: Sync customer details
-    print("\n\033[96m📋 BƯỚC 2: Sync Customer Detail\033[0m")
-    print("-" * 40)
-    
-    try:
-        cmd2 = [sys.executable, str(BASE_DIR / "sync_customer_detail_full.py"), "--date", date_str]
-        result2 = subprocess.run(cmd2, capture_output=False)
+        # Tính số ngày
+        from datetime import datetime as dt
+        start_dt = dt.strptime(date_from, "%Y-%m-%d")
+        end_dt = dt.strptime(date_to, "%Y-%m-%d")
+        total_days = (end_dt - start_dt).days + 1
+        print(f"\033[90m   Tổng: {total_days} ngày (sẽ sync từng ngày một)\033[0m")
+        print(f"\033[90m   ⚡ Sync từng ngày để tránh quá tải và đảm bảo toàn vẹn dữ liệu\033[0m")
         
-        if result2.returncode == 0:
-            print("\033[92m✅ Bước 2 hoàn thành!\033[0m")
-        else:
-            print("\033[91m❌ Bước 2 có lỗi!\033[0m")
-    except Exception as e:
-        print(f"\033[91m❌ Lỗi bước 2: {e}\033[0m")
+        # Confirm
+        confirm = input("\033[93m⚠️  Tiếp tục? (y/n): \033[0m").strip().lower()
+        if confirm != 'y':
+            print("\033[93m⏹️  Đã hủy.\033[0m")
+            input("\nNhấn Enter để tiếp tục...")
+            return
+        
+        print("\n" + "=" * 70)
+        
+        # Thống kê tổng
+        total_stats = {
+            'days_success': 0,
+            'days_failed': 0,
+            'total_customers_synced': 0
+        }
+        
+        # Lặp qua từng ngày
+        current_dt = start_dt
+        day_num = 0
+        
+        while current_dt <= end_dt:
+            day_num += 1
+            current_date = current_dt.strftime("%Y-%m-%d")
+            
+            print(f"\n\033[95m{'='*70}\033[0m")
+            print(f"\033[95m📅 NGÀY {day_num}/{total_days}: {current_date}\033[0m")
+            print(f"\033[95m{'='*70}\033[0m")
+            
+            day_success = True
+            
+            # Step 1: Sync customers by branch cho ngày này
+            print(f"\n\033[96m📍 BƯỚC 1: Sync Customers by Branch ({current_date})\033[0m")
+            print("-" * 40)
+            
+            try:
+                cmd1 = [sys.executable, str(BASE_DIR / "sync_customer_by_branch.py"), "--date", current_date]
+                result1 = subprocess.run(cmd1, capture_output=False)
+                
+                if result1.returncode == 0:
+                    print("\033[92m✅ Bước 1 hoàn thành!\033[0m")
+                else:
+                    print("\033[91m❌ Bước 1 có lỗi!\033[0m")
+                    day_success = False
+            except Exception as e:
+                print(f"\033[91m❌ Lỗi bước 1: {e}\033[0m")
+                day_success = False
+            
+            # Step 2: Sync customer details cho ngày này
+            print(f"\n\033[96m📋 BƯỚC 2: Sync Customer Detail ({current_date})\033[0m")
+            print("-" * 40)
+            
+            try:
+                cmd2 = [sys.executable, str(BASE_DIR / "sync_customer_detail_full.py"), "--date", current_date]
+                result2 = subprocess.run(cmd2, capture_output=False)
+                
+                if result2.returncode == 0:
+                    print("\033[92m✅ Bước 2 hoàn thành!\033[0m")
+                else:
+                    print("\033[91m❌ Bước 2 có lỗi!\033[0m")
+                    day_success = False
+            except Exception as e:
+                print(f"\033[91m❌ Lỗi bước 2: {e}\033[0m")
+                day_success = False
+            
+            # Cập nhật thống kê
+            if day_success:
+                total_stats['days_success'] += 1
+                print(f"\n\033[92m✅ Ngày {current_date} hoàn thành!\033[0m")
+            else:
+                total_stats['days_failed'] += 1
+                print(f"\n\033[91m⚠️ Ngày {current_date} có lỗi!\033[0m")
+            
+            # Delay giữa các ngày để tránh quá tải
+            if current_dt < end_dt:
+                print(f"\033[90m⏳ Đợi 3 giây trước ngày tiếp theo...\033[0m")
+                time.sleep(3)
+            
+            current_dt += timedelta(days=1)
+        
+        # Tổng kết cuối cùng
+        print("\n" + "=" * 70)
+        print("\033[92m📊 TỔNG KẾT FULL SYNC KHOẢNG THỜI GIAN\033[0m")
+        print("=" * 70)
+        print(f"   📅 Khoảng thời gian: {date_from} → {date_to}")
+        print(f"   ✅ Ngày thành công: {total_stats['days_success']}/{total_days}")
+        if total_stats['days_failed'] > 0:
+            print(f"   ❌ Ngày có lỗi: {total_stats['days_failed']}")
+        print("=" * 70)
+        
+    else:
+        # Sync theo ngày đơn lẻ
+        if not date_str:
+            date_str = datetime.now().strftime("%Y-%m-%d")
+        
+        print("\n\033[92m🔄 FULL SYNC: Branch → Customers → Details\033[0m")
+        print(f"\033[90m   Ngày: {date_str}\033[0m")
+        print()
+        
+        # Confirm
+        confirm = input("\033[93m⚠️  Tiếp tục? (y/n): \033[0m").strip().lower()
+        if confirm != 'y':
+            print("\033[93m⏹️  Đã hủy.\033[0m")
+            input("\nNhấn Enter để tiếp tục...")
+            return
+        
+        print("\n" + "=" * 60)
+        
+        # Step 1: Sync customers by branch
+        print("\n\033[96m📍 BƯỚC 1: Sync Customers by Branch\033[0m")
+        print("-" * 40)
+        
+        try:
+            cmd1 = [sys.executable, str(BASE_DIR / "sync_customer_by_branch.py"), "--date", date_str]
+            result1 = subprocess.run(cmd1, capture_output=False)
+            
+            if result1.returncode == 0:
+                print("\033[92m✅ Bước 1 hoàn thành!\033[0m")
+            else:
+                print("\033[91m❌ Bước 1 có lỗi!\033[0m")
+        except Exception as e:
+            print(f"\033[91m❌ Lỗi bước 1: {e}\033[0m")
+        
+        print()
+        
+        # Step 2: Sync customer details
+        print("\n\033[96m📋 BƯỚC 2: Sync Customer Detail\033[0m")
+        print("-" * 40)
+        
+        try:
+            cmd2 = [sys.executable, str(BASE_DIR / "sync_customer_detail_full.py"), "--date", date_str]
+            result2 = subprocess.run(cmd2, capture_output=False)
+            
+            if result2.returncode == 0:
+                print("\033[92m✅ Bước 2 hoàn thành!\033[0m")
+            else:
+                print("\033[91m❌ Bước 2 có lỗi!\033[0m")
+        except Exception as e:
+            print(f"\033[91m❌ Lỗi bước 2: {e}\033[0m")
     
     print("\n" + "=" * 60)
     print("\033[92m🎉 FULL SYNC HOÀN TẤT!\033[0m")
@@ -855,7 +960,8 @@ def main():
             print("\n\033[96m🔄 Full Sync:\033[0m")
             print("  1. Sync hôm nay")
             print("  2. Sync ngày tùy chọn")
-            sub_choice = input("\n   Chọn (1-2): ").strip()
+            print("  3. Sync khoảng thời gian")
+            sub_choice = input("\n   Chọn (1-3): ").strip()
             
             if sub_choice == "1":
                 today = datetime.now().strftime("%Y-%m-%d")
@@ -864,6 +970,13 @@ def main():
                 date = get_custom_date()
                 if date:
                     run_full_customer_sync(date_str=date)
+            elif sub_choice == "3":
+                start_date, end_date = get_date_range()
+                if start_date and end_date:
+                    run_full_customer_sync(
+                        date_from=start_date.strftime("%Y-%m-%d"),
+                        date_to=end_date.strftime("%Y-%m-%d")
+                    )
         
         elif choice == "25":
             show_customer_sync_stats()

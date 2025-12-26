@@ -334,11 +334,25 @@ class CustomerDetailSync:
         conn.close()
         logger.info("✅ Database tables for customer detail ensured")
     
-    def get_customer_ids_to_sync(self, sync_date: str = None) -> List[int]:
-        """Lấy danh sách CustomerID cần sync từ database"""
+    def get_customer_ids_to_sync(self, sync_date: str = None, date_from: str = None, date_to: str = None) -> List[int]:
+        """Lấy danh sách CustomerID cần sync từ database
+        
+        Args:
+            sync_date: Sync customers từ ngày cụ thể (YYYY-MM-DD)
+            date_from: Ngày bắt đầu khoảng thời gian (YYYY-MM-DD)
+            date_to: Ngày kết thúc khoảng thời gian (YYYY-MM-DD)
+        """
         conn = self.get_conn()
         
-        if sync_date:
+        if date_from and date_to:
+            # Lấy customers được sync trong khoảng thời gian
+            cursor = conn.execute("""
+                SELECT DISTINCT c.id, c.name, c.branch_id
+                FROM customers c
+                WHERE DATE(c.updated_at) BETWEEN ? AND ?
+                ORDER BY c.id
+            """, (date_from, date_to))
+        elif sync_date:
             # Lấy customers được sync trong ngày cụ thể
             cursor = conn.execute("""
                 SELECT DISTINCT c.id, c.name, c.branch_id
@@ -716,12 +730,14 @@ class CustomerDetailSync:
         
         return result
     
-    def sync_all_customer_details(self, sync_date: str = None, limit: int = None):
+    def sync_all_customer_details(self, sync_date: str = None, date_from: str = None, date_to: str = None, limit: int = None):
         """
         Sync chi tiết của tất cả customers
         
         Args:
             sync_date: Chỉ sync customers được cập nhật trong ngày này
+            date_from: Ngày bắt đầu khoảng thời gian
+            date_to: Ngày kết thúc khoảng thời gian
             limit: Giới hạn số lượng customers để sync (cho test)
         """
         self.stats['start_time'] = datetime.now()
@@ -729,6 +745,11 @@ class CustomerDetailSync:
         logger.info("\n" + "=" * 70)
         logger.info("🚀 BẮT ĐẦU SYNC CUSTOMER DETAIL")
         logger.info("=" * 70)
+        
+        if date_from and date_to:
+            logger.info(f"📅 Khoảng thời gian: {date_from} → {date_to}")
+        elif sync_date:
+            logger.info(f"📅 Ngày: {sync_date}")
         
         # Đảm bảo tables tồn tại
         self.ensure_tables()
@@ -739,7 +760,7 @@ class CustomerDetailSync:
             return
         
         # Lấy danh sách customers cần sync
-        customers = self.get_customer_ids_to_sync(sync_date)
+        customers = self.get_customer_ids_to_sync(sync_date, date_from, date_to)
         
         if limit:
             customers = customers[:limit]
@@ -832,6 +853,8 @@ class CustomerDetailSync:
 def main():
     parser = argparse.ArgumentParser(description='Sync Customer Detail từ VTTech')
     parser.add_argument('--date', type=str, help='Chỉ sync customers updated trong ngày này (YYYY-MM-DD)')
+    parser.add_argument('--date-from', type=str, help='Ngày bắt đầu khoảng thời gian (YYYY-MM-DD)')
+    parser.add_argument('--date-to', type=str, help='Ngày kết thúc khoảng thời gian (YYYY-MM-DD)')
     parser.add_argument('--limit', type=int, help='Giới hạn số customers để sync (cho test)')
     parser.add_argument('--customer-id', type=int, help='Sync chi tiết của một customer cụ thể')
     
@@ -847,9 +870,17 @@ def main():
             logger.info(f"Result: {result}")
     else:
         # Sync tất cả customers
-        # Nếu có --date, sử dụng date đó, nếu không dùng ngày hôm nay
-        sync_date = args.date or datetime.now().strftime('%Y-%m-%d')
-        syncer.sync_all_customer_details(sync_date=sync_date, limit=args.limit)
+        if args.date_from and args.date_to:
+            # Sync theo khoảng thời gian
+            syncer.sync_all_customer_details(
+                date_from=args.date_from, 
+                date_to=args.date_to, 
+                limit=args.limit
+            )
+        else:
+            # Nếu có --date, sử dụng date đó, nếu không dùng ngày hôm nay
+            sync_date = args.date or datetime.now().strftime('%Y-%m-%d')
+            syncer.sync_all_customer_details(sync_date=sync_date, limit=args.limit)
 
 
 if __name__ == "__main__":
