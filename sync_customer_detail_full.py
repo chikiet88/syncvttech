@@ -198,6 +198,7 @@ class CustomerDetailSync:
         cursor = conn.cursor()
         
         # Bảng customer_services - Dịch vụ của khách
+        # Sử dụng UNIQUE constraint để hỗ trợ INSERT OR REPLACE
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS customer_services (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -219,7 +220,8 @@ class CustomerDetailSync:
                 note TEXT,
                 raw_data TEXT,
                 synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (customer_id) REFERENCES customers(id)
+                FOREIGN KEY (customer_id) REFERENCES customers(id),
+                UNIQUE(customer_id, service_id, created_date)
             )
         """)
         
@@ -240,7 +242,8 @@ class CustomerDetailSync:
                 note TEXT,
                 raw_data TEXT,
                 synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (customer_id) REFERENCES customers(id)
+                FOREIGN KEY (customer_id) REFERENCES customers(id),
+                UNIQUE(customer_id, treatment_id)
             )
         """)
         
@@ -260,7 +263,8 @@ class CustomerDetailSync:
                 note TEXT,
                 raw_data TEXT,
                 synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (customer_id) REFERENCES customers(id)
+                FOREIGN KEY (customer_id) REFERENCES customers(id),
+                UNIQUE(customer_id, payment_id)
             )
         """)
         
@@ -282,7 +286,8 @@ class CustomerDetailSync:
                 note TEXT,
                 raw_data TEXT,
                 synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (customer_id) REFERENCES customers(id)
+                FOREIGN KEY (customer_id) REFERENCES customers(id),
+                UNIQUE(customer_id, appointment_id)
             )
         """)
         
@@ -301,7 +306,8 @@ class CustomerDetailSync:
                 note TEXT,
                 raw_data TEXT,
                 synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (customer_id) REFERENCES customers(id)
+                FOREIGN KEY (customer_id) REFERENCES customers(id),
+                UNIQUE(customer_id, history_id)
             )
         """)
         
@@ -337,6 +343,8 @@ class CustomerDetailSync:
     def get_customer_ids_to_sync(self, sync_date: str = None, date_from: str = None, date_to: str = None) -> List[int]:
         """Lấy danh sách CustomerID cần sync từ database
         
+        Logic: Lấy customers dựa vào cột sync_date (ngày dữ liệu được sync)
+        
         Args:
             sync_date: Sync customers từ ngày cụ thể (YYYY-MM-DD)
             date_from: Ngày bắt đầu khoảng thời gian (YYYY-MM-DD)
@@ -345,19 +353,19 @@ class CustomerDetailSync:
         conn = self.get_conn()
         
         if date_from and date_to:
-            # Lấy customers được sync trong khoảng thời gian
+            # Lấy customers theo khoảng sync_date
             cursor = conn.execute("""
                 SELECT DISTINCT c.id, c.name, c.branch_id
                 FROM customers c
-                WHERE DATE(c.updated_at) BETWEEN ? AND ?
+                WHERE c.sync_date BETWEEN ? AND ?
                 ORDER BY c.id
             """, (date_from, date_to))
         elif sync_date:
-            # Lấy customers được sync trong ngày cụ thể
+            # Lấy customers theo sync_date cụ thể
             cursor = conn.execute("""
                 SELECT DISTINCT c.id, c.name, c.branch_id
                 FROM customers c
-                WHERE DATE(c.updated_at) = ?
+                WHERE c.sync_date = ?
                 ORDER BY c.id
             """, (sync_date,))
         else:
@@ -460,19 +468,19 @@ class CustomerDetailSync:
         return history
     
     def save_customer_services(self, customer_id: int, services: List[Dict]) -> int:
-        """Lưu services vào database"""
+        """Lưu services vào database - Sử dụng INSERT OR REPLACE để tối ưu"""
         if not services:
             return 0
         
         conn = self.get_conn()
         count = 0
         try:
-            # Xóa dữ liệu cũ của customer này
-            conn.execute("DELETE FROM customer_services WHERE customer_id = ?", (customer_id,))
+            # Sử dụng transaction
+            conn.execute("BEGIN TRANSACTION")
             
             for svc in services:
                 conn.execute("""
-                    INSERT INTO customer_services 
+                    INSERT OR REPLACE INTO customer_services 
                     (customer_id, service_id, service_name, service_code, quantity, used_quantity,
                      price, discount, total, paid, debt, status, created_date, 
                      branch_id, branch_name, note, raw_data, synced_at)
@@ -498,26 +506,28 @@ class CustomerDetailSync:
                     datetime.now().isoformat()
                 ))
                 count += 1
+            
             conn.commit()
         except Exception as e:
+            conn.rollback()
             logger.error(f"Error saving services for customer {customer_id}: {e}")
         finally:
             conn.close()
         return count
     
     def save_customer_treatments(self, customer_id: int, treatments: List[Dict]) -> int:
-        """Lưu treatments vào database"""
+        """Lưu treatments vào database - Sử dụng INSERT OR REPLACE để tối ưu"""
         if not treatments:
             return 0
         
         conn = self.get_conn()
         count = 0
         try:
-            conn.execute("DELETE FROM customer_treatments WHERE customer_id = ?", (customer_id,))
+            conn.execute("BEGIN TRANSACTION")
             
             for t in treatments:
                 conn.execute("""
-                    INSERT INTO customer_treatments 
+                    INSERT OR REPLACE INTO customer_treatments 
                     (customer_id, treatment_id, service_id, service_name, employee_id, employee_name,
                      treatment_date, branch_id, branch_name, status, note, raw_data, synced_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -537,26 +547,28 @@ class CustomerDetailSync:
                     datetime.now().isoformat()
                 ))
                 count += 1
+            
             conn.commit()
         except Exception as e:
+            conn.rollback()
             logger.error(f"Error saving treatments for customer {customer_id}: {e}")
         finally:
             conn.close()
         return count
     
     def save_customer_payments(self, customer_id: int, payments: List[Dict]) -> int:
-        """Lưu payments vào database"""
+        """Lưu payments vào database - Sử dụng INSERT OR REPLACE để tối ưu"""
         if not payments:
             return 0
         
         conn = self.get_conn()
         count = 0
         try:
-            conn.execute("DELETE FROM customer_payments WHERE customer_id = ?", (customer_id,))
+            conn.execute("BEGIN TRANSACTION")
             
             for p in payments:
                 conn.execute("""
-                    INSERT INTO customer_payments 
+                    INSERT OR REPLACE INTO customer_payments 
                     (customer_id, payment_id, amount, payment_date, payment_method, payment_type,
                      branch_id, branch_name, service_name, note, raw_data, synced_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -575,26 +587,28 @@ class CustomerDetailSync:
                     datetime.now().isoformat()
                 ))
                 count += 1
+            
             conn.commit()
         except Exception as e:
+            conn.rollback()
             logger.error(f"Error saving payments for customer {customer_id}: {e}")
         finally:
             conn.close()
         return count
     
     def save_customer_appointments(self, customer_id: int, appointments: List[Dict]) -> int:
-        """Lưu appointments vào database"""
+        """Lưu appointments vào database - Sử dụng INSERT OR REPLACE để tối ưu"""
         if not appointments:
             return 0
         
         conn = self.get_conn()
         count = 0
         try:
-            conn.execute("DELETE FROM customer_appointments WHERE customer_id = ?", (customer_id,))
+            conn.execute("BEGIN TRANSACTION")
             
             for a in appointments:
                 conn.execute("""
-                    INSERT INTO customer_appointments 
+                    INSERT OR REPLACE INTO customer_appointments 
                     (customer_id, appointment_id, appointment_date, service_id, service_name,
                      employee_id, employee_name, branch_id, branch_name, status, status_name,
                      note, raw_data, synced_at)
@@ -616,26 +630,28 @@ class CustomerDetailSync:
                     datetime.now().isoformat()
                 ))
                 count += 1
+            
             conn.commit()
         except Exception as e:
+            conn.rollback()
             logger.error(f"Error saving appointments for customer {customer_id}: {e}")
         finally:
             conn.close()
         return count
     
     def save_customer_history(self, customer_id: int, history: List[Dict]) -> int:
-        """Lưu history vào database"""
+        """Lưu history vào database - Sử dụng INSERT OR REPLACE để tối ưu"""
         if not history:
             return 0
         
         conn = self.get_conn()
         count = 0
         try:
-            conn.execute("DELETE FROM customer_history WHERE customer_id = ?", (customer_id,))
+            conn.execute("BEGIN TRANSACTION")
             
             for h in history:
                 conn.execute("""
-                    INSERT INTO customer_history 
+                    INSERT OR REPLACE INTO customer_history 
                     (customer_id, history_id, action_type, action_date, employee_id, employee_name,
                      content, result, note, raw_data, synced_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -653,8 +669,10 @@ class CustomerDetailSync:
                     datetime.now().isoformat()
                 ))
                 count += 1
+            
             conn.commit()
         except Exception as e:
+            conn.rollback()
             logger.error(f"Error saving history for customer {customer_id}: {e}")
         finally:
             conn.close()

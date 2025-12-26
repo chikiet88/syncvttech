@@ -201,10 +201,20 @@ class VTTechCustomerSync:
                 total_debt REAL DEFAULT 0,
                 point INTEGER DEFAULT 0,
                 is_active INTEGER DEFAULT 1,
+                sync_date DATE,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        
+        # Thêm cột sync_date nếu chưa có (cho database cũ)
+        try:
+            cursor.execute("ALTER TABLE customers ADD COLUMN sync_date DATE")
+        except:
+            pass  # Cột đã tồn tại
+        
+        # Tạo index cho sync_date
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_customers_sync_date ON customers(sync_date)")
         
         # Bảng branches
         cursor.execute("""
@@ -300,10 +310,12 @@ class VTTechCustomerSync:
             return []
     
     def save_branches_to_db(self, branches: List[Dict]) -> int:
-        """Lưu branches vào database"""
+        """Lưu branches vào database - Sử dụng transaction để đảm bảo toàn vẹn"""
         conn = self.get_conn()
         count = 0
         try:
+            conn.execute("BEGIN TRANSACTION")
+            
             for data in branches:
                 conn.execute("""
                     INSERT OR REPLACE INTO branches (id, code, name, address, phone, email, is_active, updated_at)
@@ -319,9 +331,11 @@ class VTTechCustomerSync:
                     datetime.now().isoformat()
                 ))
                 count += 1
+            
             conn.commit()
             logger.info(f"  💾 Saved {count} branches to DB")
         except Exception as e:
+            conn.rollback()
             logger.error(f"  ❌ Error saving branches: {e}")
         finally:
             conn.close()
@@ -379,11 +393,24 @@ class VTTechCustomerSync:
         
         return all_customers
     
-    def save_customers_to_db(self, customers: List[Dict], branch_id: int = None) -> int:
-        """Lưu customers vào database"""
+    def save_customers_to_db(self, customers: List[Dict], branch_id: int = None, sync_date: str = None) -> int:
+        """Lưu customers vào database - Sử dụng transaction để đảm bảo toàn vẹn
+        
+        Args:
+            customers: Danh sách customers từ API
+            branch_id: ID của branch
+            sync_date: Ngày sync data (format: YYYY-MM-DD), dùng để tracking
+        """
         conn = self.get_conn()
         count = 0
+        
+        # Nếu không có sync_date, dùng ngày hiện tại
+        if not sync_date:
+            sync_date = datetime.now().strftime('%Y-%m-%d')
+        
         try:
+            conn.execute("BEGIN TRANSACTION")
+            
             for data in customers:
                 # Map fields từ API response sang database schema
                 customer_id = data.get('CustID', data.get('ID'))
@@ -392,8 +419,8 @@ class VTTechCustomerSync:
                     INSERT OR REPLACE INTO customers 
                     (id, code, name, phone, email, gender, birthday, address, 
                      city_id, district_id, ward_id, branch_id, source_id, 
-                     membership_id, total_spent, total_debt, point, is_active, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     membership_id, total_spent, total_debt, point, is_active, sync_date, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     customer_id,
                     data.get('Code', data.get('CustCode', '')),
@@ -413,11 +440,14 @@ class VTTechCustomerSync:
                     data.get('TotalDebt', data.get('Debt', 0)),
                     data.get('Point', 0),
                     1,
+                    sync_date,
                     datetime.now().isoformat()
                 ))
                 count += 1
+            
             conn.commit()
         except Exception as e:
+            conn.rollback()
             logger.error(f"  ❌ Error saving customers: {e}")
             self.stats['errors'] += 1
         finally:
@@ -476,6 +506,9 @@ class VTTechCustomerSync:
         
         total_customers_saved = 0
         
+        # Lấy sync_date từ date_from (format: YYYY-MM-DD HH:MM:SS -> YYYY-MM-DD)
+        sync_date_str = date_from.split()[0] if ' ' in date_from else date_from
+        
         for i, branch in enumerate(branches, 1):
             branch_id = branch.get('ID')
             branch_name = branch.get('Name', f'Branch {branch_id}')
@@ -489,24 +522,24 @@ class VTTechCustomerSync:
                 if customers:
                     logger.info(f"   ✅ Tìm thấy {len(customers)} khách hàng")
                     
-                    # Lưu vào database
-                    saved = self.save_customers_to_db(customers, branch_id)
+                    # Lưu vào database với sync_date
+                    saved = self.save_customers_to_db(customers, branch_id, sync_date=sync_date_str)
                     total_customers_saved += saved
-                    logger.info(f"   💾 Đã lưu {saved} khách hàng vào DB")
+                    logger.info(f"   💾 Đã lưu {saved} khách hàng vào DB (sync_date: {sync_date_str})")
                     
                     # Log sync
-                    self.log_sync(date_from.split()[0], 'customer_list', branch_id, branch_name, 
+                    self.log_sync(sync_date_str, 'customer_list', branch_id, branch_name, 
                                   len(customers), 'success')
                 else:
                     logger.info(f"   ℹ️ Không có khách hàng trong khoảng thời gian này")
-                    self.log_sync(date_from.split()[0], 'customer_list', branch_id, branch_name, 
+                    self.log_sync(sync_date_str, 'customer_list', branch_id, branch_name, 
                                   0, 'no_data')
                 
                 self.stats['total_customers'] += len(customers) if customers else 0
                 
             except Exception as e:
                 logger.error(f"   ❌ Lỗi khi lấy khách hàng branch {branch_id}: {e}")
-                self.log_sync(date_from.split()[0], 'customer_list', branch_id, branch_name, 
+                self.log_sync(sync_date_str, 'customer_list', branch_id, branch_name, 
                               0, 'error', str(e))
                 self.stats['errors'] += 1
             
