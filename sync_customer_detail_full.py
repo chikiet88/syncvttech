@@ -130,36 +130,67 @@ class CustomerDetailSync:
             logger.error(f"❌ Lỗi đăng nhập: {e}")
             return False
     
+    def init_xsrf_token(self) -> str:
+        """Lấy XSRF token từ ListCustomer page (cần gọi 1 lần sau login)"""
+        try:
+            resp = self.session.get(f"{BASE_URL}/Customer/ListCustomer", timeout=30)
+            if resp.status_code == 200:
+                match = re.search(r'name=__RequestVerificationToken[^>]*value=([^\s/>]+)', resp.text)
+                if match:
+                    return match.group(1)
+        except Exception as e:
+            logger.error(f"❌ Lỗi lấy XSRF token: {e}")
+        return ''
+    
     def set_customer_context(self, customer_id: int) -> bool:
         """
         Set context cho customer bằng cách GET trang MainCustomer
         Đây là bước BẮT BUỘC trước khi gọi các handler lấy chi tiết
         """
         try:
+            # Nếu chưa có XSRF token, lấy từ ListCustomer
+            if not hasattr(self, '_base_xsrf') or not self._base_xsrf:
+                self._base_xsrf = self.init_xsrf_token()
+            
+            # Access MainCustomer để set session context
             resp = self.session.get(
                 f"{BASE_URL}/Customer/MainCustomer?CustomerID={customer_id}",
                 timeout=30
             )
             if resp.status_code == 200:
-                # Extract XSRF token
+                # Thử lấy XSRF từ MainCustomer page
                 match = re.search(r'name=__RequestVerificationToken[^>]*value=([^\s/>]+)', resp.text)
                 if match:
                     self.xsrf_tokens[customer_id] = match.group(1)
-                    self.current_customer_id = customer_id
-                    return True
+                else:
+                    # Fallback: dùng XSRF từ ListCustomer
+                    self.xsrf_tokens[customer_id] = self._base_xsrf
+                
+                self.current_customer_id = customer_id
+                return True
         except Exception as e:
             logger.error(f"❌ Lỗi set_customer_context cho ID {customer_id}: {e}")
         return False
     
     def call_handler(self, page_url: str, handler: str, data: Dict = None, retry: int = 3) -> Any:
-        """Gọi handler với XSRF token"""
+        """Gọi handler với XSRF token và CustomerID"""
         for attempt in range(retry):
             try:
                 xsrf = self.xsrf_tokens.get(self.current_customer_id, '')
                 
+                # Tạo form data với CustomerID - BẮT BUỘC để server biết customer nào
+                form_data = {
+                    '__RequestVerificationToken': xsrf,
+                    'CustomerID': self.current_customer_id,
+                    '__CUSTOMERID': self.current_customer_id
+                }
+                # Merge với data truyền vào
+                if data:
+                    form_data.update(data)
+                
                 resp = self.session.post(
                     f"{BASE_URL}{page_url}?handler={handler}",
-                    data=data or {},
+                    data=form_data,
                     headers={
                         'Content-Type': 'application/x-www-form-urlencoded',
                         'X-Requested-With': 'XMLHttpRequest',
@@ -329,6 +360,26 @@ class CustomerDetailSync:
             )
         """)
         
+        # Bảng để track data changes (audit log) cho customer details
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS data_change_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                table_name TEXT NOT NULL,
+                record_id INTEGER NOT NULL,
+                change_type TEXT NOT NULL,
+                field_name TEXT,
+                old_value TEXT,
+                new_value TEXT,
+                sync_date DATE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Tạo indexes cho change logs
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_change_logs_table ON data_change_logs(table_name)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_change_logs_record ON data_change_logs(record_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_change_logs_date ON data_change_logs(sync_date)")
+        
         # Tạo indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_cs_customer ON customer_services(customer_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ct_customer ON customer_treatments(customer_id)")
@@ -467,18 +518,84 @@ class CustomerDetailSync:
         
         return history
     
+    def log_data_change(self, conn, table_name: str, record_id: int, change_type: str, 
+                        field_name: str = None, old_value: str = None, new_value: str = None):
+        """Ghi log thay đổi dữ liệu"""
+        today = datetime.now().strftime('%Y-%m-%d')
+        try:
+            conn.execute("""
+                INSERT INTO data_change_logs 
+                (table_name, record_id, change_type, field_name, old_value, new_value, sync_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (table_name, record_id, change_type, field_name, 
+                  str(old_value) if old_value is not None else None,
+                  str(new_value) if new_value is not None else None, 
+                  today))
+        except Exception as e:
+            logger.debug(f"Error logging change: {e}")
+    
+    def compare_and_log_changes(self, conn, table_name: str, record_id: int, 
+                                 old_data: dict, new_data: dict, tracked_fields: list):
+        """So sánh và log các thay đổi"""
+        changes = []
+        for field in tracked_fields:
+            old_val = old_data.get(field) if old_data else None
+            new_val = new_data.get(field)
+            
+            old_str = str(old_val) if old_val is not None else ''
+            new_str = str(new_val) if new_val is not None else ''
+            
+            if old_str != new_str:
+                self.log_data_change(conn, table_name, record_id, 'UPDATE', field, old_str, new_str)
+                changes.append(field)
+        
+        return changes
+
     def save_customer_services(self, customer_id: int, services: List[Dict]) -> int:
-        """Lưu services vào database - Sử dụng INSERT OR REPLACE để tối ưu"""
+        """Lưu services vào database - Kiểm tra thay đổi và log"""
         if not services:
             return 0
         
         conn = self.get_conn()
         count = 0
+        new_count = 0
+        updated_count = 0
+        
+        # Fields cần track
+        tracked_fields = ['quantity', 'used_quantity', 'total', 'paid', 'debt', 'status']
+        
         try:
-            # Sử dụng transaction
             conn.execute("BEGIN TRANSACTION")
             
             for svc in services:
+                service_id = svc.get('ServiceID', svc.get('ID'))
+                created_date = svc.get('CreatedDate', svc.get('CreateDate'))
+                
+                # Kiểm tra record cũ
+                cursor = conn.execute("""
+                    SELECT * FROM customer_services 
+                    WHERE customer_id = ? AND service_id = ? AND created_date = ?
+                """, (customer_id, service_id, created_date))
+                existing = cursor.fetchone()
+                
+                new_data = {
+                    'quantity': svc.get('Quantity', svc.get('Qty', 1)),
+                    'used_quantity': svc.get('UsedQuantity', svc.get('Used', 0)),
+                    'total': svc.get('Total', svc.get('Amount', 0)),
+                    'paid': svc.get('Paid', 0),
+                    'debt': svc.get('Debt', 0),
+                    'status': svc.get('Status', svc.get('StatusName', '')),
+                }
+                
+                if existing:
+                    old_data = dict(existing)
+                    self.compare_and_log_changes(conn, 'customer_services', existing['id'], old_data, new_data, tracked_fields)
+                    updated_count += 1
+                else:
+                    self.log_data_change(conn, 'customer_services', service_id, 'INSERT', 
+                                        'service_name', None, svc.get('ServiceName', svc.get('Name', '')))
+                    new_count += 1
+                
                 conn.execute("""
                     INSERT OR REPLACE INTO customer_services 
                     (customer_id, service_id, service_name, service_code, quantity, used_quantity,
@@ -487,18 +604,18 @@ class CustomerDetailSync:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     customer_id,
-                    svc.get('ServiceID', svc.get('ID')),
+                    service_id,
                     svc.get('ServiceName', svc.get('Name', '')),
                     svc.get('ServiceCode', svc.get('Code', '')),
-                    svc.get('Quantity', svc.get('Qty', 1)),
-                    svc.get('UsedQuantity', svc.get('Used', 0)),
+                    new_data['quantity'],
+                    new_data['used_quantity'],
                     svc.get('Price', 0),
                     svc.get('Discount', 0),
-                    svc.get('Total', svc.get('Amount', 0)),
-                    svc.get('Paid', 0),
-                    svc.get('Debt', 0),
-                    svc.get('Status', svc.get('StatusName', '')),
-                    svc.get('CreatedDate', svc.get('CreateDate')),
+                    new_data['total'],
+                    new_data['paid'],
+                    new_data['debt'],
+                    new_data['status'],
+                    created_date,
                     svc.get('BranchID'),
                     svc.get('BranchName', ''),
                     svc.get('Note', ''),
@@ -513,19 +630,44 @@ class CustomerDetailSync:
             logger.error(f"Error saving services for customer {customer_id}: {e}")
         finally:
             conn.close()
+        
         return count
     
     def save_customer_treatments(self, customer_id: int, treatments: List[Dict]) -> int:
-        """Lưu treatments vào database - Sử dụng INSERT OR REPLACE để tối ưu"""
+        """Lưu treatments vào database - Kiểm tra thay đổi và log"""
         if not treatments:
             return 0
         
         conn = self.get_conn()
         count = 0
+        tracked_fields = ['status', 'employee_id', 'treatment_date']
+        
         try:
             conn.execute("BEGIN TRANSACTION")
             
             for t in treatments:
+                treatment_id = t.get('ID', t.get('TreatmentID'))
+                
+                # Kiểm tra record cũ
+                cursor = conn.execute("""
+                    SELECT * FROM customer_treatments 
+                    WHERE customer_id = ? AND treatment_id = ?
+                """, (customer_id, treatment_id))
+                existing = cursor.fetchone()
+                
+                new_data = {
+                    'status': t.get('Status', t.get('StatusName', '')),
+                    'employee_id': t.get('EmployeeID', t.get('DoctorID')),
+                    'treatment_date': t.get('TreatmentDate', t.get('Date')),
+                }
+                
+                if existing:
+                    old_data = dict(existing)
+                    self.compare_and_log_changes(conn, 'customer_treatments', existing['id'], old_data, new_data, tracked_fields)
+                else:
+                    self.log_data_change(conn, 'customer_treatments', treatment_id, 'INSERT',
+                                        'service_name', None, t.get('ServiceName', ''))
+                
                 conn.execute("""
                     INSERT OR REPLACE INTO customer_treatments 
                     (customer_id, treatment_id, service_id, service_name, employee_id, employee_name,
@@ -533,15 +675,15 @@ class CustomerDetailSync:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     customer_id,
-                    t.get('ID', t.get('TreatmentID')),
+                    treatment_id,
                     t.get('ServiceID'),
                     t.get('ServiceName', ''),
-                    t.get('EmployeeID', t.get('DoctorID')),
+                    new_data['employee_id'],
                     t.get('EmployeeName', t.get('DoctorName', '')),
-                    t.get('TreatmentDate', t.get('Date')),
+                    new_data['treatment_date'],
                     t.get('BranchID'),
                     t.get('BranchName', ''),
-                    t.get('Status', t.get('StatusName', '')),
+                    new_data['status'],
                     t.get('Note', ''),
                     json.dumps(t, ensure_ascii=False),
                     datetime.now().isoformat()
@@ -557,16 +699,40 @@ class CustomerDetailSync:
         return count
     
     def save_customer_payments(self, customer_id: int, payments: List[Dict]) -> int:
-        """Lưu payments vào database - Sử dụng INSERT OR REPLACE để tối ưu"""
+        """Lưu payments vào database - Kiểm tra thay đổi và log"""
         if not payments:
             return 0
         
         conn = self.get_conn()
         count = 0
+        tracked_fields = ['amount', 'payment_method', 'payment_type']
+        
         try:
             conn.execute("BEGIN TRANSACTION")
             
             for p in payments:
+                payment_id = p.get('ID', p.get('PaymentID'))
+                
+                # Kiểm tra record cũ
+                cursor = conn.execute("""
+                    SELECT * FROM customer_payments 
+                    WHERE customer_id = ? AND payment_id = ?
+                """, (customer_id, payment_id))
+                existing = cursor.fetchone()
+                
+                new_data = {
+                    'amount': p.get('Amount', p.get('Money', 0)),
+                    'payment_method': p.get('PaymentMethod', p.get('Method', '')),
+                    'payment_type': p.get('PaymentType', p.get('Type', '')),
+                }
+                
+                if existing:
+                    old_data = dict(existing)
+                    self.compare_and_log_changes(conn, 'customer_payments', existing['id'], old_data, new_data, tracked_fields)
+                else:
+                    self.log_data_change(conn, 'customer_payments', payment_id, 'INSERT',
+                                        'amount', None, str(new_data['amount']))
+                
                 conn.execute("""
                     INSERT OR REPLACE INTO customer_payments 
                     (customer_id, payment_id, amount, payment_date, payment_method, payment_type,
@@ -574,11 +740,11 @@ class CustomerDetailSync:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     customer_id,
-                    p.get('ID', p.get('PaymentID')),
-                    p.get('Amount', p.get('Money', 0)),
+                    payment_id,
+                    new_data['amount'],
                     p.get('PaymentDate', p.get('Date')),
-                    p.get('PaymentMethod', p.get('Method', '')),
-                    p.get('PaymentType', p.get('Type', '')),
+                    new_data['payment_method'],
+                    new_data['payment_type'],
                     p.get('BranchID'),
                     p.get('BranchName', ''),
                     p.get('ServiceName', ''),
@@ -597,16 +763,40 @@ class CustomerDetailSync:
         return count
     
     def save_customer_appointments(self, customer_id: int, appointments: List[Dict]) -> int:
-        """Lưu appointments vào database - Sử dụng INSERT OR REPLACE để tối ưu"""
+        """Lưu appointments vào database - Kiểm tra thay đổi và log"""
         if not appointments:
             return 0
         
         conn = self.get_conn()
         count = 0
+        tracked_fields = ['appointment_date', 'status', 'employee_id']
+        
         try:
             conn.execute("BEGIN TRANSACTION")
             
             for a in appointments:
+                appointment_id = a.get('ID', a.get('AppointmentID'))
+                
+                # Kiểm tra record cũ
+                cursor = conn.execute("""
+                    SELECT * FROM customer_appointments 
+                    WHERE customer_id = ? AND appointment_id = ?
+                """, (customer_id, appointment_id))
+                existing = cursor.fetchone()
+                
+                new_data = {
+                    'appointment_date': a.get('AppointmentDate', a.get('Date', a.get('DateApp'))),
+                    'status': a.get('Status'),
+                    'employee_id': a.get('EmployeeID', a.get('DoctorID')),
+                }
+                
+                if existing:
+                    old_data = dict(existing)
+                    self.compare_and_log_changes(conn, 'customer_appointments', existing['id'], old_data, new_data, tracked_fields)
+                else:
+                    self.log_data_change(conn, 'customer_appointments', appointment_id, 'INSERT',
+                                        'service_name', None, a.get('ServiceName', ''))
+                
                 conn.execute("""
                     INSERT OR REPLACE INTO customer_appointments 
                     (customer_id, appointment_id, appointment_date, service_id, service_name,
@@ -615,8 +805,8 @@ class CustomerDetailSync:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     customer_id,
-                    a.get('ID', a.get('AppointmentID')),
-                    a.get('AppointmentDate', a.get('Date', a.get('DateApp'))),
+                    appointment_id,
+                    new_data['appointment_date'],
                     a.get('ServiceID'),
                     a.get('ServiceName', ''),
                     a.get('EmployeeID', a.get('DoctorID')),
@@ -640,16 +830,39 @@ class CustomerDetailSync:
         return count
     
     def save_customer_history(self, customer_id: int, history: List[Dict]) -> int:
-        """Lưu history vào database - Sử dụng INSERT OR REPLACE để tối ưu"""
+        """Lưu history vào database - Kiểm tra thay đổi và log"""
         if not history:
             return 0
         
         conn = self.get_conn()
         count = 0
+        tracked_fields = ['content', 'result']
+        
         try:
             conn.execute("BEGIN TRANSACTION")
             
             for h in history:
+                history_id = h.get('ID', h.get('HistoryID'))
+                
+                # Kiểm tra record cũ
+                cursor = conn.execute("""
+                    SELECT * FROM customer_history 
+                    WHERE customer_id = ? AND history_id = ?
+                """, (customer_id, history_id))
+                existing = cursor.fetchone()
+                
+                new_data = {
+                    'content': h.get('Content', h.get('Description', '')),
+                    'result': h.get('Result', ''),
+                }
+                
+                if existing:
+                    old_data = dict(existing)
+                    self.compare_and_log_changes(conn, 'customer_history', existing['id'], old_data, new_data, tracked_fields)
+                else:
+                    self.log_data_change(conn, 'customer_history', history_id, 'INSERT',
+                                        'action_type', None, h.get('ActionType', h.get('Type', '')))
+                
                 conn.execute("""
                     INSERT OR REPLACE INTO customer_history 
                     (customer_id, history_id, action_type, action_date, employee_id, employee_name,
@@ -657,13 +870,13 @@ class CustomerDetailSync:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     customer_id,
-                    h.get('ID', h.get('HistoryID')),
+                    history_id,
                     h.get('ActionType', h.get('Type', '')),
                     h.get('ActionDate', h.get('Date')),
                     h.get('EmployeeID'),
                     h.get('EmployeeName', h.get('UserName', '')),
-                    h.get('Content', h.get('Description', '')),
-                    h.get('Result', ''),
+                    new_data['content'],
+                    new_data['result'],
                     h.get('Note', ''),
                     json.dumps(h, ensure_ascii=False),
                     datetime.now().isoformat()

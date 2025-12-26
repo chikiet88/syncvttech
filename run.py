@@ -43,6 +43,7 @@ def print_menu():
     print("  \033[93m23.\033[0m 📋 Sync Customer Detail (từ customers đã sync)")
     print("  \033[93m24.\033[0m 🔄 Full Sync: Branch → Customers → Details")
     print("  \033[93m25.\033[0m 📊 Xem thống kê Customer Sync")
+    print("  \033[93m26.\033[0m 📝 Xem Data Change Logs")
     print()
     print("  \033[94m--- Call Center ---\033[0m")
     print("  \033[93m10.\033[0m 📞 Sync PBX Calls (hôm qua)")
@@ -665,10 +666,96 @@ def show_customer_sync_stats():
         except:
             print("   (Chưa có sync logs)")
         
+        # Data Change Logs gần đây
+        print("\n\033[96m📝 Data Change Logs gần đây:\033[0m")
+        try:
+            cursor = conn.execute("""
+                SELECT table_name, change_type, COUNT(*) as count, sync_date
+                FROM data_change_logs
+                GROUP BY table_name, change_type, sync_date
+                ORDER BY sync_date DESC
+                LIMIT 10
+            """)
+            rows = cursor.fetchall()
+            if rows:
+                for row in rows:
+                    change_icon = "🆕" if row['change_type'] == 'INSERT' else "✏️"
+                    print(f"   {change_icon} {row['sync_date']} | {row['table_name']}: {row['count']} {row['change_type']}")
+            else:
+                print("   (Chưa có change logs)")
+        except Exception as e:
+            print(f"   (Chưa có change logs: {e})")
+        
         conn.close()
         
     except Exception as e:
         print(f"\033[91m❌ Lỗi: {e}\033[0m")
+    
+    input("\nNhấn Enter để tiếp tục...")
+
+
+def show_data_change_logs():
+    """Hiển thị chi tiết Data Change Logs"""
+    print("\n\033[92m📝 Data Change Logs:\033[0m\n")
+    
+    try:
+        import sqlite3
+        db_path = BASE_DIR / "database" / "vttech.db"
+        
+        if not db_path.exists():
+            print("\033[91m❌ Database chưa được tạo!\033[0m")
+            input("\nNhấn Enter để tiếp tục...")
+            return
+        
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        
+        # Thống kê tổng quan
+        print("\033[96m📊 Tổng quan:\033[0m")
+        cursor = conn.execute("""
+            SELECT 
+                table_name,
+                change_type,
+                COUNT(*) as count
+            FROM data_change_logs
+            GROUP BY table_name, change_type
+            ORDER BY table_name, change_type
+        """)
+        
+        current_table = None
+        for row in cursor.fetchall():
+            if row['table_name'] != current_table:
+                current_table = row['table_name']
+                print(f"\n   📋 {current_table}:")
+            
+            icon = "🆕" if row['change_type'] == 'INSERT' else "✏️"
+            print(f"      {icon} {row['change_type']}: {row['count']:,}")
+        
+        # Chi tiết thay đổi gần đây
+        print("\n\033[96m📜 Chi tiết thay đổi gần đây:\033[0m")
+        cursor = conn.execute("""
+            SELECT 
+                table_name, record_id, change_type, 
+                field_name, old_value, new_value, 
+                sync_date, created_at
+            FROM data_change_logs
+            WHERE change_type = 'UPDATE' AND field_name IS NOT NULL
+            ORDER BY created_at DESC
+            LIMIT 20
+        """)
+        
+        for row in cursor.fetchall():
+            old_val = (row['old_value'] or '')[:30]
+            new_val = (row['new_value'] or '')[:30]
+            print(f"   [{row['sync_date']}] {row['table_name']} #{row['record_id']}: "
+                  f"{row['field_name']} '{old_val}' → '{new_val}'")
+        
+        conn.close()
+        
+    except Exception as e:
+        print(f"\033[91m❌ Lỗi: {e}\033[0m")
+        import traceback
+        traceback.print_exc()
     
     input("\nNhấn Enter để tiếp tục...")
 
@@ -980,6 +1067,9 @@ def main():
         
         elif choice == "25":
             show_customer_sync_stats()
+        
+        elif choice == "26":
+            show_data_change_logs()
         
         elif choice == "0":
             print("\n\033[93m👋 Tạm biệt!\033[0m\n")

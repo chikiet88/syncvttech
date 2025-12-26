@@ -246,6 +246,26 @@ class VTTechCustomerSync:
             )
         """)
         
+        # Bảng để track data changes (audit log)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS data_change_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                table_name TEXT NOT NULL,
+                record_id INTEGER NOT NULL,
+                change_type TEXT NOT NULL,
+                field_name TEXT,
+                old_value TEXT,
+                new_value TEXT,
+                sync_date DATE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Tạo indexes cho change logs
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_change_logs_table ON data_change_logs(table_name)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_change_logs_record ON data_change_logs(record_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_change_logs_date ON data_change_logs(sync_date)")
+        
         # Tạo indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_customers_branch ON customers(branch_id)")
@@ -394,7 +414,7 @@ class VTTechCustomerSync:
         return all_customers
     
     def save_customers_to_db(self, customers: List[Dict], branch_id: int = None, sync_date: str = None) -> int:
-        """Lưu customers vào database - Sử dụng transaction để đảm bảo toàn vẹn
+        """Lưu customers vào database - Kiểm tra thay đổi và lưu logs
         
         Args:
             customers: Danh sách customers từ API
@@ -403,10 +423,15 @@ class VTTechCustomerSync:
         """
         conn = self.get_conn()
         count = 0
+        new_count = 0
+        updated_count = 0
         
         # Nếu không có sync_date, dùng ngày hiện tại
         if not sync_date:
             sync_date = datetime.now().strftime('%Y-%m-%d')
+        
+        # Các fields cần track thay đổi
+        tracked_fields = ['name', 'phone', 'email', 'address', 'total_spent', 'total_debt', 'point', 'branch_id']
         
         try:
             conn.execute("BEGIN TRANSACTION")
@@ -415,6 +440,58 @@ class VTTechCustomerSync:
                 # Map fields từ API response sang database schema
                 customer_id = data.get('CustID', data.get('ID'))
                 
+                # Chuẩn bị dữ liệu mới
+                new_data = {
+                    'code': data.get('Code', data.get('CustCode', '')),
+                    'name': data.get('Name', data.get('CustName', data.get('CustomerName', ''))),
+                    'phone': data.get('Phone', data.get('Mobile', data.get('CustPhone', ''))),
+                    'email': data.get('Email', ''),
+                    'gender': data.get('Gender', data.get('Sex', 0)),
+                    'birthday': data.get('Birthday', data.get('BirthDay')),
+                    'address': data.get('Address', ''),
+                    'city_id': data.get('CityID'),
+                    'district_id': data.get('DistrictID'),
+                    'ward_id': data.get('WardID'),
+                    'branch_id': branch_id or data.get('BranchID'),
+                    'source_id': data.get('SourceID', data.get('CustomerSourceID')),
+                    'membership_id': data.get('MembershipID'),
+                    'total_spent': data.get('TotalSpent', data.get('TotalPaid', data.get('Paid', 0))),
+                    'total_debt': data.get('TotalDebt', data.get('Debt', 0)),
+                    'point': data.get('Point', 0),
+                }
+                
+                # Kiểm tra xem customer đã tồn tại chưa
+                cursor = conn.execute("SELECT * FROM customers WHERE id = ?", (customer_id,))
+                existing = cursor.fetchone()
+                
+                if existing:
+                    # So sánh và log thay đổi
+                    for field in tracked_fields:
+                        old_val = existing[field]
+                        new_val = new_data.get(field)
+                        
+                        # Convert để so sánh
+                        old_str = str(old_val) if old_val is not None else ''
+                        new_str = str(new_val) if new_val is not None else ''
+                        
+                        if old_str != new_str:
+                            conn.execute("""
+                                INSERT INTO data_change_logs 
+                                (table_name, record_id, change_type, field_name, old_value, new_value, sync_date)
+                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """, ('customers', customer_id, 'UPDATE', field, old_str, new_str, sync_date))
+                    
+                    updated_count += 1
+                else:
+                    # Customer mới - log INSERT
+                    conn.execute("""
+                        INSERT INTO data_change_logs 
+                        (table_name, record_id, change_type, field_name, old_value, new_value, sync_date)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, ('customers', customer_id, 'INSERT', None, None, new_data.get('name'), sync_date))
+                    new_count += 1
+                
+                # Insert/Update customer
                 conn.execute("""
                     INSERT OR REPLACE INTO customers 
                     (id, code, name, phone, email, gender, birthday, address, 
@@ -423,22 +500,22 @@ class VTTechCustomerSync:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     customer_id,
-                    data.get('Code', data.get('CustCode', '')),
-                    data.get('Name', data.get('CustName', data.get('CustomerName', ''))),
-                    data.get('Phone', data.get('Mobile', data.get('CustPhone', ''))),
-                    data.get('Email', ''),
-                    data.get('Gender', data.get('Sex', 0)),
-                    data.get('Birthday', data.get('BirthDay')),
-                    data.get('Address', ''),
-                    data.get('CityID'),
-                    data.get('DistrictID'),
-                    data.get('WardID'),
-                    branch_id or data.get('BranchID'),
-                    data.get('SourceID', data.get('CustomerSourceID')),
-                    data.get('MembershipID'),
-                    data.get('TotalSpent', data.get('TotalPaid', data.get('Paid', 0))),
-                    data.get('TotalDebt', data.get('Debt', 0)),
-                    data.get('Point', 0),
+                    new_data['code'],
+                    new_data['name'],
+                    new_data['phone'],
+                    new_data['email'],
+                    new_data['gender'],
+                    new_data['birthday'],
+                    new_data['address'],
+                    new_data['city_id'],
+                    new_data['district_id'],
+                    new_data['ward_id'],
+                    new_data['branch_id'],
+                    new_data['source_id'],
+                    new_data['membership_id'],
+                    new_data['total_spent'],
+                    new_data['total_debt'],
+                    new_data['point'],
                     1,
                     sync_date,
                     datetime.now().isoformat()
@@ -446,6 +523,10 @@ class VTTechCustomerSync:
                 count += 1
             
             conn.commit()
+            
+            if new_count > 0 or updated_count > 0:
+                logger.info(f"   📝 Thay đổi: {new_count} mới, {updated_count} cập nhật")
+                
         except Exception as e:
             conn.rollback()
             logger.error(f"  ❌ Error saving customers: {e}")
