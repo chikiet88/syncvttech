@@ -95,7 +95,7 @@ def api_summary():
     """Tổng quan dữ liệu"""
     
     if USE_DATABASE:
-        # Use database
+        # Use Prisma
         dates = vttech_db.get_available_dates()
         master_counts = vttech_db.get_master_counts()
         
@@ -113,7 +113,7 @@ def api_summary():
             'total_revenue': total_revenue,
             'branch_count': branch_count,
             'master_counts': master_counts,
-            'source': 'database'
+            'source': 'prisma'
         })
     
     else:
@@ -587,15 +587,25 @@ def api_db_query():
             return jsonify({'error': f'Không cho phép sử dụng {keyword}'}), 400
     
     try:
-        conn = vttech_db.get_conn()
-        cursor = conn.execute(sql)
-        columns = [desc[0] for desc in cursor.description] if cursor.description else []
-        rows = [dict(row) for row in cursor.fetchall()]
-        conn.close()
+        vttech_db.connect()
+        # Use Prisma query_raw for PostgreSQL
+        # We need to map ? to $1, $2 for Postgres
+        import re
+        i = 1
+        def replace_placeholder(match):
+            nonlocal i
+            res = f"${i}"
+            i += 1
+            return res
+        
+        pg_sql = re.sub(r'\?', replace_placeholder, sql)
+        
+        rows = vttech_db.prisma.query_raw(pg_sql)
+        columns = list(rows[0].keys()) if rows else []
         
         return jsonify({
             'columns': columns,
-            'rows': rows[:1000]  # Limit 1000 rows
+            'rows': rows[:1000]
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 400

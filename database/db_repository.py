@@ -1,332 +1,468 @@
 #!/usr/bin/env python3
 """
 VTTech Database Repository
-Các hàm tiện ích để đọc/ghi dữ liệu vào SQLite
+Sử dụng Prisma Client để giao tiếp với PostgreSQL
 """
 
-import sqlite3
-from pathlib import Path
-from datetime import datetime, timedelta
+import os
+from datetime import datetime, date as py_date
 from typing import List, Dict, Optional, Any
-import sys
-
-sys.path.insert(0, str(Path(__file__).parent))
-from init_db import get_connection, DB_PATH
-
+from prisma import Prisma
+from prisma.models import (
+    Branch, Service, Employee, DailyRevenue, CrawlLog, 
+    Customer, Appointment, Treatment, ServiceGroup, 
+    ServiceType, EmployeeGroup, CustomerSource, Membership,
+    City, District, Ward, CustomerPayment, CustomerInstallment,
+    CustomerComplaint, CustomerTreatmentPlan, CustomerServiceTab,
+    CustomerCareHistory, MarketingTicketExtension, MarketingTicketGroup
+)
 
 class VTTechDB:
-    """Database repository class"""
+    """Database repository class using Prisma"""
     
     def __init__(self):
-        self.db_path = DB_PATH
-    
-    def get_conn(self):
-        return get_connection()
-    
+        self.prisma = Prisma()
+        self.is_connected = False
+
+    def connect(self):
+        if not self.is_connected:
+            self.prisma.connect()
+            self.is_connected = True
+
+    def disconnect(self):
+        if self.is_connected:
+            self.prisma.disconnect()
+            self.is_connected = False
+
+    def __enter__(self):
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.disconnect()
+
+    def _parse_date(self, d):
+        if not d: return None
+        if isinstance(d, datetime): return d
+        if isinstance(d, py_date): return datetime.combine(d, datetime.min.time())
+        try:
+            if isinstance(d, str):
+                if 'T' in d: return datetime.fromisoformat(d.replace('Z', '+00:00'))
+                return datetime.strptime(d.split('.')[0], "%Y-%m-%d %H:%M:%S")
+        except:
+            try:
+                return datetime.strptime(d, "%Y-%m-%d")
+            except:
+                return None
+        return None
+
     # ============== WRITE METHODS ==============
     
     def upsert_branch(self, data: Dict) -> bool:
         """Insert or update branch"""
-        conn = self.get_conn()
+        self.connect()
         try:
-            conn.execute("""
-                INSERT OR REPLACE INTO branches (id, code, name, address, phone, email, is_active, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                data.get('ID'),
-                data.get('Code'),
-                data.get('Name'),
-                data.get('Address'),
-                data.get('Phone'),
-                data.get('Email'),
-                1 if data.get('IsActive', True) else 0,
-                datetime.now().isoformat()
-            ))
-            conn.commit()
+            bid = int(data.get('ID'))
+            self.prisma.branch.upsert(
+                where={'id': bid},
+                data={
+                    'create': {
+                        'id': bid,
+                        'code': data.get('Code', data.get('ShortName', '')),
+                        'name': data.get('Name'),
+                        'address': data.get('Address', ''),
+                        'phone': data.get('Phone', ''),
+                        'email': data.get('Email', ''),
+                        'is_active': 1 if data.get('IsActive', True) else 0,
+                    },
+                    'update': {
+                        'code': data.get('Code', data.get('ShortName', '')),
+                        'name': data.get('Name'),
+                        'address': data.get('Address', ''),
+                        'phone': data.get('Phone', ''),
+                        'email': data.get('Email', ''),
+                        'is_active': 1 if data.get('IsActive', True) else 0,
+                        'updated_at': datetime.now()
+                    }
+                }
+            )
             return True
         except Exception as e:
-            print(f"Error upserting branch: {e}")
             return False
-        finally:
-            conn.close()
-    
-    def upsert_daily_revenue(self, date: str, branch_id: int, data: Dict) -> bool:
-        """Insert or update daily revenue"""
-        conn = self.get_conn()
-        try:
-            conn.execute("""
-                INSERT OR REPLACE INTO daily_revenue 
-                (date, branch_id, branch_name, paid, paid_new, raise_amount, 
-                 num_customers, num_appointments, num_checked_in, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                date,
-                branch_id,
-                data.get('BranchName'),
-                data.get('Paid', 0),
-                data.get('PaidNew', 0),
-                data.get('Raise', 0),
-                data.get('PaidNumCust', 0),
-                data.get('App', 0),
-                data.get('AppChecked', 0),
-                datetime.now().isoformat()
-            ))
-            conn.commit()
-            return True
-        except Exception as e:
-            print(f"Error upserting revenue: {e}")
-            return False
-        finally:
-            conn.close()
-    
-    def insert_daily_revenue_batch(self, date: str, records: List[Dict]) -> int:
-        """Insert nhiều records cùng lúc"""
-        conn = self.get_conn()
+
+    def upsert_branches(self, branches: List[Dict]) -> int:
         count = 0
-        try:
-            for data in records:
-                conn.execute("""
-                    INSERT OR REPLACE INTO daily_revenue 
-                    (date, branch_id, branch_name, paid, paid_new, raise_amount, 
-                     num_customers, num_appointments, num_checked_in)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    date,
-                    data.get('BranchID'),
-                    data.get('BranchName'),
-                    data.get('Paid', 0),
-                    data.get('PaidNew', 0),
-                    data.get('Raise', 0),
-                    data.get('PaidNumCust', 0),
-                    data.get('App', 0),
-                    data.get('AppChecked', 0)
-                ))
-                count += 1
-            conn.commit()
-        except Exception as e:
-            print(f"Error batch insert: {e}")
-        finally:
-            conn.close()
+        for b in branches:
+            if self.upsert_branch(b): count += 1
         return count
     
+    def upsert_service(self, data: Dict) -> bool:
+        self.connect()
+        try:
+            sid = int(data.get('ID'))
+            self.prisma.service.upsert(
+                where={'id': sid},
+                data={
+                    'create': {
+                        'id': sid,
+                        'code': data.get('Code', ''),
+                        'name': data.get('Name'),
+                        'group_id': data.get('GroupID', data.get('Type') or data.get('CatID')),
+                        'price': float(data.get('Price', 0)),
+                        'is_active': 1 if data.get('State', 1) == 1 else 0,
+                    },
+                    'update': {
+                        'code': data.get('Code', ''),
+                        'name': data.get('Name'),
+                        'group_id': data.get('GroupID', data.get('Type') or data.get('CatID')),
+                        'price': float(data.get('Price', 0)),
+                        'is_active': 1 if data.get('State', 1) == 1 else 0,
+                        'updated_at': datetime.now()
+                    }
+                }
+            )
+            return True
+        except Exception as e:
+            return False
+
+    def upsert_services(self, services: List[Dict]) -> int:
+        count = 0
+        for s in services:
+            if self.upsert_service(s): count += 1
+        return count
+
+    def upsert_service_groups(self, groups: List[Dict]) -> int:
+        self.connect()
+        count = 0
+        for g in groups:
+            try:
+                gid = int(g.get('ID'))
+                self.prisma.servicegroup.upsert(
+                    where={'id': gid},
+                    data={
+                        'create': {'id': gid, 'code': g.get('Code', ''), 'name': g.get('Name'), 'parent_id': g.get('ParentID')},
+                        'update': {'code': g.get('Code', ''), 'name': g.get('Name'), 'parent_id': g.get('ParentID')}
+                    }
+                )
+                count += 1
+            except: pass
+        return count
+
+    def upsert_employees(self, employees: List[Dict]) -> int:
+        self.connect()
+        count = 0
+        for e in employees:
+            try:
+                eid = int(e.get('ID'))
+                self.prisma.employee.upsert(
+                    where={'id': eid},
+                    data={
+                        'create': {
+                            'id': eid, 'code': e.get('Code', ''), 'name': e.get('Name'), 
+                            'branch_id': e.get('BranchID'), 'position': e.get('Position', ''),
+                            'phone': e.get('Phone', ''), 'email': e.get('Email', ''),
+                            'is_active': 1 if e.get('State', 1) == 1 else 0,
+                        },
+                        'update': {
+                            'code': e.get('Code', ''), 'name': e.get('Name'), 
+                            'branch_id': e.get('BranchID'), 'position': e.get('Position', ''),
+                            'phone': e.get('Phone', ''), 'email': e.get('Email', ''),
+                            'is_active': 1 if e.get('State', 1) == 1 else 0,
+                            'updated_at': datetime.now()
+                        }
+                    }
+                )
+                count += 1
+            except: pass
+        return count
+
+    def upsert_users(self, users: List[Dict]) -> int:
+        self.connect()
+        count = 0
+        for u in users:
+            try:
+                uid = int(u.get('ID'))
+                self.prisma.user.upsert(
+                    where={'id': uid},
+                    data={
+                        'create': {
+                            'id': uid, 'username': u.get('Username', u.get('Name', '')),
+                            'full_name': u.get('FullName', u.get('EmployeeName', u.get('Name', ''))),
+                            'email': u.get('Email', ''), 'phone': u.get('Phone', ''),
+                            'branch_id': u.get('BranchID'), 'role': str(u.get('RoleID', '')),
+                        },
+                        'update': {
+                            'username': u.get('Username', u.get('Name', '')),
+                            'full_name': u.get('FullName', u.get('EmployeeName', u.get('Name', ''))),
+                            'email': u.get('Email', ''), 'phone': u.get('Phone', ''),
+                            'branch_id': u.get('BranchID'), 'role': str(u.get('RoleID', '')),
+                        }
+                    }
+                )
+                count += 1
+            except: pass
+        return count
+
+    def upsert_customer_sources(self, sources: List[Dict]) -> int:
+        self.connect()
+        count = 0
+        for s in sources:
+            try:
+                sid = int(s.get('ID'))
+                self.prisma.customersource.upsert(
+                    where={'id': sid},
+                    data={
+                        'create': {'id': sid, 'code': s.get('Code', ''), 'name': s.get('Name'), 'parent_id': s.get('ParentID', s.get('SPID'))},
+                        'update': {'code': s.get('Code', ''), 'name': s.get('Name'), 'parent_id': s.get('ParentID', s.get('SPID'))}
+                    }
+                )
+                count += 1
+            except: pass
+        return count
+
+    def upsert_daily_revenue(self, date_str: str, branch_id: int, data: Dict) -> bool:
+        self.connect()
+        try:
+            dt = self._parse_date(date_str)
+            if not dt: return False
+            self.prisma.dailyrevenue.upsert(
+                where={'date_branch_id': {'date': dt, 'branch_id': branch_id}},
+                data={
+                    'create': {
+                        'date': dt, 'branch_id': branch_id, 'branch_name': data.get('BranchName'),
+                        'paid': float(data.get('Paid', 0)), 'paid_new': float(data.get('PaidNew', 0)),
+                        'raise_amount': float(data.get('Raise', 0)), 'num_customers': int(data.get('PaidNumCust', 0) or data.get('CustomerCount', 0)),
+                        'num_appointments': int(data.get('App', 0)), 'num_checked_in': int(data.get('AppChecked', 0))
+                    },
+                    'update': {
+                        'branch_name': data.get('BranchName'), 'paid': float(data.get('Paid', 0)),
+                        'paid_new': float(data.get('PaidNew', 0)), 'raise_amount': float(data.get('Raise', 0)),
+                        'num_customers': int(data.get('PaidNumCust', 0) or data.get('CustomerCount', 0)),
+                        'num_appointments': int(data.get('App', 0)), 'num_checked_in': int(data.get('AppChecked', 0))
+                    }
+                }
+            )
+            return True
+        except Exception as e:
+            return False
+    
+    def insert_daily_revenue_batch(self, date_str: str, records: List[Dict]) -> int:
+        count = 0
+        for data in records:
+            if self.upsert_daily_revenue(date_str, data.get('BranchID'), data): count += 1
+        return count
+
+    def upsert_customers(self, customers: List[Dict]) -> int:
+        self.connect()
+        count = 0
+        for c in customers:
+            try:
+                cid = int(c.get('ID'))
+                self.prisma.customer.upsert(
+                    where={'id': cid},
+                    data={
+                        'create': {
+                            'id': cid, 'code': c.get('Code', ''), 'name': c.get('Name', c.get('CustomerName', '')),
+                            'phone': c.get('Phone', c.get('Mobile', '')), 'email': c.get('Email', ''),
+                            'gender': c.get('Gender', c.get('Sex', 0)), 'birthday': self._parse_date(c.get('Birthday', c.get('BirthDay'))),
+                            'address': c.get('Address', ''), 'city_id': c.get('CityID'), 'district_id': c.get('DistrictID'),
+                            'ward_id': c.get('WardID'), 'branch_id': c.get('BranchID'), 
+                            'source_id': c.get('SourceID', c.get('CustomerSourceID')), 'membership_id': c.get('MembershipID'),
+                            'total_spent': float(c.get('TotalSpent', c.get('TotalPaid', 0))), 'total_debt': float(c.get('TotalDebt', c.get('Debt', 0))),
+                            'point': int(c.get('Point', 0)), 'created_at': self._parse_date(c.get('CreatedDate', datetime.now()))
+                        },
+                        'update': {
+                            'code': c.get('Code', ''), 'name': c.get('Name', c.get('CustomerName', '')),
+                            'phone': c.get('Phone', c.get('Mobile', '')), 'email': c.get('Email', ''),
+                            'gender': c.get('Gender', c.get('Sex', 0)), 'birthday': self._parse_date(c.get('Birthday', c.get('BirthDay'))),
+                            'address': c.get('Address', ''), 'city_id': c.get('CityID'), 'district_id': c.get('DistrictID'),
+                            'ward_id': c.get('WardID'), 'branch_id': c.get('BranchID'), 
+                            'source_id': c.get('SourceID', c.get('CustomerSourceID')), 'membership_id': c.get('MembershipID'),
+                            'total_spent': float(c.get('TotalSpent', c.get('TotalPaid', 0))), 'total_debt': float(c.get('TotalDebt', c.get('Debt', 0))),
+                            'point': int(c.get('Point', 0)), 'updated_at': datetime.now()
+                        }
+                    }
+                )
+                count += 1
+            except: pass
+        return count
+
+    def upsert_appointments(self, appointments: List[Dict]) -> int:
+        self.connect()
+        count = 0
+        for a in appointments:
+            try:
+                aid = int(a.get('ID'))
+                self.prisma.appointment.upsert(
+                    where={'id': aid},
+                    data={
+                        'create': {
+                            'id': aid, 'customer_id': a.get('CustomerID'), 'customer_name': a.get('CustomerName', a.get('Name', '')),
+                            'phone': a.get('Phone', a.get('Mobile', '')), 'branch_id': a.get('BranchID'), 'branch_name': a.get('BranchName', ''),
+                            'service_id': a.get('ServiceID'), 'service_name': a.get('ServiceName', ''),
+                            'employee_id': a.get('EmployeeID', a.get('DoctorID')), 'employee_name': a.get('EmployeeName', a.get('DoctorName', '')),
+                            'appointment_date': self._parse_date(a.get('AppointmentDate', a.get('DateApp', a.get('Date')))),
+                            'status': int(a.get('Status', 0)), 'note': a.get('Note', ''),
+                        },
+                        'update': {
+                            'customer_id': a.get('CustomerID'), 'customer_name': a.get('CustomerName', a.get('Name', '')),
+                            'phone': a.get('Phone', a.get('Mobile', '')), 'branch_id': a.get('BranchID'), 'branch_name': a.get('BranchName', ''),
+                            'service_id': a.get('ServiceID'), 'service_name': a.get('ServiceName', ''),
+                            'employee_id': a.get('EmployeeID', a.get('DoctorID')), 'employee_name': a.get('EmployeeName', a.get('DoctorName', '')),
+                            'appointment_date': self._parse_date(a.get('AppointmentDate', a.get('DateApp', a.get('Date')))),
+                            'status': int(a.get('Status', 0)), 'note': a.get('Note', ''), 'updated_at': datetime.now()
+                        }
+                    }
+                )
+                count += 1
+            except: pass
+        return count
+
+    def upsert_customer_payment(self, customer_id: int, data: Dict) -> bool:
+        self.connect()
+        try:
+            pid = data.get('ID') or data.get('PaymentID')
+            self.prisma.customerpayment.upsert(
+                where={'customer_id_payment_id': {'customer_id': customer_id, 'payment_id': pid}},
+                data={
+                    'create': {
+                        'customer_id': customer_id, 'payment_id': pid, 'amount': float(data.get('Amount', data.get('Paid', 0))),
+                        'payment_date': self._parse_date(data.get('PaymentDate', data.get('Date'))),
+                        'payment_method': data.get('PaymentMethod', data.get('Method', '')),
+                        'note': data.get('Note', data.get('Remark', '')), 'signature_data': data.get('Signature', '')
+                    },
+                    'update': {
+                        'amount': float(data.get('Amount', data.get('Paid', 0))),
+                        'payment_date': self._parse_date(data.get('PaymentDate', data.get('Date'))),
+                        'payment_method': data.get('PaymentMethod', data.get('Method', '')),
+                        'note': data.get('Note', data.get('Remark', '')), 'signature_data': data.get('Signature', '')
+                    }
+                }
+            )
+            return True
+        except: return False
+
     def log_crawl(self, crawl_date: str, crawl_type: str, status: str, 
                   records_count: int = 0, error_message: str = None, 
                   duration: float = None):
-        """Log crawl history"""
-        conn = self.get_conn()
+        self.connect()
         try:
-            conn.execute("""
-                INSERT INTO crawl_logs (crawl_date, crawl_type, status, records_count, error_message, duration_seconds)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (crawl_date, crawl_type, status, records_count, error_message, duration))
-            conn.commit()
-        except Exception as e:
-            print(f"Error logging crawl: {e}")
-        finally:
-            conn.close()
+            dt = self._parse_date(crawl_date)
+            self.prisma.crawllog.create(
+                data={
+                    'crawl_date': dt or datetime.now(), 'crawl_type': crawl_type, 'status': status,
+                    'records_count': records_count, 'error_message': error_message, 'duration_seconds': duration
+                }
+            )
+        except: pass
     
     # ============== READ METHODS ==============
     
-    def get_daily_revenue(self, date: str) -> List[Dict]:
-        """Lấy doanh thu theo ngày"""
-        conn = self.get_conn()
-        cursor = conn.execute("""
-            SELECT * FROM daily_revenue WHERE date = ? ORDER BY paid DESC
-        """, (date,))
-        result = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return result
-    
-    def get_revenue_range(self, start_date: str, end_date: str) -> List[Dict]:
-        """Lấy doanh thu trong khoảng thời gian"""
-        conn = self.get_conn()
-        cursor = conn.execute("""
-            SELECT * FROM daily_revenue 
-            WHERE date BETWEEN ? AND ?
-            ORDER BY date, branch_id
-        """, (start_date, end_date))
-        result = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return result
-    
-    def get_daily_summary(self, limit: int = 30) -> List[Dict]:
-        """Lấy tổng hợp doanh thu theo ngày"""
-        conn = self.get_conn()
-        cursor = conn.execute("""
-            SELECT * FROM v_daily_summary LIMIT ?
-        """, (limit,))
-        result = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return result
-    
-    def get_monthly_summary(self, limit: int = 12) -> List[Dict]:
-        """Lấy tổng hợp doanh thu theo tháng"""
-        conn = self.get_conn()
-        cursor = conn.execute("""
-            SELECT * FROM v_monthly_summary LIMIT ?
-        """, (limit,))
-        result = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return result
-    
-    def get_branch_performance(self, start_date: str = None, end_date: str = None) -> List[Dict]:
-        """Lấy hiệu suất chi nhánh"""
-        conn = self.get_conn()
-        
-        if start_date and end_date:
-            cursor = conn.execute("""
-                SELECT 
-                    branch_id,
-                    branch_name,
-                    COUNT(DISTINCT date) as days_active,
-                    SUM(paid) as total_paid,
-                    AVG(paid) as avg_daily_paid,
-                    SUM(num_customers) as total_customers
-                FROM daily_revenue
-                WHERE date BETWEEN ? AND ?
-                GROUP BY branch_id, branch_name
-                ORDER BY total_paid DESC
-            """, (start_date, end_date))
-        else:
-            cursor = conn.execute("SELECT * FROM v_branch_performance")
-        
-        result = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return result
-    
     def get_available_dates(self) -> List[str]:
-        """Lấy danh sách các ngày có dữ liệu"""
-        conn = self.get_conn()
-        cursor = conn.execute("""
-            SELECT DISTINCT date FROM daily_revenue ORDER BY date DESC
-        """)
-        result = [row['date'] for row in cursor.fetchall()]
-        conn.close()
-        return result
-    
-    def get_latest_date(self) -> Optional[str]:
-        """Lấy ngày mới nhất có dữ liệu"""
-        conn = self.get_conn()
-        cursor = conn.execute("""
-            SELECT MAX(date) as latest FROM daily_revenue
-        """)
-        row = cursor.fetchone()
-        conn.close()
-        return row['latest'] if row else None
-    
-    def get_branches(self) -> List[Dict]:
-        """Lấy danh sách chi nhánh"""
-        conn = self.get_conn()
-        cursor = conn.execute("SELECT * FROM branches WHERE is_active = 1 ORDER BY name")
-        result = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return result
-    
-    def get_services(self, group_id: int = None) -> List[Dict]:
-        """Lấy danh sách dịch vụ"""
-        conn = self.get_conn()
-        if group_id:
-            cursor = conn.execute("SELECT * FROM services WHERE group_id = ? AND is_active = 1", (group_id,))
-        else:
-            cursor = conn.execute("SELECT * FROM services WHERE is_active = 1 ORDER BY name")
-        result = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return result
-    
-    def get_employees(self, branch_id: int = None) -> List[Dict]:
-        """Lấy danh sách nhân viên"""
-        conn = self.get_conn()
-        if branch_id:
-            cursor = conn.execute("SELECT * FROM employees WHERE branch_id = ? AND is_active = 1", (branch_id,))
-        else:
-            cursor = conn.execute("SELECT * FROM employees WHERE is_active = 1 ORDER BY name")
-        result = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return result
-    
-    def get_master_counts(self) -> Dict[str, int]:
-        """Đếm số lượng master data"""
-        conn = self.get_conn()
-        counts = {}
-        
-        for table in ['branches', 'services', 'service_groups', 'employees', 'users', 'customer_sources']:
-            cursor = conn.execute(f"SELECT COUNT(*) as count FROM {table}")
-            counts[table] = cursor.fetchone()['count']
-        
-        conn.close()
-        return counts
-    
-    def get_crawl_logs(self, limit: int = 50) -> List[Dict]:
-        """Lấy log crawl"""
-        conn = self.get_conn()
-        cursor = conn.execute("""
-            SELECT * FROM crawl_logs ORDER BY created_at DESC LIMIT ?
-        """, (limit,))
-        result = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return result
-    
-    # ============== ANALYSIS METHODS ==============
-    
-    def compare_periods(self, period1_start: str, period1_end: str, 
-                        period2_start: str, period2_end: str) -> Dict:
-        """So sánh 2 giai đoạn"""
-        conn = self.get_conn()
-        
-        result = {}
-        for period_name, start, end in [
-            ('period1', period1_start, period1_end),
-            ('period2', period2_start, period2_end)
-        ]:
-            cursor = conn.execute("""
-                SELECT 
-                    SUM(paid) as total_paid,
-                    SUM(paid_new) as total_paid_new,
-                    SUM(num_customers) as total_customers,
-                    COUNT(DISTINCT date) as days,
-                    COUNT(DISTINCT branch_id) as branches
-                FROM daily_revenue
-                WHERE date BETWEEN ? AND ?
-            """, (start, end))
-            result[period_name] = dict(cursor.fetchone())
-        
-        # Calculate growth
-        if result['period1']['total_paid'] and result['period2']['total_paid']:
-            result['growth_rate'] = (
-                (result['period2']['total_paid'] - result['period1']['total_paid']) 
-                / result['period1']['total_paid'] * 100
-            )
-        
-        conn.close()
-        return result
-    
-    def get_trend(self, days: int = 30) -> List[Dict]:
-        """Lấy xu hướng N ngày gần nhất"""
-        conn = self.get_conn()
-        cursor = conn.execute("""
+        """Lấy danh sách các ngày có dữ liệu doanh thu"""
+        self.connect()
+        # Prisma doesn't support SELECT DISTINCT in a simple way for dates, use raw query
+        result = self.prisma.query_raw('SELECT DISTINCT date FROM daily_revenue ORDER BY date DESC')
+        return [r['date'].split('T')[0] if isinstance(r['date'], str) else r['date'].strftime('%Y-%m-%d') for r in result]
+
+    def get_daily_revenue(self, date_str: str) -> List[Dict]:
+        """Lấy doanh thu chi tiết theo ngày"""
+        self.connect()
+        dt = self._parse_date(date_str)
+        if not dt: return []
+        records = self.prisma.dailyrevenue.find_many(where={'date': dt}, order={'paid': 'desc'})
+        return [r.dict() for r in records]
+
+    def get_daily_summary(self, limit: int = 30) -> List[Dict]:
+        """Tổng hợp doanh thu theo ngày"""
+        self.connect()
+        # Aggregation query
+        query = """
             SELECT 
                 date,
                 SUM(paid) as total_paid,
                 SUM(paid_new) as total_paid_new,
-                SUM(num_customers) as total_customers
+                SUM(num_customers) as total_customers,
+                SUM(num_appointments) as total_appointments
             FROM daily_revenue
             GROUP BY date
             ORDER BY date DESC
-            LIMIT ?
-        """, (days,))
-        result = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return list(reversed(result))
+            LIMIT $1
+        """
+        result = self.prisma.query_raw(query, limit)
+        return result
 
+    def get_monthly_summary(self, months: int = 12) -> List[Dict]:
+        self.connect()
+        query = """
+            SELECT 
+                TO_CHAR(date, 'YYYY-MM') as month,
+                SUM(paid) as total_paid,
+                SUM(num_customers) as total_customers,
+                COUNT(DISTINCT branch_id) as branch_count
+            FROM daily_revenue
+            GROUP BY month
+            ORDER BY month DESC
+            LIMIT $1
+        """
+        return self.prisma.query_raw(query, months)
+
+    def get_master_counts(self) -> Dict[str, int]:
+        self.connect()
+        return {
+            'branches': self.prisma.branch.count(),
+            'services': self.prisma.service.count(),
+            'employees': self.prisma.employee.count(),
+            'users': self.prisma.user.count(),
+            'customers': self.prisma.customer.count()
+        }
+    
+    def get_branches(self) -> List[Dict]:
+        self.connect()
+        records = self.prisma.branch.find_many(order={'name': 'asc'})
+        return [r.dict() for r in records]
+
+    def get_services(self) -> List[Dict]:
+        self.connect()
+        records = self.prisma.service.find_many(order={'name': 'asc'})
+        return [r.dict() for r in records]
+
+    def get_employees(self, branch_id: Optional[int] = None) -> List[Dict]:
+        self.connect()
+        where = {'branch_id': branch_id} if branch_id else {}
+        records = self.prisma.employee.find_many(where=where, order={'name': 'asc'})
+        return [r.dict() for r in records]
+
+    def get_crawl_logs(self, limit: int = 50) -> List[Dict]:
+        self.connect()
+        records = self.prisma.crawllog.find_many(order={'created_at': 'desc'}, take=limit)
+        return [r.dict() for r in records]
+
+    def get_branch_performance(self, start_date: str = None, end_date: str = None) -> List[Dict]:
+        self.connect()
+        query = """
+            SELECT 
+                branch_id,
+                branch_name,
+                SUM(paid) as total_paid,
+                SUM(num_customers) as total_customers,
+                SUM(num_appointments) as total_appointments
+            FROM daily_revenue
+            WHERE 1=1
+        """
+        params = []
+        if start_date:
+            query += " AND date >= $1"
+            params.append(self._parse_date(start_date))
+        if end_date:
+            query += " AND date <= $" + str(len(params) + 1)
+            params.append(self._parse_date(end_date))
+        
+        query += " GROUP BY branch_id, branch_name ORDER BY total_paid DESC"
+        return self.prisma.query_raw(query, *params)
+        
+    def get_trend(self, days: int = 30) -> List[Dict]:
+        return self.get_daily_summary(days)
 
 # Singleton instance
 db = VTTechDB()
-
-
-if __name__ == "__main__":
-    # Test
-    print("Testing VTTechDB...")
-    
-    print(f"\n📊 Master counts: {db.get_master_counts()}")
-    print(f"\n📅 Available dates: {db.get_available_dates()[:5]}")
-    print(f"\n📈 Daily summary: {db.get_daily_summary(5)}")

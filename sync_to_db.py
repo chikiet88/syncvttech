@@ -31,7 +31,7 @@ import sys
 import argparse
 import logging
 import time
-import sqlite3
+# import sqlite3  # Removed
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, List, Any
@@ -66,567 +66,143 @@ logger = logging.getLogger(__name__)
 
 
 # ============== DATABASE HELPER ==============
+from database.db_repository import db as vttech_db
+
 class DatabaseHelper:
-    """Helper class để lưu dữ liệu vào SQLite"""
+    """Helper class để chuyển hướng sang Prisma/PostgreSQL"""
     
-    def __init__(self, db_path: Path):
-        self.db_path = db_path
-        self._ensure_tables()
-    
-    def get_conn(self):
-        """Get database connection"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
-    
-    def _ensure_tables(self):
-        """Đảm bảo các bảng cần thiết tồn tại"""
-        conn = self.get_conn()
-        cursor = conn.cursor()
-        
-        # Tạo thêm các bảng mới nếu chưa có
-        
-        # Bảng appointments
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS appointments (
-                id INTEGER PRIMARY KEY,
-                customer_id INTEGER,
-                customer_name TEXT,
-                phone TEXT,
-                branch_id INTEGER,
-                branch_name TEXT,
-                service_id INTEGER,
-                service_name TEXT,
-                employee_id INTEGER,
-                employee_name TEXT,
-                appointment_date DATETIME,
-                status INTEGER DEFAULT 0,
-                note TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Bảng customers 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS customers (
-                id INTEGER PRIMARY KEY,
-                code TEXT,
-                name TEXT NOT NULL,
-                phone TEXT,
-                email TEXT,
-                gender INTEGER,
-                birthday DATE,
-                address TEXT,
-                city_id INTEGER,
-                district_id INTEGER,
-                ward_id INTEGER,
-                branch_id INTEGER,
-                source_id INTEGER,
-                membership_id INTEGER,
-                total_spent REAL DEFAULT 0,
-                total_debt REAL DEFAULT 0,
-                point INTEGER DEFAULT 0,
-                is_active INTEGER DEFAULT 1,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Bảng treatments
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS treatments (
-                id INTEGER PRIMARY KEY,
-                customer_id INTEGER,
-                customer_name TEXT,
-                branch_id INTEGER,
-                branch_name TEXT,
-                service_id INTEGER,
-                service_name TEXT,
-                employee_id INTEGER,
-                employee_name TEXT,
-                treatment_date DATETIME,
-                amount REAL DEFAULT 0,
-                paid REAL DEFAULT 0,
-                status INTEGER DEFAULT 0,
-                note TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (customer_id) REFERENCES customers(id),
-                FOREIGN KEY (branch_id) REFERENCES branches(id)
-            )
-        """)
-        
-        # Bảng memberships
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS memberships (
-                id INTEGER PRIMARY KEY,
-                code TEXT,
-                name TEXT NOT NULL,
-                discount_percent REAL DEFAULT 0,
-                min_spending REAL DEFAULT 0,
-                is_active INTEGER DEFAULT 1,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Bảng employee_groups
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS employee_groups (
-                id INTEGER PRIMARY KEY,
-                code TEXT,
-                name TEXT NOT NULL,
-                is_active INTEGER DEFAULT 1,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Bảng service_types
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS service_types (
-                id INTEGER PRIMARY KEY,
-                code TEXT,
-                name TEXT NOT NULL,
-                parent_id INTEGER,
-                is_active INTEGER DEFAULT 1,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Tạo indexes
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_customers_branch ON customers(branch_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_treatments_customer ON treatments(customer_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_treatments_date ON treatments(treatment_date)")
-        
-        conn.commit()
-        conn.close()
-    
+    def __enter__(self):
+        vttech_db.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        vttech_db.disconnect()
+
     def upsert_branches(self, branches: List[Dict]) -> int:
-        """Insert or update branches"""
-        conn = self.get_conn()
-        count = 0
-        try:
-            for data in branches:
-                conn.execute("""
-                    INSERT OR REPLACE INTO branches (id, code, name, address, phone, email, is_active, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    data.get('ID'),
-                    data.get('Code', data.get('ShortName', '')),
-                    data.get('Name'),
-                    data.get('Address', ''),
-                    data.get('Phone', ''),
-                    data.get('Email', ''),
-                    1 if data.get('IsActive', True) else 0,
-                    datetime.now().isoformat()
-                ))
-                count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} branches")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving branches: {e}")
-        finally:
-            conn.close()
-        return count
+        return vttech_db.upsert_branches(branches)
     
     def upsert_services(self, services: List[Dict]) -> int:
-        """Insert or update services"""
-        conn = self.get_conn()
-        count = 0
-        try:
-            for data in services:
-                conn.execute("""
-                    INSERT OR REPLACE INTO services (id, code, name, group_id, price, is_active, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    data.get('ID'),
-                    data.get('Code', ''),
-                    data.get('Name'),
-                    data.get('GroupID', data.get('Type')),
-                    data.get('Price', 0),
-                    1 if data.get('State', 1) == 1 else 0,
-                    datetime.now().isoformat()
-                ))
-                count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} services")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving services: {e}")
-        finally:
-            conn.close()
-        return count
+        return vttech_db.upsert_services(services)
     
     def upsert_service_groups(self, groups: List[Dict]) -> int:
-        """Insert or update service groups"""
-        conn = self.get_conn()
-        count = 0
-        try:
-            for data in groups:
-                conn.execute("""
-                    INSERT OR REPLACE INTO service_groups (id, code, name, parent_id, is_active)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (
-                    data.get('ID'),
-                    data.get('Code', ''),
-                    data.get('Name'),
-                    data.get('ParentID'),
-                    1
-                ))
-                count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} service groups")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving service groups: {e}")
-        finally:
-            conn.close()
-        return count
+        return vttech_db.upsert_service_groups(groups)
     
     def upsert_employees(self, employees: List[Dict]) -> int:
-        """Insert or update employees"""
-        conn = self.get_conn()
-        count = 0
-        try:
-            for data in employees:
-                conn.execute("""
-                    INSERT OR REPLACE INTO employees (id, code, name, branch_id, position, is_active, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    data.get('ID'),
-                    data.get('Code', ''),
-                    data.get('Name'),
-                    data.get('BranchID'),
-                    data.get('Position', ''),
-                    1 if data.get('State', 1) == 1 else 0,
-                    datetime.now().isoformat()
-                ))
-                count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} employees")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving employees: {e}")
-        finally:
-            conn.close()
-        return count
+        return vttech_db.upsert_employees(employees)
     
     def upsert_users(self, users: List[Dict]) -> int:
-        """Insert or update users"""
-        conn = self.get_conn()
-        count = 0
-        try:
-            for data in users:
-                conn.execute("""
-                    INSERT OR REPLACE INTO users (id, username, full_name, email, phone, branch_id, role, is_active)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    data.get('ID'),
-                    data.get('Username', data.get('Name', '')),
-                    data.get('FullName', data.get('EmployeeName', data.get('Name', ''))),
-                    data.get('Email', ''),
-                    data.get('Phone', ''),
-                    data.get('BranchID'),
-                    data.get('RoleID', ''),
-                    1
-                ))
-                count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} users")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving users: {e}")
-        finally:
-            conn.close()
-        return count
+        return vttech_db.upsert_users(users)
     
     def upsert_customer_sources(self, sources: List[Dict]) -> int:
-        """Insert or update customer sources"""
-        conn = self.get_conn()
-        count = 0
-        try:
-            for data in sources:
-                conn.execute("""
-                    INSERT OR REPLACE INTO customer_sources (id, code, name, parent_id, is_active)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (
-                    data.get('ID'),
-                    data.get('Code', ''),
-                    data.get('Name'),
-                    data.get('ParentID', data.get('SPID')),
-                    1
-                ))
-                count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} customer sources")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving customer sources: {e}")
-        finally:
-            conn.close()
-        return count
+        return vttech_db.upsert_customer_sources(sources)
     
     def upsert_cities(self, cities: List[Dict]) -> int:
-        """Insert or update cities"""
-        conn = self.get_conn()
+        vttech_db.connect()
         count = 0
-        try:
-            for data in cities:
-                conn.execute("""
-                    INSERT OR REPLACE INTO cities (id, name, code)
-                    VALUES (?, ?, ?)
-                """, (
-                    data.get('ID'),
-                    data.get('Name'),
-                    data.get('Code', '')
-                ))
+        for data in cities:
+            try:
+                vttech_db.prisma.city.upsert(
+                    where={'id': int(data.get('ID'))},
+                    data={
+                        'create': {'id': int(data.get('ID')), 'name': data.get('Name'), 'code': data.get('Code', '')},
+                        'update': {'name': data.get('Name'), 'code': data.get('Code', '')}
+                    }
+                )
                 count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} cities")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving cities: {e}")
-        finally:
-            conn.close()
+            except: pass
         return count
     
     def upsert_districts(self, districts: List[Dict]) -> int:
-        """Insert or update districts"""
-        conn = self.get_conn()
+        vttech_db.connect()
         count = 0
-        try:
-            for data in districts:
-                conn.execute("""
-                    INSERT OR REPLACE INTO districts (id, name, city_id)
-                    VALUES (?, ?, ?)
-                """, (
-                    data.get('ID'),
-                    data.get('Name'),
-                    data.get('CityID')
-                ))
+        for data in districts:
+            try:
+                vttech_db.prisma.district.upsert(
+                    where={'id': int(data.get('ID'))},
+                    data={
+                        'create': {'id': int(data.get('ID')), 'name': data.get('Name'), 'city_id': data.get('CityID')},
+                        'update': {'name': data.get('Name'), 'city_id': data.get('CityID')}
+                    }
+                )
                 count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} districts")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving districts: {e}")
-        finally:
-            conn.close()
+            except: pass
         return count
     
     def upsert_wards(self, wards: List[Dict]) -> int:
-        """Insert or update wards"""
-        conn = self.get_conn()
+        vttech_db.connect()
         count = 0
-        try:
-            for data in wards:
-                conn.execute("""
-                    INSERT OR REPLACE INTO wards (id, name, district_id)
-                    VALUES (?, ?, ?)
-                """, (
-                    data.get('ID'),
-                    data.get('Name'),
-                    data.get('DistrictID')
-                ))
+        for data in wards:
+            try:
+                vttech_db.prisma.ward.upsert(
+                    where={'id': int(data.get('ID'))},
+                    data={
+                        'create': {'id': int(data.get('ID')), 'name': data.get('Name'), 'district_id': data.get('DistrictID')},
+                        'update': {'name': data.get('Name'), 'district_id': data.get('DistrictID')}
+                    }
+                )
                 count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} wards")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving wards: {e}")
-        finally:
-            conn.close()
+            except: pass
         return count
     
     def upsert_memberships(self, memberships: List[Dict]) -> int:
-        """Insert or update memberships"""
-        conn = self.get_conn()
+        vttech_db.connect()
         count = 0
-        try:
-            for data in memberships:
-                conn.execute("""
-                    INSERT OR REPLACE INTO memberships (id, code, name, discount_percent, min_spending, is_active)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (
-                    data.get('ID'),
-                    data.get('Code', ''),
-                    data.get('Name'),
-                    data.get('DiscountPercent', data.get('Discount', 0)),
-                    data.get('MinSpending', 0),
-                    1
-                ))
+        for data in memberships:
+            try:
+                vttech_db.prisma.membership.upsert(
+                    where={'id': int(data.get('ID'))},
+                    data={
+                        'create': {
+                            'id': int(data.get('ID')), 
+                            'code': data.get('Code', ''), 
+                            'name': data.get('Name'), 
+                            'discount_percent': float(data.get('DiscountPercent', data.get('Discount', 0))),
+                            'min_spending': float(data.get('MinSpending', 0))
+                        },
+                        'update': {
+                            'code': data.get('Code', ''), 
+                            'name': data.get('Name'), 
+                            'discount_percent': float(data.get('DiscountPercent', data.get('Discount', 0))),
+                            'min_spending': float(data.get('MinSpending', 0))
+                        }
+                    }
+                )
                 count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} memberships")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving memberships: {e}")
-        finally:
-            conn.close()
+            except: pass
         return count
     
     def upsert_employee_groups(self, groups: List[Dict]) -> int:
-        """Insert or update employee groups"""
-        conn = self.get_conn()
+        vttech_db.connect()
         count = 0
-        try:
-            for data in groups:
-                conn.execute("""
-                    INSERT OR REPLACE INTO employee_groups (id, code, name, is_active)
-                    VALUES (?, ?, ?, ?)
-                """, (
-                    data.get('ID'),
-                    data.get('Code', ''),
-                    data.get('Name'),
-                    1
-                ))
+        for data in groups:
+            try:
+                vttech_db.prisma.employeegroup.upsert(
+                    where={'id': int(data.get('ID'))},
+                    data={
+                        'create': {'id': int(data.get('ID')), 'code': data.get('Code', ''), 'name': data.get('Name')},
+                        'update': {'code': data.get('Code', ''), 'name': data.get('Name')}
+                    }
+                )
                 count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} employee groups")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving employee groups: {e}")
-        finally:
-            conn.close()
+            except: pass
         return count
     
     def upsert_daily_revenue(self, date: str, records: List[Dict]) -> int:
-        """Insert or update daily revenue"""
-        conn = self.get_conn()
-        count = 0
-        try:
-            for data in records:
-                conn.execute("""
-                    INSERT OR REPLACE INTO daily_revenue 
-                    (date, branch_id, branch_name, paid, paid_new, raise_amount, 
-                     num_customers, num_appointments, num_checked_in, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    date,
-                    data.get('BranchID'),
-                    data.get('BranchName'),
-                    data.get('Paid', 0),
-                    data.get('PaidNew', 0),
-                    data.get('Raise', 0),
-                    data.get('PaidNumCust', 0),
-                    data.get('App', 0),
-                    data.get('AppChecked', 0),
-                    datetime.now().isoformat()
-                ))
-                count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} revenue records for {date}")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving revenue: {e}")
-        finally:
-            conn.close()
-        return count
+        return vttech_db.insert_daily_revenue_batch(date, records)
     
     def upsert_customers(self, customers: List[Dict]) -> int:
-        """Insert or update customers"""
-        conn = self.get_conn()
-        count = 0
-        try:
-            for data in customers:
-                conn.execute("""
-                    INSERT OR REPLACE INTO customers 
-                    (id, code, name, phone, email, gender, birthday, address, 
-                     city_id, district_id, ward_id, branch_id, source_id, 
-                     membership_id, total_spent, total_debt, point, is_active, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    data.get('ID'),
-                    data.get('Code', ''),
-                    data.get('Name', data.get('CustomerName', '')),
-                    data.get('Phone', data.get('Mobile', '')),
-                    data.get('Email', ''),
-                    data.get('Gender', data.get('Sex', 0)),
-                    data.get('Birthday', data.get('BirthDay')),
-                    data.get('Address', ''),
-                    data.get('CityID'),
-                    data.get('DistrictID'),
-                    data.get('WardID'),
-                    data.get('BranchID'),
-                    data.get('SourceID', data.get('CustomerSourceID')),
-                    data.get('MembershipID'),
-                    data.get('TotalSpent', data.get('TotalPaid', 0)),
-                    data.get('TotalDebt', data.get('Debt', 0)),
-                    data.get('Point', 0),
-                    1,
-                    datetime.now().isoformat()
-                ))
-                count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} customers")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving customers: {e}")
-        finally:
-            conn.close()
-        return count
+        return vttech_db.upsert_customers(customers)
     
     def upsert_appointments(self, appointments: List[Dict]) -> int:
-        """Insert or update appointments"""
-        conn = self.get_conn()
-        count = 0
-        try:
-            for data in appointments:
-                conn.execute("""
-                    INSERT OR REPLACE INTO appointments 
-                    (id, customer_id, customer_name, phone, branch_id, branch_name, 
-                     service_id, service_name, employee_id, employee_name, 
-                     appointment_date, status, note, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    data.get('ID'),
-                    data.get('CustomerID'),
-                    data.get('CustomerName', data.get('Name', '')),
-                    data.get('Phone', data.get('Mobile', '')),
-                    data.get('BranchID'),
-                    data.get('BranchName', ''),
-                    data.get('ServiceID'),
-                    data.get('ServiceName', ''),
-                    data.get('EmployeeID', data.get('DoctorID')),
-                    data.get('EmployeeName', data.get('DoctorName', '')),
-                    data.get('AppointmentDate', data.get('DateApp', data.get('Date'))),
-                    data.get('Status', 0),
-                    data.get('Note', ''),
-                    datetime.now().isoformat()
-                ))
-                count += 1
-            conn.commit()
-            logger.info(f"  💾 DB: Saved {count} appointments")
-        except Exception as e:
-            logger.error(f"  ❌ Error saving appointments: {e}")
-        finally:
-            conn.close()
-        return count
+        return vttech_db.upsert_appointments(appointments)
     
     def log_crawl(self, crawl_date: str, crawl_type: str, status: str, 
                   records_count: int = 0, error_message: str = None, 
                   duration: float = None):
-        """Log crawl history"""
-        conn = self.get_conn()
-        try:
-            conn.execute("""
-                INSERT INTO crawl_logs (crawl_date, crawl_type, status, records_count, error_message, duration_seconds)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (crawl_date, crawl_type, status, records_count, error_message, duration))
-            conn.commit()
-        except Exception as e:
-            logger.error(f"Error logging crawl: {e}")
-        finally:
-            conn.close()
+        vttech_db.log_crawl(crawl_date, crawl_type, status, records_count, error_message, duration)
     
     def get_table_counts(self) -> Dict[str, int]:
-        """Đếm số records trong các bảng"""
-        conn = self.get_conn()
-        counts = {}
-        
-        tables = ['branches', 'services', 'service_groups', 'employees', 'users', 
-                  'customer_sources', 'cities', 'districts', 'wards', 'memberships',
-                  'employee_groups', 'daily_revenue', 'customers', 'appointments']
-        
-        for table in tables:
-            try:
-                cursor = conn.execute(f"SELECT COUNT(*) as count FROM {table}")
-                counts[table] = cursor.fetchone()['count']
-            except:
-                counts[table] = 0
-        
-        conn.close()
-        return counts
+        return vttech_db.get_master_counts()
 
 
 # ============== CRAWLER CLASS ==============
@@ -643,7 +219,7 @@ class VTTechSyncToDB:
         self.token = None
         self.xsrf_tokens = {}
         self.branches = []
-        self.db = DatabaseHelper(DB_PATH)
+        self.db = DatabaseHelper()
         self.stats = {
             'total_records': 0,
             'db_saved': 0,
