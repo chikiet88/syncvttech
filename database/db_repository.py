@@ -255,6 +255,19 @@ class VTTechDB:
     def upsert_customers(self, customers: List[Dict]) -> int:
         self.connect()
         count = 0
+        
+        # Pre-fetch existing IDs to avoid foreign key violations
+        try:
+            existing_branches = {b.id for b in self.prisma.branch.find_many()}
+            existing_sources = {s.id for s in self.prisma.customersource.find_many()}
+            existing_memberships = {m.id for m in self.prisma.membership.find_many()}
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error pre-fetching IDs: {e}")
+            existing_branches = set()
+            existing_sources = set()
+            existing_memberships = set()
+
         for c in customers:
             try:
                 # Handle both ID and CustID
@@ -266,6 +279,25 @@ class VTTechDB:
                 # Parse necessary dates
                 birthday = self._parse_date(c.get('Birthday', c.get('BirthDay')))
                 created_at = self._parse_date(c.get('CreatedDate', c.get('CreateDate')))
+                
+                # Validate foreign keys
+                branch_id = c.get('BranchID')
+                if branch_id is not None:
+                    branch_id = int(branch_id)
+                    if branch_id not in existing_branches:
+                        branch_id = None
+                
+                source_id = c.get('SourceID', c.get('CustomerSourceID'))
+                if source_id is not None:
+                    source_id = int(source_id)
+                    if source_id not in existing_sources:
+                        source_id = None
+                
+                membership_id = c.get('MembershipID')
+                if membership_id is not None:
+                    membership_id = int(membership_id)
+                    if membership_id not in existing_memberships:
+                        membership_id = None
                 
                 self.prisma.customer.upsert(
                     where={'id': cid},
@@ -282,9 +314,9 @@ class VTTechDB:
                             'city_id': c.get('CityID'), 
                             'district_id': c.get('DistrictID'),
                             'ward_id': c.get('WardID'), 
-                            'branch_id': c.get('BranchID'), 
-                            'source_id': c.get('SourceID', c.get('CustomerSourceID')), 
-                            'membership_id': c.get('MembershipID'),
+                            'branch_id': branch_id, 
+                            'source_id': source_id, 
+                            'membership_id': membership_id,
                             'total_spent': float(c.get('TotalSpent', c.get('TotalPaid', 0) or 0)), 
                             'total_debt': float(c.get('TotalDebt', c.get('Debt', 0) or 0)),
                             'point': int(c.get('Point', 0) or 0), 
@@ -301,9 +333,9 @@ class VTTechDB:
                             'city_id': c.get('CityID'), 
                             'district_id': c.get('DistrictID'),
                             'ward_id': c.get('WardID'), 
-                            'branch_id': c.get('BranchID'), 
-                            'source_id': c.get('SourceID', c.get('CustomerSourceID')), 
-                            'membership_id': c.get('MembershipID'),
+                            'branch_id': branch_id, 
+                            'source_id': source_id, 
+                            'membership_id': membership_id,
                             'total_spent': float(c.get('TotalSpent', c.get('TotalPaid', 0) or 0)), 
                             'total_debt': float(c.get('TotalDebt', c.get('Debt', 0) or 0)),
                             'point': int(c.get('Point', 0) or 0), 
@@ -352,20 +384,85 @@ class VTTechDB:
         self.connect()
         try:
             pid = data.get('ID') or data.get('PaymentID')
+            if pid: pid = int(pid)
             self.prisma.customerpayment.upsert(
                 where={'customer_id_payment_id': {'customer_id': customer_id, 'payment_id': pid}},
                 data={
                     'create': {
-                        'customer_id': customer_id, 'payment_id': pid, 'amount': float(data.get('Amount', data.get('Paid', 0))),
+                        'customer_id': customer_id, 'payment_id': pid, 'amount': float(data.get('Amount', data.get('Paid', 0)) or 0),
                         'payment_date': self._parse_date(data.get('PaymentDate', data.get('Date'))),
-                        'payment_method': data.get('PaymentMethod', data.get('Method', '')),
-                        'note': data.get('Note', data.get('Remark', '')), 'signature_data': data.get('Signature', '')
+                        'payment_method': data.get('PaymentMethod', data.get('Method', '') or ''),
+                        'note': data.get('Note', data.get('Remark', '') or ''), 'signature_data': data.get('Signature', '') or ''
                     },
                     'update': {
-                        'amount': float(data.get('Amount', data.get('Paid', 0))),
+                        'amount': float(data.get('Amount', data.get('Paid', 0)) or 0),
                         'payment_date': self._parse_date(data.get('PaymentDate', data.get('Date'))),
-                        'payment_method': data.get('PaymentMethod', data.get('Method', '')),
-                        'note': data.get('Note', data.get('Remark', '')), 'signature_data': data.get('Signature', '')
+                        'payment_method': data.get('PaymentMethod', data.get('Method', '') or ''),
+                        'note': data.get('Note', data.get('Remark', '') or ''), 'signature_data': data.get('Signature', '') or ''
+                    }
+                }
+            )
+            return True
+        except: return False
+
+    def upsert_customer_service_tab(self, customer_id: int, data: Dict) -> bool:
+        self.connect()
+        try:
+            sid = data.get('ID') or data.get('TabID')
+            if sid: sid = int(sid)
+            self.prisma.customerservicetab.upsert(
+                where={'id': sid},
+                data={
+                    'create': {
+                        'id': sid,
+                        'customer_id': customer_id,
+                        'service_id': data.get('ServiceID'),
+                        'service_name': data.get('ServiceName', data.get('Name')),
+                        'quantity': int(data.get('Quantity', 1) or 1),
+                        'price': float(data.get('Price', 0) or 0),
+                        'discount': float(data.get('Discount', 0) or 0),
+                        'total': float(data.get('Total', 0) or 0),
+                        'created_at': self._parse_date(data.get('CreatedDate', data.get('Date'))),
+                        'status': str(data.get('Status', ''))
+                    },
+                    'update': {
+                        'customer_id': customer_id,
+                        'service_id': data.get('ServiceID'),
+                        'service_name': data.get('ServiceName', data.get('Name')),
+                        'quantity': int(data.get('Quantity', 1) or 1),
+                        'price': float(data.get('Price', 0) or 0),
+                        'discount': float(data.get('Discount', 0) or 0),
+                        'total': float(data.get('Total', 0) or 0),
+                        'created_at': self._parse_date(data.get('CreatedDate', data.get('Date'))),
+                        'status': str(data.get('Status', ''))
+                    }
+                }
+            )
+            return True
+        except: return False
+
+    def upsert_customer_care_history(self, customer_id: int, data: Dict) -> bool:
+        self.connect()
+        try:
+            hid = data.get('ID') or data.get('HistoryID')
+            if hid: hid = int(hid)
+            self.prisma.customercarehistory.upsert(
+                where={'id': hid},
+                data={
+                    'create': {
+                        'id': hid,
+                        'customer_id': customer_id,
+                        'action_type': data.get('ActionType', data.get('Type', '')),
+                        'action_date': self._parse_date(data.get('ActionDate', data.get('Date'))),
+                        'employee_name': data.get('EmployeeName', data.get('User', '')),
+                        'note': data.get('Note', data.get('Content', ''))
+                    },
+                    'update': {
+                        'customer_id': customer_id,
+                        'action_type': data.get('ActionType', data.get('Type', '')),
+                        'action_date': self._parse_date(data.get('ActionDate', data.get('Date'))),
+                        'employee_name': data.get('EmployeeName', data.get('User', '')),
+                        'note': data.get('Note', data.get('Content', ''))
                     }
                 }
             )

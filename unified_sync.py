@@ -128,7 +128,7 @@ class VTTechUnifiedSync:
             'service_groups': self.db.upsert_service_groups(data.get('Table3', [])),
             'employees': self.db.upsert_employees(data.get('Table4', [])),
             'users': self.db.upsert_users(data.get('Table5', [])),
-            'sources': self.db.upsert_customer_sources(data.get('Table5', [])) # Table5 often contains sources too
+            'sources': self.db.upsert_customer_sources(data.get('Table10', [])) 
         }
         for k, v in counts.items(): logger.info(f"  ✅ {k}: {v} records")
         self.stats['master'] = sum(counts.values())

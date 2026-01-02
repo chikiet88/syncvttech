@@ -169,6 +169,28 @@ class VTTechCustomerSync:
             
         return []
 
+    def sync_master_data(self):
+        logger.info("\n📦 ĐANG ĐỒNG BỘ MASTER DATA (Sources, Memberships...)")
+        try:
+            # Reusing Initialize handler logic from sync_to_db
+            res = self.call_handler("/Customer/ListCustomer/", "Initialize")
+            if not res:
+                logger.error("❌ Failed to get Initialize data")
+                return
+            
+            # Table10 is usually CustomerSources
+            if "Table10" in res:
+                count = self.db.upsert_customer_sources(res["Table10"])
+                logger.info(f"   ✅ Saved {count} customer sources")
+            
+            # Table2/3 is usually Memberships
+            if "Table2" in res:
+                count = self.db.upsert_memberships(res["Table2"])
+                logger.info(f"   ✅ Saved {count} memberships")
+                
+        except Exception as e:
+            logger.error(f"❌ Error syncing master data: {e}")
+
     def get_customers_by_branch(self, branch_id: int, date_from: str, date_to: str) -> List[Dict]:
         all_customers = []
         begin_id = 0
@@ -193,6 +215,9 @@ class VTTechCustomerSync:
         
         self.db.connect()
         if not self.login(): return
+        
+        # Sync master data first to avoid FK constraints
+        self.sync_master_data()
         
         branches = self.get_all_branches()
         for i, branch in enumerate(branches, 1):
