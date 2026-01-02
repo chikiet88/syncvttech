@@ -39,3 +39,11 @@ Thumbs.db
 # Temporary
 *.tmp
 /tmp/
+
+# Node
+node_modules/
+package-lock.json
+
+# Environment
+.env*
+prisma.config.js
