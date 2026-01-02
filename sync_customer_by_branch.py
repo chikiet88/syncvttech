@@ -62,13 +62,27 @@ class VTTechCustomerSync:
     
     def decompress(self, data: str) -> Any:
         try:
-            data = data.strip('"')
-            decoded = base64.b64decode(data)
-            decompressed = zlib.decompress(decoded, 16 + zlib.MAX_WBITS)
-            return json.loads(decompressed.decode('utf-8'))
-        except:
-            try: return json.loads(data)
-            except: return data
+            # Strip quotes if present
+            s = data.strip().strip('"')
+            if not s: return None
+            
+            # Try plain JSON first
+            try:
+                return json.loads(s)
+            except:
+                pass
+                
+            # Try Base64 + Gzip
+            try:
+                decoded = base64.b64decode(s)
+                decompressed = zlib.decompress(decoded, 16 + zlib.MAX_WBITS)
+                return json.loads(decompressed.decode('utf-8'))
+            except:
+                pass
+                
+            return s
+        except Exception as e:
+            return data
     
     def login(self) -> bool:
         logger.info("🔐 Đang đăng nhập...")
@@ -80,8 +94,13 @@ class VTTechCustomerSync:
             if data.get("Session"):
                 self.token = data["Session"]
                 self.session.cookies.set("WebToken", self.token)
+                
+                # IMPORTANT: Must visit a page to initialize session state on server
+                self.session.get(f"{BASE_URL}/Customer/ListCustomer")
+                
                 logger.info(f"✅ Đăng nhập thành công")
                 return True
+            logger.error(f"❌ Login failed: {data.get('RESULT')}")
             return False
         except Exception as e:
             logger.error(f"❌ Lỗi đăng nhập: {e}")
@@ -115,14 +134,29 @@ class VTTechCustomerSync:
 
     def get_all_branches(self) -> List[Dict]:
         logger.info("\n📍 BƯỚC 1: LẤY TẤT CẢ BRANCH")
-        # Reuse SessionData logic
-        resp = self.session.post(f"{BASE_URL}/api/Home/SessionData", json={})
-        result = self.decompress(resp.text)
-        if result and "Table" in result:
-            branches = result["Table"]
-            self.db.upsert_branches(branches)
-            logger.info(f"✅ Tìm thấy {len(branches)} branches")
-            return branches
+        try:
+            resp = self.session.post(f"{BASE_URL}/api/Home/SessionData", json={})
+            if resp.status_code != 200:
+                logger.error(f"❌ SessionData request failed: {resp.status_code}")
+                return []
+            
+            result = self.decompress(resp.text)
+            if not result:
+                logger.error("❌ Failed to decompress/parse SessionData response")
+                return []
+                
+            if isinstance(result, dict) and "Table" in result:
+                branches = result["Table"]
+                self.db.upsert_branches(branches)
+                logger.info(f"✅ Tìm thấy {len(branches)} branches")
+                return branches
+            else:
+                logger.error(f"❌ Unexpected SessionData structure: {type(result)}")
+                if isinstance(result, dict):
+                    logger.error(f"   Keys available: {list(result.keys())}")
+        except Exception as e:
+            logger.error(f"❌ Error in get_all_branches: {e}")
+            
         return []
 
     def get_customers_by_branch(self, branch_id: int, date_from: str, date_to: str) -> List[Dict]:
