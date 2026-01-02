@@ -66,7 +66,12 @@ class CustomerDetailSync:
             if data.get("Session"):
                 self.token = data["Session"]
                 self.session.cookies.set("WebToken", self.token)
+                
+                # Add Authorization header for future calls
+                self.session.headers.update({"Authorization": f"Bearer {self.token}"})
+                
                 logger.info(f"✅ Login success")
+                # Initialize session state
                 resp = self.session.get(f"{BASE_URL}/Customer/ListCustomer")
                 match = re.search(r'name=__RequestVerificationToken[^>]*value=([^\s/>]+)', resp.text)
                 if match: self.xsrf_token = match.group(1)

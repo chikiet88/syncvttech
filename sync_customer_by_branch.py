@@ -132,17 +132,29 @@ class VTTechCustomerSync:
         except: pass
         return None
 
+    def call_api(self, endpoint: str, data: Dict = None) -> Any:
+        try:
+            resp = self.session.post(
+                f"{BASE_URL}{endpoint}",
+                json=data or {},
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.token}"
+                },
+                timeout=120
+            )
+            if resp.status_code == 200: return self.decompress(resp.text)
+            else: logger.error(f"❌ API {endpoint} error: {resp.status_code}")
+        except Exception as e:
+            logger.error(f"❌ API {endpoint} exception: {e}")
+        return None
+
     def get_all_branches(self) -> List[Dict]:
         logger.info("\n📍 BƯỚC 1: LẤY TẤT CẢ BRANCH")
         try:
-            resp = self.session.post(f"{BASE_URL}/api/Home/SessionData", json={})
-            if resp.status_code != 200:
-                logger.error(f"❌ SessionData request failed: {resp.status_code}")
-                return []
-            
-            result = self.decompress(resp.text)
+            result = self.call_api("/api/Home/SessionData", {})
             if not result:
-                logger.error("❌ Failed to decompress/parse SessionData response")
+                logger.error("❌ Failed to get SessionData")
                 return []
                 
             if isinstance(result, dict) and "Table" in result:
@@ -151,9 +163,7 @@ class VTTechCustomerSync:
                 logger.info(f"✅ Tìm thấy {len(branches)} branches")
                 return branches
             else:
-                logger.error(f"❌ Unexpected SessionData structure: {type(result)}")
-                if isinstance(result, dict):
-                    logger.error(f"   Keys available: {list(result.keys())}")
+                logger.error(f"❌ Unexpected SessionData structure")
         except Exception as e:
             logger.error(f"❌ Error in get_all_branches: {e}")
             
