@@ -122,7 +122,7 @@ class CustomerDetailSync:
                 start = dt.replace(hour=0, minute=0, second=0)
                 end = dt.replace(hour=23, minute=59, second=59)
                 where = {
-                    'created_at': {
+                    'updated_at': {
                         'gte': start,
                         'lte': end
                     }
@@ -131,7 +131,7 @@ class CustomerDetailSync:
                 logger.error(f"❌ Invalid date format: {date_str}")
         
         # Get customers from DB
-        customers = prisma.customer.find_many(where=where, take=limit, order={'id': 'desc'})
+        customers = prisma.customer.find_many(where=where, take=limit, order={'updated_at': 'desc'})
         logger.info(f"📋 Syncing details for {len(customers)} customers...")
         
         for i, c in enumerate(customers, 1):
