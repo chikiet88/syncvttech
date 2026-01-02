@@ -104,31 +104,21 @@ def show_db_stats():
     print("\n\033[92m📊 Thống kê Database:\033[0m\n")
     
     try:
-        sys.path.insert(0, str(BASE_DIR / 'database'))
-        from db_repository import db
         
         counts = db.get_master_counts()
-        dates = db.get_available_dates()
         summary = db.get_daily_summary(5)
         
         print("\033[96m📦 Master Data:\033[0m")
         for table, count in counts.items():
             print(f"   • {table}: {count:,} records")
         
-        print(f"\n\033[96m📅 Ngày có dữ liệu: {len(dates)} ngày\033[0m")
-        if dates:
-            print(f"   • Mới nhất: {dates[0]}")
-            print(f"   • Cũ nhất: {dates[-1]}")
-        
         if summary:
             print(f"\n\033[96m💰 Doanh thu gần đây:\033[0m")
             for s in summary[:5]:
-                total = s.get('total_paid', 0)
-                print(f"   • {s['date']}: {total:,.0f} VND")
+                print(f"   • {s['date']}: {float(s['total_paid'] or 0):,.0f} VND")
         
     except Exception as e:
         print(f"\033[91m❌ Lỗi: {e}\033[0m")
-        print("\033[90m   Hãy chạy migrate trước (option 6)\033[0m")
     
     input("\nNhấn Enter để tiếp tục...")
 
@@ -654,99 +644,21 @@ def show_customer_sync_stats():
     print("\n\033[92m📊 Thống kê Customer Sync:\033[0m\n")
     
     try:
-        import sqlite3
-        db_path = BASE_DIR / "database" / "vttech.db"
+        from database.db_repository import db
+        db.connect()
         
-        if not db_path.exists():
-            print("\033[91m❌ Database chưa được tạo!\033[0m")
-            print("\033[90m   Hãy chạy sync trước.\033[0m")
-            input("\nNhấn Enter để tiếp tục...")
-            return
-        
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        
-        # Thống kê branches
-        cursor = conn.execute("SELECT COUNT(*) as count FROM branches")
-        branches_count = cursor.fetchone()['count']
-        
-        # Thống kê customers
-        cursor = conn.execute("SELECT COUNT(*) as count FROM customers")
-        customers_count = cursor.fetchone()['count']
-        
-        # Thống kê customer detail
-        detail_tables = [
-            ('customer_services', 'Services'),
-            ('customer_treatments', 'Treatments'),
-            ('customer_payments', 'Payments'),
-            ('customer_appointments', 'Appointments'),
-            ('customer_history', 'History')
-        ]
+        counts = db.get_master_counts()
+        branch_stats = db.get_customers_by_branch_stats()
         
         print("\033[96m📦 Master Data:\033[0m")
-        print(f"   • Branches: {branches_count:,}")
-        print(f"   • Customers: {customers_count:,}")
+        print(f"   • Branches: {counts.get('branches', 0):,}")
+        print(f"   • Customers: {counts.get('customers', 0):,}")
+        print(f"   • Appointments: {counts.get('appointments', 0):,}")
         
-        print("\n\033[96m📋 Customer Detail:\033[0m")
-        for table, label in detail_tables:
-            try:
-                cursor = conn.execute(f"SELECT COUNT(*) as count FROM {table}")
-                count = cursor.fetchone()['count']
-                print(f"   • {label}: {count:,}")
-            except:
-                print(f"   • {label}: 0 (bảng chưa có)")
-        
-        # Thống kê theo branch
         print("\n\033[96m👥 Customers theo Branch:\033[0m")
-        cursor = conn.execute("""
-            SELECT b.name, COUNT(c.id) as customer_count
-            FROM branches b
-            LEFT JOIN customers c ON b.id = c.branch_id
-            GROUP BY b.id, b.name
-            HAVING customer_count > 0
-            ORDER BY customer_count DESC
-            LIMIT 10
-        """)
-        for row in cursor.fetchall():
+        for row in branch_stats[:10]:
             print(f"   • {row['name']}: {row['customer_count']} khách")
-        
-        # Sync logs gần đây
-        print("\n\033[96m📜 Sync Logs gần đây:\033[0m")
-        try:
-            cursor = conn.execute("""
-                SELECT sync_date, branch_name, records_count, status
-                FROM sync_logs
-                ORDER BY created_at DESC
-                LIMIT 10
-            """)
-            for row in cursor.fetchall():
-                status_icon = "✅" if row['status'] == 'success' else "⚠️"
-                print(f"   {status_icon} {row['sync_date']} | {row['branch_name']}: {row['records_count']} records")
-        except:
-            print("   (Chưa có sync logs)")
-        
-        # Data Change Logs gần đây
-        print("\n\033[96m📝 Data Change Logs gần đây:\033[0m")
-        try:
-            cursor = conn.execute("""
-                SELECT table_name, change_type, COUNT(*) as count, sync_date
-                FROM data_change_logs
-                GROUP BY table_name, change_type, sync_date
-                ORDER BY sync_date DESC
-                LIMIT 10
-            """)
-            rows = cursor.fetchall()
-            if rows:
-                for row in rows:
-                    change_icon = "🆕" if row['change_type'] == 'INSERT' else "✏️"
-                    print(f"   {change_icon} {row['sync_date']} | {row['table_name']}: {row['count']} {row['change_type']}")
-            else:
-                print("   (Chưa có change logs)")
-        except Exception as e:
-            print(f"   (Chưa có change logs: {e})")
-        
-        conn.close()
-        
+            
     except Exception as e:
         print(f"\033[91m❌ Lỗi: {e}\033[0m")
     

@@ -257,34 +257,64 @@ class VTTechDB:
         count = 0
         for c in customers:
             try:
-                cid = int(c.get('ID'))
+                # Handle both ID and CustID
+                cid = c.get('ID') or c.get('CustID')
+                if cid is None:
+                    continue
+                cid = int(cid)
+                
+                # Parse necessary dates
+                birthday = self._parse_date(c.get('Birthday', c.get('BirthDay')))
+                created_at = self._parse_date(c.get('CreatedDate', c.get('CreateDate')))
+                
                 self.prisma.customer.upsert(
                     where={'id': cid},
                     data={
                         'create': {
-                            'id': cid, 'code': c.get('Code', ''), 'name': c.get('Name', c.get('CustomerName', '')),
-                            'phone': c.get('Phone', c.get('Mobile', '')), 'email': c.get('Email', ''),
-                            'gender': c.get('Gender', c.get('Sex', 0)), 'birthday': self._parse_date(c.get('Birthday', c.get('BirthDay'))),
-                            'address': c.get('Address', ''), 'city_id': c.get('CityID'), 'district_id': c.get('DistrictID'),
-                            'ward_id': c.get('WardID'), 'branch_id': c.get('BranchID'), 
-                            'source_id': c.get('SourceID', c.get('CustomerSourceID')), 'membership_id': c.get('MembershipID'),
-                            'total_spent': float(c.get('TotalSpent', c.get('TotalPaid', 0))), 'total_debt': float(c.get('TotalDebt', c.get('Debt', 0))),
-                            'point': int(c.get('Point', 0)), 'created_at': self._parse_date(c.get('CreatedDate', datetime.now()))
+                            'id': cid, 
+                            'code': c.get('Code', c.get('CustCode', '')), 
+                            'name': c.get('Name', c.get('CustomerName', c.get('CustName', ''))),
+                            'phone': c.get('Phone', c.get('Mobile', c.get('CustPhone', ''))), 
+                            'email': c.get('Email', ''),
+                            'gender': int(c.get('Gender', c.get('Sex', 0)) or 0), 
+                            'birthday': birthday,
+                            'address': c.get('Address', ''), 
+                            'city_id': c.get('CityID'), 
+                            'district_id': c.get('DistrictID'),
+                            'ward_id': c.get('WardID'), 
+                            'branch_id': c.get('BranchID'), 
+                            'source_id': c.get('SourceID', c.get('CustomerSourceID')), 
+                            'membership_id': c.get('MembershipID'),
+                            'total_spent': float(c.get('TotalSpent', c.get('TotalPaid', 0) or 0)), 
+                            'total_debt': float(c.get('TotalDebt', c.get('Debt', 0) or 0)),
+                            'point': int(c.get('Point', 0) or 0), 
+                            'created_at': created_at or datetime.now()
                         },
                         'update': {
-                            'code': c.get('Code', ''), 'name': c.get('Name', c.get('CustomerName', '')),
-                            'phone': c.get('Phone', c.get('Mobile', '')), 'email': c.get('Email', ''),
-                            'gender': c.get('Gender', c.get('Sex', 0)), 'birthday': self._parse_date(c.get('Birthday', c.get('BirthDay'))),
-                            'address': c.get('Address', ''), 'city_id': c.get('CityID'), 'district_id': c.get('DistrictID'),
-                            'ward_id': c.get('WardID'), 'branch_id': c.get('BranchID'), 
-                            'source_id': c.get('SourceID', c.get('CustomerSourceID')), 'membership_id': c.get('MembershipID'),
-                            'total_spent': float(c.get('TotalSpent', c.get('TotalPaid', 0))), 'total_debt': float(c.get('TotalDebt', c.get('Debt', 0))),
-                            'point': int(c.get('Point', 0)), 'updated_at': datetime.now()
+                            'code': c.get('Code', c.get('CustCode', '')), 
+                            'name': c.get('Name', c.get('CustomerName', c.get('CustName', ''))),
+                            'phone': c.get('Phone', c.get('Mobile', c.get('CustPhone', ''))), 
+                            'email': c.get('Email', ''),
+                            'gender': int(c.get('Gender', c.get('Sex', 0)) or 0), 
+                            'birthday': birthday,
+                            'address': c.get('Address', ''), 
+                            'city_id': c.get('CityID'), 
+                            'district_id': c.get('DistrictID'),
+                            'ward_id': c.get('WardID'), 
+                            'branch_id': c.get('BranchID'), 
+                            'source_id': c.get('SourceID', c.get('CustomerSourceID')), 
+                            'membership_id': c.get('MembershipID'),
+                            'total_spent': float(c.get('TotalSpent', c.get('TotalPaid', 0) or 0)), 
+                            'total_debt': float(c.get('TotalDebt', c.get('Debt', 0) or 0)),
+                            'point': int(c.get('Point', 0) or 0), 
+                            'updated_at': datetime.now()
                         }
                     }
                 )
                 count += 1
-            except: pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Error upserting customer {c.get('ID') or c.get('CustID')}: {e}")
         return count
 
     def upsert_appointments(self, appointments: List[Dict]) -> int:
