@@ -109,13 +109,29 @@ class CustomerDetailSync:
             for h in res:
                 self.db.upsert_customer_care_history(customer_id, h)
 
-    def run(self, limit: int = 100):
+    def run(self, limit: int = 100, date_str: str = None):
         if not self.login(): return
         self.db.connect()
         prisma = self.db.prisma
         
+        # Build query
+        where = {}
+        if date_str:
+            try:
+                dt = datetime.strptime(date_str, '%Y-%m-%d')
+                start = dt.replace(hour=0, minute=0, second=0)
+                end = dt.replace(hour=23, minute=59, second=59)
+                where = {
+                    'created_at': {
+                        'gte': start,
+                        'lte': end
+                    }
+                }
+            except:
+                logger.error(f"❌ Invalid date format: {date_str}")
+        
         # Get customers from DB
-        customers = prisma.customer.find_many(take=limit, order={'id': 'desc'})
+        customers = prisma.customer.find_many(where=where, take=limit, order={'id': 'desc'})
         logger.info(f"📋 Syncing details for {len(customers)} customers...")
         
         for i, c in enumerate(customers, 1):
@@ -128,5 +144,6 @@ class CustomerDetailSync:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--limit', type=int, default=100)
+    parser.add_argument('--date', type=str, help='Filter customers by created date (YYYY-MM-DD)')
     args = parser.parse_args()
-    CustomerDetailSync().run(limit=args.limit)
+    CustomerDetailSync().run(limit=args.limit, date_str=args.date)
