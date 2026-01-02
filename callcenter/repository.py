@@ -418,6 +418,94 @@ class CallCenterRepository:
         finally:
             conn.close()
     
+    # ============== EXTENSION METHODS ==============
+    
+    def upsert_extension(self, data: Dict) -> bool:
+        """Insert hoặc update một extension"""
+        conn = self.get_conn()
+        try:
+            raw_data = json.dumps(data, ensure_ascii=False, default=str)
+            
+            conn.execute("""
+                INSERT OR REPLACE INTO callcenter_extensions
+                (vttech_id, extension, password, is_active, raw_data, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                data.get('ID') or data.get('id') or data.get('vttech_id'),
+                data.get('Extension') or data.get('extension'),
+                data.get('Password') or data.get('password'),
+                1,  # active by default
+                raw_data,
+                datetime.now().isoformat()
+            ))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"❌ Error upserting extension: {e}")
+            return False
+        finally:
+            conn.close()
+    
+    def upsert_extensions_batch(self, extensions: List[Dict]) -> Dict[str, int]:
+        """Batch insert extensions từ TicketExtensionList"""
+        conn = self.get_conn()
+        success_count = 0
+        failed_count = 0
+        
+        try:
+            for data in extensions:
+                try:
+                    raw_data = json.dumps(data, ensure_ascii=False, default=str)
+                    
+                    conn.execute("""
+                        INSERT OR REPLACE INTO callcenter_extensions
+                        (vttech_id, extension, password, is_active, raw_data, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (
+                        data.get('ID') or data.get('id') or data.get('vttech_id'),
+                        data.get('Extension') or data.get('extension'),
+                        data.get('Password') or data.get('password'),
+                        1,  # active by default
+                        raw_data,
+                        datetime.now().isoformat()
+                    ))
+                    success_count += 1
+                except Exception as e:
+                    print(f"❌ Error inserting extension: {e}")
+                    failed_count += 1
+            conn.commit()
+        finally:
+            conn.close()
+        
+        return {'success': success_count, 'failed': failed_count}
+    
+    def get_extensions(self, active_only: bool = True) -> List[Dict]:
+        """Lấy danh sách extensions"""
+        conn = self.get_conn()
+        try:
+            sql = "SELECT * FROM callcenter_extensions"
+            if active_only:
+                sql += " WHERE is_active = 1"
+            sql += " ORDER BY extension"
+            
+            cursor = conn.execute(sql)
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+    
+    def get_extension_by_number(self, extension: str) -> Optional[Dict]:
+        """Lấy extension theo số"""
+        conn = self.get_conn()
+        try:
+            cursor = conn.execute(
+                "SELECT * FROM callcenter_extensions WHERE extension = ?",
+                (extension,)
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
     def upsert_employees_batch(self, employees: List[Dict]) -> Dict[str, int]:
         """Batch insert employees"""
         conn = self.get_conn()
@@ -502,13 +590,13 @@ class CallCenterRepository:
                     COUNT(r.id) as total_calls,
                     SUM(CASE WHEN r.direction = 'outbound' THEN 1 ELSE 0 END) as outbound_calls,
                     SUM(CASE WHEN r.direction = 'inbound' THEN 1 ELSE 0 END) as inbound_calls,
-                    SUM(CASE WHEN r.call_status = 'ANSWERED' THEN 1 ELSE 0 END) as answered_calls,
-                    SUM(CASE WHEN r.call_status = 'CANCELED' THEN 1 ELSE 0 END) as canceled_calls,
-                    SUM(CASE WHEN r.call_status = 'NO_ANSWER' THEN 1 ELSE 0 END) as no_answer_calls,
-                    SUM(CASE WHEN r.call_status = 'BUSY' THEN 1 ELSE 0 END) as busy_calls,
+                    SUM(CASE WHEN r.disposition = 'ANSWERED' THEN 1 ELSE 0 END) as answered_calls,
+                    SUM(CASE WHEN r.disposition = 'CANCELED' THEN 1 ELSE 0 END) as canceled_calls,
+                    SUM(CASE WHEN r.disposition = 'NO ANSWER' OR r.disposition = 'NO_ANSWER' THEN 1 ELSE 0 END) as no_answer_calls,
+                    SUM(CASE WHEN r.disposition = 'BUSY' THEN 1 ELSE 0 END) as busy_calls,
                     COALESCE(SUM(r.duration), 0) as total_duration,
                     COALESCE(SUM(r.billsec), 0) as total_billsec,
-                    COALESCE(AVG(r.billsec), 0) as avg_billsec
+                    COALESCE(AVG(CASE WHEN r.billsec > 0 THEN r.billsec ELSE NULL END), 0) as avg_billsec
                 FROM callcenter_employees e
                 LEFT JOIN callcenter_records r ON e.extension = r.caller_id_number
             """
@@ -533,7 +621,7 @@ class CallCenterRepository:
             if where_clauses:
                 sql += " WHERE " + " AND ".join(where_clauses)
             
-            sql += " GROUP BY e.id, e.extension ORDER BY total_calls DESC"
+            sql += " GROUP BY e.id, e.extension ORDER BY total_billsec DESC"
             
             cursor = conn.execute(sql, params)
             return [dict(row) for row in cursor.fetchall()]

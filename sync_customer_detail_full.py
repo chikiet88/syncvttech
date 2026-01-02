@@ -292,6 +292,7 @@ class CustomerDetailSync:
                 branch_name TEXT,
                 service_name TEXT,
                 note TEXT,
+                signature_data TEXT,
                 raw_data TEXT,
                 synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (customer_id) REFERENCES customers(id),
@@ -454,7 +455,7 @@ class CustomerDetailSync:
         """Lấy điều trị của customer"""
         result = self.call_handler(
             "/Customer/Treatment/TreatmentList/TreatmentList_Service/",
-            "LoadataTreatment"
+            "LoadDetail"
         )
         
         treatments = []
@@ -483,12 +484,32 @@ class CustomerDetailSync:
                 payments = result
         
         return payments
+
+    def get_payment_signature(self, payment_id: int) -> str:
+        """Lấy chữ ký theo mã bill"""
+        result = self.call_handler(
+            "/Customer/Payment/PaymentList/PaymentList_Service/",
+            "GetSign_Payment",
+            data={"id": payment_id, "type": "payment"}
+        )
+        
+        if result:
+            # Result có thể là list [ {'SignData': '...'} ] hoặc dict
+            if isinstance(result, list) and len(result) > 0:
+                item = result[0]
+                if isinstance(item, dict) and 'SignData' in item:
+                    return str(item['SignData'])
+            elif isinstance(result, dict) and "Data" in result:
+                return str(result["Data"])
+            elif isinstance(result, str):
+                return result
+        return ""
     
     def get_customer_appointments(self, customer_id: int) -> List[Dict]:
         """Lấy lịch hẹn của customer"""
         result = self.call_handler(
-            "/Customer/ScheduleList_Schedule/",
-            "Loadata"
+            "/Customer/MainCustomer/",
+            "LoadCustomerScheduleNext"
         )
         
         appointments = []
@@ -646,7 +667,7 @@ class CustomerDetailSync:
             conn.execute("BEGIN TRANSACTION")
             
             for t in treatments:
-                treatment_id = t.get('ID', t.get('TreatmentID'))
+                treatment_id = t.get('ID', t.get('TreatmentID', t.get('TabID')))
                 
                 # Kiểm tra record cũ
                 cursor = conn.execute("""
@@ -657,8 +678,8 @@ class CustomerDetailSync:
                 
                 new_data = {
                     'status': t.get('Status', t.get('StatusName', '')),
-                    'employee_id': t.get('EmployeeID', t.get('DoctorID')),
-                    'treatment_date': t.get('TreatmentDate', t.get('Date')),
+                    'employee_id': t.get('EmployeeID', t.get('DoctorID', t.get('Created_By'))),
+                    'treatment_date': t.get('TreatmentDate', t.get('Date', t.get('Created'))),
                 }
                 
                 if existing:
@@ -733,11 +754,14 @@ class CustomerDetailSync:
                     self.log_data_change(conn, 'customer_payments', payment_id, 'INSERT',
                                         'amount', None, str(new_data['amount']))
                 
+                # Lấy chữ ký từ API
+                signature = self.get_payment_signature(payment_id) if payment_id else ""
+                
                 conn.execute("""
                     INSERT OR REPLACE INTO customer_payments 
                     (customer_id, payment_id, amount, payment_date, payment_method, payment_type,
-                     branch_id, branch_name, service_name, note, raw_data, synced_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     branch_id, branch_name, service_name, note, signature_data, raw_data, synced_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     customer_id,
                     payment_id,
@@ -749,6 +773,7 @@ class CustomerDetailSync:
                     p.get('BranchName', ''),
                     p.get('ServiceName', ''),
                     p.get('Note', ''),
+                    signature,
                     json.dumps(p, ensure_ascii=False),
                     datetime.now().isoformat()
                 ))
@@ -785,7 +810,7 @@ class CustomerDetailSync:
                 existing = cursor.fetchone()
                 
                 new_data = {
-                    'appointment_date': a.get('AppointmentDate', a.get('Date', a.get('DateApp'))),
+                    'appointment_date': a.get('AppointmentDate', a.get('Date', a.get('DateApp', a.get('DateFrom')))),
                     'status': a.get('Status'),
                     'employee_id': a.get('EmployeeID', a.get('DoctorID')),
                 }

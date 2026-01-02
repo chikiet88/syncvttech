@@ -320,43 +320,95 @@ def get_callcenter_conn():
 
 @app.route('/api/callcenter/stats')
 def api_callcenter_stats():
-    """Call Center statistics"""
+    """Call Center statistics with date filtering"""
     conn = get_callcenter_conn()
     if not conn:
-        return jsonify({'error': 'Call Center database not available', 'total_records': 0}), 200
+        return jsonify({'error': 'Call Center database not available', 'total_calls': 0}), 200
     
     try:
         cursor = conn.cursor()
         
-        # Total records
-        cursor.execute("SELECT COUNT(*) as total FROM callcenter_records")
-        total = cursor.fetchone()['total']
+        # Get date filters
+        date_from = request.args.get('date_from')
+        date_to = request.args.get('date_to')
+        
+        # Build date filter clause
+        date_filter = ""
+        params = []
+        if date_from and date_to:
+            date_filter = "WHERE date(start_time) BETWEEN ? AND ?"
+            params = [date_from, date_to]
+        elif date_from:
+            date_filter = "WHERE date(start_time) >= ?"
+            params = [date_from]
+        elif date_to:
+            date_filter = "WHERE date(start_time) <= ?"
+            params = [date_to]
+        
+        # Total calls and total billsec
+        query = f"""
+            SELECT 
+                COUNT(*) as total_calls,
+                COALESCE(SUM(billsec), 0) as total_billsec
+            FROM callcenter_records
+            {date_filter}
+        """
+        cursor.execute(query, params)
+        row = cursor.fetchone()
+        total_calls = row['total_calls']
+        total_billsec = row['total_billsec']
+        
+        # By status
+        query = f"""
+            SELECT disposition, COUNT(*) as cnt, COALESCE(SUM(billsec), 0) as billsec
+            FROM callcenter_records 
+            {date_filter}
+            GROUP BY disposition
+        """
+        cursor.execute(query, params)
+        by_status = {
+            (row['disposition'] or 'UNKNOWN'): {
+                'count': row['cnt'],
+                'billsec': row['billsec']
+            } for row in cursor.fetchall()
+        }
         
         # By direction
-        cursor.execute("""
-            SELECT direction, COUNT(*) as cnt 
+        query = f"""
+            SELECT direction, COUNT(*) as cnt, COALESCE(SUM(billsec), 0) as billsec
             FROM callcenter_records 
+            {date_filter}
             GROUP BY direction
-        """)
-        by_direction = {row['direction'] or 'unknown': row['cnt'] for row in cursor.fetchall()}
+        """
+        cursor.execute(query, params)
+        by_direction = {
+            (row['direction'] or 'unknown'): {
+                'count': row['cnt'],
+                'billsec': row['billsec']
+            } for row in cursor.fetchall()
+        }
         
-        # Today's calls
-        cursor.execute("""
-            SELECT COUNT(*) as cnt FROM callcenter_records 
-            WHERE date(start_time) = date('now')
-        """)
-        today_calls = cursor.fetchone()['cnt']
+        # Active extensions (unique caller_id_number)
+        query = f"""
+            SELECT COUNT(DISTINCT caller_id_number) as cnt
+            FROM callcenter_records 
+            {date_filter}
+        """
+        cursor.execute(query, params)
+        active_extensions = cursor.fetchone()['cnt']
         
-        # By date (last 30 days)
-        cursor.execute("""
-            SELECT date(start_time) as date, COUNT(*) as count 
+        # By date
+        query = f"""
+            SELECT date(start_time) as date, COUNT(*) as count, COALESCE(SUM(billsec), 0) as billsec
             FROM callcenter_records 
             WHERE start_time IS NOT NULL
+            {"AND " + date_filter.replace("WHERE ", "") if date_filter else ""}
             GROUP BY date(start_time) 
             ORDER BY date DESC 
             LIMIT 30
-        """)
-        by_date = [{'date': row['date'], 'count': row['count']} for row in cursor.fetchall()]
+        """
+        cursor.execute(query, params)
+        by_date = [{'date': row['date'], 'count': row['count'], 'billsec': row['billsec']} for row in cursor.fetchall()]
         by_date.reverse()
         
         # Last sync
@@ -375,14 +427,16 @@ def api_callcenter_stats():
         conn.close()
         
         return jsonify({
-            'total_records': total,
+            'total_calls': total_calls,
+            'total_billsec': total_billsec,
+            'active_extensions': active_extensions,
+            'by_status': by_status,
             'by_direction': by_direction,
-            'today_calls': today_calls,
             'by_date': by_date,
             'last_sync': last_sync
         })
     except Exception as e:
-        return jsonify({'error': str(e), 'total_records': 0}), 200
+        return jsonify({'error': str(e), 'total_calls': 0}), 200
 
 @app.route('/api/callcenter/records')
 def api_callcenter_records():

@@ -51,8 +51,9 @@ def print_menu():
     print("  \033[93m12.\033[0m 📞 Sync PBX Calls (khoảng thời gian)")
     print("  \033[93m13.\033[0m 👤 Sync Nhân viên từ VTTech")
     print("  \033[93m14.\033[0m 📊 Xem thống kê Call Center")
-    print("  \033[93m15.\033[0m 🔄 Full Sync: PBX + Nhân viên")
+    print("  \033[93m15.\033[0m 🔄 Full Sync: Extensions + Nhân viên + PBX")
     print("  \033[93m16.\033[0m 🔧 Cài đặt Cron Job Call Center")
+    print("  \033[93m17.\033[0m 📞 Sync Extensions từ VTTech")
     print()
     print("  \033[91m0.\033[0m ❌ Thoát")
     print()
@@ -190,42 +191,98 @@ def setup_callcenter_cron():
 def run_employee_sync():
     """Sync nhân viên từ VTTech"""
     print("\n\033[92m👤 Đang sync nhân viên từ VTTech...\033[0m")
-    print("\033[90m   API: /Marketing/TicketGroupList/?handler=LoadData\033[0m\n")
+    print("\033[90m   API: /api/Home/SessionData (Table4 - Employees)\033[0m\n")
     
     try:
-        cmd = [sys.executable, str(BASE_DIR / "callcenter" / "sync_employees.py")]
-        result = subprocess.run(cmd, cwd=str(BASE_DIR))
+        from callcenter.sync_employees import VTTechEmployeeSync
+        from callcenter.init_callcenter_db import init_callcenter_database, migrate_database
+        import warnings
+        warnings.filterwarnings('ignore')
         
-        if result.returncode == 0:
-            print("\n\033[92m✅ Sync nhân viên hoàn tất!\033[0m")
-        else:
-            print("\n\033[91m❌ Có lỗi khi sync nhân viên!\033[0m")
+        init_callcenter_database()
+        migrate_database()
+        
+        syncer = VTTechEmployeeSync()
+        result = syncer.sync_employees_from_session()
+        
+        print(f"\n\033[92m✅ Sync nhân viên hoàn tất!\033[0m")
+        print(f"   👥 Total: {result.get('total', 0)} | Saved: {result.get('success', 0)}")
             
     except Exception as e:
         print(f"\033[91m❌ Lỗi: {e}\033[0m")
+        import traceback
+        traceback.print_exc()
+    
+    input("\nNhấn Enter để tiếp tục...")
+
+
+def run_extension_sync():
+    """Sync Extensions từ VTTech"""
+    print("\n\033[92m📞 Đang sync Extensions từ VTTech...\033[0m")
+    print("\033[90m   API: /Marketing/TicketExtensionList/?handler=LoadData\033[0m\n")
+    
+    try:
+        from callcenter.sync_employees import VTTechEmployeeSync
+        from callcenter.init_callcenter_db import init_callcenter_database, migrate_database
+        import warnings
+        warnings.filterwarnings('ignore')
+        
+        init_callcenter_database()
+        migrate_database()
+        
+        syncer = VTTechEmployeeSync()
+        result = syncer.sync_extensions()
+        
+        print(f"\n\033[92m✅ Sync Extensions hoàn tất!\033[0m")
+        print(f"   📞 Total: {result.get('total', 0)} | Saved: {result.get('saved', 0)}")
+            
+    except Exception as e:
+        print(f"\033[91m❌ Lỗi: {e}\033[0m")
+        import traceback
+        traceback.print_exc()
     
     input("\nNhấn Enter để tiếp tục...")
 
 
 def run_full_callcenter_sync(date_from=None, date_to=None):
-    """Chạy Full Sync: PBX + Nhân viên"""
+    """Chạy Full Sync: Extensions + Nhân viên + PBX"""
     print("\n\033[92m🔄 FULL SYNC CALL CENTER\033[0m")
     print("=" * 50)
     
-    # Step 1: Sync Employees
-    print("\n\033[96m📍 BƯỚC 1: Sync Nhân viên từ VTTech\033[0m")
+    # Step 1: Sync Extensions + Employees từ VTTech
+    print("\n\033[96m📍 BƯỚC 1: Sync Extensions + Nhân viên từ VTTech\033[0m")
     print("-" * 40)
+    print("\033[90m   APIs:\033[0m")
+    print("\033[90m   - /Marketing/TicketExtensionList/?handler=LoadData (Extensions)\033[0m")
+    print("\033[90m   - /api/Home/SessionData (Employees - fallback)\033[0m\n")
     
     try:
-        cmd1 = [sys.executable, str(BASE_DIR / "callcenter" / "sync_employees.py")]
-        result1 = subprocess.run(cmd1, cwd=str(BASE_DIR))
+        # Import và gọi trực tiếp thay vì subprocess
+        from callcenter.sync_employees import VTTechEmployeeSync
+        from callcenter.init_callcenter_db import init_callcenter_database, migrate_database
+        import warnings
+        warnings.filterwarnings('ignore')
         
-        if result1.returncode == 0:
-            print("\033[92m✅ Bước 1 hoàn thành!\033[0m")
-        else:
-            print("\033[93m⚠️  Bước 1 có lỗi (tiếp tục sync PBX)...\033[0m")
+        # Init DB
+        init_callcenter_database()
+        migrate_database()
+        
+        # Full Sync: Extensions + Employees
+        syncer = VTTechEmployeeSync()
+        result = syncer.sync_all()
+        
+        ext_count = result.get('extensions', {}).get('total', 0)
+        emp_count = result.get('employees', {}).get('total', 0)
+        emp_saved = result.get('employees', {}).get('success', 0)
+        
+        print(f"\n\033[92m✅ Bước 1 hoàn thành!\033[0m")
+        print(f"   📞 Extensions: {ext_count}")
+        print(f"   👥 Employees: {emp_count} (saved: {emp_saved})")
+        
     except Exception as e:
         print(f"\033[91m❌ Lỗi bước 1: {e}\033[0m")
+        import traceback
+        traceback.print_exc()
     
     # Step 2: Sync PBX
     print("\n\033[96m📞 BƯỚC 2: Sync PBX Calls\033[0m")
@@ -998,6 +1055,10 @@ def main():
         
         elif choice == "16":
             setup_callcenter_cron()
+        
+        elif choice == "17":
+            # Sync Extensions từ VTTech
+            run_extension_sync()
         
         # Customer Sync options (NEW)
         elif choice == "20":

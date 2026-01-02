@@ -113,6 +113,20 @@ def init_callcenter_database():
         )
     """)
     
+    # Bảng Extensions từ TicketExtensionList
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS callcenter_extensions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vttech_id INTEGER UNIQUE,          -- ID từ VTTech
+            extension TEXT UNIQUE NOT NULL,     -- Số Extension (1000, 1001,...)
+            password TEXT,                      -- Password của extension
+            is_active INTEGER DEFAULT 1,
+            raw_data TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
     # Bảng Sync Logs - theo dõi quá trình sync
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS callcenter_sync_logs (
@@ -182,6 +196,9 @@ def init_callcenter_database():
     
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_employees_extension ON callcenter_employees(extension)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_employees_vttech_id ON callcenter_employees(vttech_id)")
+    
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_extensions_extension ON callcenter_extensions(extension)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_extensions_vttech_id ON callcenter_extensions(vttech_id)")
     
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_logs_status ON callcenter_sync_logs(status)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_logs_sync_type ON callcenter_sync_logs(sync_type)")

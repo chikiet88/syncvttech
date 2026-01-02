@@ -139,6 +139,26 @@ class VTTechUnifiedSync:
             logger.error(f"❌ Handler error {page}?handler={handler}: {e}")
             self.stats['errors'] += 1
             return None
+
+    def get_payment_signature(self, payment_id: int) -> str:
+        """Lấy chữ ký theo mã bill"""
+        result = self.call_handler(
+            "/Customer/Payment/PaymentList/PaymentList_Service/",
+            "GetSign_Payment",
+            data={"id": payment_id, "type": "payment"}
+        )
+        
+        if result:
+            # Result có thể là list [ {'SignData': '...'} ] hoặc dict
+            if isinstance(result, list) and len(result) > 0:
+                item = result[0]
+                if isinstance(item, dict) and 'SignData' in item:
+                    return str(item['SignData'])
+            elif isinstance(result, dict) and "Data" in result:
+                return str(result["Data"])
+            elif isinstance(result, str):
+                return result
+        return ""
     
     def call_api(self, endpoint: str, data: dict = None) -> Any:
         """Gọi API endpoint"""
@@ -165,6 +185,112 @@ class VTTechUnifiedSync:
         self.db_conn = sqlite3.connect(DB_PATH)
         self.db_conn.row_factory = sqlite3.Row
         logger.info(f"📦 Connected to {DB_PATH}")
+        self.ensure_tables()
+
+    def ensure_tables(self):
+        """Đảm bảo các bảng cần thiết tồn tại"""
+        cursor = self.db_conn.cursor()
+        
+        # 1. Bảng customers (nếu chưa có)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS customers (
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                phone TEXT,
+                email TEXT,
+                branch_id INTEGER,
+                source_id INTEGER,
+                code TEXT,
+                created_at DATETIME,
+                synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # 2. Bảng customer_payments
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS customer_payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer_id INTEGER NOT NULL,
+                payment_id INTEGER,
+                amount REAL DEFAULT 0,
+                payment_date DATETIME,
+                payment_method TEXT,
+                note TEXT,
+                signature_data TEXT,
+                synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (customer_id) REFERENCES customers(id),
+                UNIQUE(customer_id, payment_id)
+            )
+        ''')
+        
+        # 3. Bảng customer_installments [NEW]
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS customer_installments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer_id INTEGER NOT NULL,
+                installment_id INTEGER,
+                total_amount REAL DEFAULT 0,
+                paid_amount REAL DEFAULT 0,
+                remain_amount REAL DEFAULT 0,
+                created_at DATETIME,
+                note TEXT,
+                synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (customer_id) REFERENCES customers(id),
+                UNIQUE(customer_id, installment_id)
+            )
+        ''')
+        
+        # 4. Bảng customer_complaints [NEW]
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS customer_complaints (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer_id INTEGER NOT NULL,
+                complaint_id INTEGER,
+                content TEXT,
+                status_name TEXT,
+                created_at DATETIME,
+                synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (customer_id) REFERENCES customers(id),
+                UNIQUE(customer_id, complaint_id)
+            )
+        ''', )
+        
+        # 5. Bảng customer_treatment_plans [NEW]
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS customer_treatment_plans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer_id INTEGER NOT NULL,
+                plan_id INTEGER,
+                service_name TEXT,
+                doctor_name TEXT,
+                created_at DATETIME,
+                note TEXT,
+                synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (customer_id) REFERENCES customers(id),
+                UNIQUE(customer_id, plan_id)
+            )
+        ''')
+
+        # 6. Bảng marketing_ticket_extensions [NEW]
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS marketing_ticket_extensions (
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                code TEXT,
+                synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 7. Bảng marketing_ticket_groups [NEW]
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS marketing_ticket_groups (
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        self.db_conn.commit()
     
     def close_db(self):
         """Đóng database"""
@@ -266,6 +392,30 @@ class VTTechUnifiedSync:
                     ''', (m.get('ID'), m.get('Name')))
                 self.db_conn.commit()
                 logger.info(f"  ✅ memberships: {len(combos['Membership'])} records")
+
+        # Marketing Ticket Extensions [NEW]
+        tickets = self.call_handler('/Marketing/TicketExtensionList/', 'LoadData')
+        if tickets and isinstance(tickets, list):
+            for t in tickets:
+                cursor.execute('''
+                    INSERT OR REPLACE INTO marketing_ticket_extensions (id, name, code)
+                    VALUES (?, ?, ?)
+                ''', (t.get('ID'), t.get('Name'), t.get('Code')))
+            self.db_conn.commit()
+            logger.info(f"  ✅ marketing_ticket_extensions: {len(tickets)} records")
+            self.stats['master'] += len(tickets)
+
+        # Marketing Ticket Groups [NEW]
+        ticket_groups = self.call_handler('/Marketing/TicketGroupList/', 'LoadData')
+        if ticket_groups and isinstance(ticket_groups, list):
+            for g in ticket_groups:
+                cursor.execute('''
+                    INSERT OR REPLACE INTO marketing_ticket_groups (id, name)
+                    VALUES (?, ?)
+                ''', (g.get('ID'), g.get('Name')))
+            self.db_conn.commit()
+            logger.info(f"  ✅ marketing_ticket_groups: {len(ticket_groups)} records")
+            self.stats['master'] += len(ticket_groups)
     
     # ========== SYNC REVENUE ==========
     
@@ -361,33 +511,39 @@ class VTTechUnifiedSync:
             current_date = start_date
             appointments_found = False
             
+            # Use branch IDs to ensure discovery if -1 is restricted
+            cursor.execute('SELECT id FROM branches')
+            branch_ids = [row[0] for row in cursor.fetchall()]
+            if not branch_ids: branch_ids = [-1]
+            
             while current_date <= end_date:
                 date_str = current_date.strftime('%Y-%m-%d')
                 
-                appointments = self.call_handler(
-                    '/Appointment/AppointmentByDay/',
-                    'LoadData',
-                    {'date': date_str, 'branchID': -1, 'statusID': -1, 'type': 0}
-                )
-                
-                if appointments and isinstance(appointments, list) and len(appointments) > 0:
-                    appointments_found = True
-                    for apt in appointments:
-                        customer_id = apt.get('CustomerID')
-                        if customer_id and customer_id not in synced_customer_ids:
-                            cursor.execute('''
-                                INSERT OR REPLACE INTO customers 
-                                (id, name, phone, branch_id, created_at)
-                                VALUES (?, ?, ?, ?, ?)
-                            ''', (
-                                customer_id,
-                                apt.get('CustomerName'),
-                                apt.get('CustomerPhone') or apt.get('Phone'),
-                                apt.get('BranchID'),
-                                apt.get('CreatedDate') or date_str
-                            ))
-                            total += 1
-                            synced_customer_ids.add(customer_id)
+                for bid in ([-1] + branch_ids):
+                    appointments = self.call_handler(
+                        '/Appointment/AppointmentByDay/',
+                        'LoadData',
+                        {'date': date_str, 'branchID': bid, 'statusID': -1, 'type': 0}
+                    )
+                    
+                    if appointments and isinstance(appointments, list) and len(appointments) > 0:
+                        appointments_found = True
+                        for apt in appointments:
+                            customer_id = apt.get('CustomerID')
+                            if customer_id and customer_id not in synced_customer_ids:
+                                cursor.execute('''
+                                    INSERT OR REPLACE INTO customers 
+                                    (id, name, phone, branch_id, created_at)
+                                    VALUES (?, ?, ?, ?, ?)
+                                ''', (
+                                    customer_id,
+                                    apt.get('CustomerName'),
+                                    apt.get('CustomerPhone') or apt.get('Phone'),
+                                    apt.get('BranchID'),
+                                    apt.get('CreatedDate') or date_str
+                                ))
+                                total += 1
+                                synced_customer_ids.add(customer_id)
                 
                 current_date += timedelta(days=1)
             
@@ -395,41 +551,42 @@ class VTTechUnifiedSync:
                 # Cách 3: Thử lấy từ Customer/ListCustomer
                 logger.info("  ⚠️ No appointments found, trying Customer List API...")
                 page_size = 100
-                start = 0
                 
-                while start < max_pages * page_size:
-                    result = self.call_handler(
-                        '/Customer/ListCustomer/',
-                        'LoadData',
-                        {
-                            'dateFrom': f'{date_from} 00:00:00',
-                            'dateTo': f'{date_to} 23:59:59',
-                            'branchID': -1,
-                            'start': start,
-                            'length': page_size
-                        }
-                    )
-                    
-                    if not result or not isinstance(result, list) or len(result) == 0:
-                        break
-                    
-                    for c in result:
-                        customer_id = c.get('ID')
-                        if customer_id and customer_id not in synced_customer_ids:
-                            cursor.execute('''
-                                INSERT OR REPLACE INTO customers 
-                                (id, name, phone, email, branch_id, source_id, created_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?)
-                            ''', (
-                                customer_id, c.get('Name'), c.get('Phone'), c.get('Email'),
-                                c.get('BranchID'), c.get('SourceID'), c.get('CreatedDate')
-                            ))
-                            total += 1
-                            synced_customer_ids.add(customer_id)
-                    
-                    if len(result) < page_size:
-                        break
-                    start += page_size
+                for bid in ([-1] + branch_ids):
+                    start = 0
+                    while start < max_pages * page_size:
+                        result = self.call_handler(
+                            '/Customer/ListCustomer/',
+                            'LoadData',
+                            {
+                                'dateFrom': f'{date_from} 00:00:00',
+                                'dateTo': f'{date_to} 23:59:59',
+                                'branchID': bid,
+                                'start': start,
+                                'length': page_size
+                            }
+                        )
+                        
+                        if not result or not isinstance(result, list) or len(result) == 0:
+                            break
+                        
+                        for c in result:
+                            customer_id = c.get('ID')
+                            if customer_id and customer_id not in synced_customer_ids:
+                                cursor.execute('''
+                                    INSERT OR REPLACE INTO customers 
+                                    (id, name, phone, email, branch_id, source_id, created_at)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                                ''', (
+                                    customer_id, c.get('Name'), c.get('Phone'), c.get('Email'),
+                                    c.get('BranchID'), c.get('SourceID'), c.get('CreatedDate')
+                                ))
+                                total += 1
+                                synced_customer_ids.add(customer_id)
+                        
+                        if len(result) < page_size:
+                            break
+                        start += page_size
         
         self.db_conn.commit()
         self.stats['customers'] = total
@@ -479,7 +636,7 @@ class VTTechUnifiedSync:
         
         # ====== 1. SYNC DỊCH VỤ CỦA KHÁCH HÀNG ======
         # LoadataTab trả về dịch vụ khách đã mua (KHÔNG PHẢI LoadServiceTab)
-        services_data = self.call_handler('/Customer/Service/TabList/TabList_Service/', 'LoadataTab')
+        services_data = self.call_handler('/Customer/Service/TabList/TabList_Service/', 'LoadataTab', data={'CustomerID': customer_id})
         if services_data and isinstance(services_data, dict):
             # Table: Dịch vụ đã mua
             table = services_data.get('Table', [])
@@ -506,7 +663,7 @@ class VTTechUnifiedSync:
                         pass
         
         # ====== 2. SYNC ĐIỀU TRỊ CỦA KHÁCH HÀNG ======
-        treatments_data = self.call_handler('/Customer/Treatment/TreatmentList/TreatmentList_Service/', 'LoadataTreatment')
+        treatments_data = self.call_handler('/Customer/Treatment/TreatmentList/TreatmentList_Service/', 'LoadDetail', data={'CustomerID': customer_id})
         if treatments_data and isinstance(treatments_data, dict):
             # Table: Lịch sử điều trị chi tiết
             table = treatments_data.get('Table', [])
@@ -519,10 +676,10 @@ class VTTechUnifiedSync:
                             VALUES (?, ?, ?, ?, ?, ?, ?)
                         ''', (
                             customer_id,
-                            treat.get('ID') or treat.get('TreatmentID'),
-                            treat.get('ServiceName') or treat.get('Name'),
-                            treat.get('EmployeeName') or treat.get('Doctor'),
-                            treat.get('TreatmentDate') or treat.get('Date') or treat.get('CreatedDate'),
+                            treat.get('ID') or treat.get('TreatmentID') or treat.get('TabID'),
+                            treat.get('ServiceName') or treat.get('Name') or treat.get('SerCode', ''),
+                            treat.get('EmployeeName') or treat.get('Doctor') or str(treat.get('Created_By', '')),
+                            treat.get('TreatmentDate') or treat.get('Date') or treat.get('CreatedDate') or treat.get('Created'),
                             treat.get('Status') or treat.get('StatusName', ''),
                             treat.get('Note') or treat.get('Remark', '')
                         ))
@@ -531,31 +688,35 @@ class VTTechUnifiedSync:
                         pass
         
         # ====== 3. SYNC THANH TOÁN CỦA KHÁCH HÀNG ======
-        payments_data = self.call_handler('/Customer/Payment/PaymentList/PaymentList_Service/', 'LoadataPayment')
+        payments_data = self.call_handler('/Customer/Payment/PaymentList/PaymentList_Service/', 'LoadataPayment', data={'CustomerID': customer_id})
         if payments_data and isinstance(payments_data, dict):
             # Table: Chi tiết thanh toán
             table = payments_data.get('Table', [])
             if table and isinstance(table, list):
                 for pay in table:
                     try:
+                        payment_id = pay.get('ID') or pay.get('PaymentID')
+                        signature = self.get_payment_signature(payment_id) if payment_id else ""
+                        
                         cursor.execute('''
                             INSERT OR REPLACE INTO customer_payments 
-                            (customer_id, payment_id, amount, payment_date, payment_method, note)
-                            VALUES (?, ?, ?, ?, ?, ?)
+                            (customer_id, payment_id, amount, payment_date, payment_method, note, signature_data)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
                         ''', (
                             customer_id,
-                            pay.get('ID') or pay.get('PaymentID'),
+                            payment_id,
                             pay.get('Amount') or pay.get('Paid') or pay.get('Total', 0),
                             pay.get('PaymentDate') or pay.get('Date') or pay.get('CreatedDate'),
                             pay.get('PaymentMethod') or pay.get('Method', ''),
-                            pay.get('Note') or pay.get('Remark', '')
+                            pay.get('Note') or pay.get('Remark', ''),
+                            signature
                         ))
                         total_records += 1
                     except Exception as e:
                         pass
         
         # ====== 4. SYNC LỊCH HẸN CỦA KHÁCH HÀNG ======
-        schedules_data = self.call_handler('/Customer/ScheduleList_Schedule/', 'Loadata')
+        schedules_data = self.call_handler('/Customer/MainCustomer/', 'LoadCustomerScheduleNext', data={'CustomerID': customer_id})
         if schedules_data:
             # Có thể là list hoặc dict
             schedules = schedules_data if isinstance(schedules_data, list) else schedules_data.get('Table', [])
@@ -569,9 +730,9 @@ class VTTechUnifiedSync:
                         ''', (
                             customer_id,
                             sch.get('ID') or sch.get('AppointmentID'),
-                            sch.get('AppointmentDate') or sch.get('Date') or sch.get('ScheduleDate'),
-                            sch.get('ServiceName') or sch.get('Service', ''),
-                            sch.get('BranchID'),
+                            sch.get('AppointmentDate') or sch.get('Date') or sch.get('ScheduleDate') or sch.get('DateFrom'),
+                            sch.get('ServiceName') or sch.get('Service') or sch.get('ScheCode', ''),
+                            sch.get('BranchID') or sch.get('Branch', ''),
                             sch.get('Status') or sch.get('StatusName', ''),
                             sch.get('Note') or sch.get('Remark', '')
                         ))
@@ -580,7 +741,7 @@ class VTTechUnifiedSync:
                         pass
         
         # ====== 5. SYNC LỊCH SỬ CHĂM SÓC ======
-        history_data = self.call_handler('/Customer/History/HistoryList_Care/', 'LoadataHistory')
+        history_data = self.call_handler('/Customer/History/HistoryList_Care/', 'LoadataHistory', data={'CustomerID': customer_id})
         if history_data:
             # Có thể là list hoặc dict
             history = history_data if isinstance(history_data, list) else history_data.get('Table', [])
@@ -603,6 +764,75 @@ class VTTechUnifiedSync:
                     except Exception as e:
                         pass
         
+        # ====== 6. SYNC KẾ HOẠCH ĐIỀU TRỊ [NEW] ======
+        plans_data = self.call_handler('/Customer/Service/TabList/TabList_Service/', 'LoadInfo_Treatment_Plant', data={'CustomerID': customer_id})
+        if plans_data and isinstance(plans_data, dict):
+            table = plans_data.get('Table', [])
+            if table and isinstance(table, list):
+                for plan in table:
+                    try:
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO customer_treatment_plans 
+                            (customer_id, plan_id, service_name, doctor_name, created_at, note)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        ''', (
+                            customer_id,
+                            plan.get('ID'),
+                            plan.get('ServiceName'),
+                            plan.get('DoctorName'),
+                            plan.get('CreatedByDate'),
+                            plan.get('Note')
+                        ))
+                        total_records += 1
+                    except Exception as e:
+                        pass
+
+        # ====== 7. SYNC TRẢ GÓP [NEW] ======
+        installments_data = self.call_handler('/Customer/Installment/InstallmentList/', 'LoadDetail', data={'CustomerID': customer_id})
+        if installments_data and isinstance(installments_data, dict):
+            table = installments_data.get('Table', [])
+            if table and isinstance(table, list):
+                for ins in table:
+                    try:
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO customer_installments 
+                            (customer_id, installment_id, total_amount, paid_amount, remain_amount, created_at, note)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            customer_id,
+                            ins.get('ID'),
+                            ins.get('TotalAmount'),
+                            ins.get('PaidAmount'),
+                            ins.get('RemainAmount'),
+                            ins.get('CreatedDate'),
+                            ins.get('Note')
+                        ))
+                        total_records += 1
+                    except Exception as e:
+                        pass
+
+        # ====== 8. SYNC KHIẾU NẠI [NEW] ======
+        complaints_data = self.call_handler('/Customer/ComplaintList/', 'Loadata', data={'CustomerID': customer_id})
+        if complaints_data:
+            table = complaints_data if isinstance(complaints_data, list) else complaints_data.get('Table', [])
+            if table and isinstance(table, list):
+                for comp in table:
+                    try:
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO customer_complaints 
+                            (customer_id, complaint_id, content, status_name, created_at)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (
+                            customer_id,
+                            comp.get('ID'),
+                            comp.get('Content'),
+                            comp.get('StatusName'),
+                            comp.get('CreatedDate')
+                        ))
+                        total_records += 1
+                    except Exception as e:
+                        pass
+
         self.db_conn.commit()
         return total_records
     
