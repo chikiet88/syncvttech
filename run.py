@@ -12,6 +12,8 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 BASE_DIR = Path(__file__).parent
+VENV_PYTHON = BASE_DIR / "venv" / "bin" / "python3"
+PYTHON_CMD = str(VENV_PYTHON) if VENV_PYTHON.exists() else sys.executable
 
 def clear_screen():
     os.system('clear' if os.name != 'nt' else 'cls')
@@ -65,13 +67,13 @@ def run_server():
     print("\033[90m   Nhấn Ctrl+C để dừng\033[0m\n")
     
     try:
-        subprocess.run([sys.executable, str(BASE_DIR / "dashboard_server.py")])
+        subprocess.run([PYTHON_CMD, str(BASE_DIR / "dashboard_server.py")])
     except KeyboardInterrupt:
         print("\n\033[93m⏹️  Server đã dừng.\033[0m")
 
 def run_cron(date_str=None, full=False):
     """Chạy Cron Crawler"""
-    cmd = [sys.executable, str(BASE_DIR / "cron_crawler.py")]
+    cmd = [PYTHON_CMD, str(BASE_DIR / "cron_crawler.py")]
     
     if date_str:
         cmd.extend(["--date", date_str])
@@ -94,7 +96,7 @@ def run_cron(date_str=None, full=False):
 def run_migrate():
     """Migrate dữ liệu"""
     print("\n\033[92m🗄️  Đang migrate dữ liệu...\033[0m\n")
-    subprocess.run([sys.executable, str(BASE_DIR / "database" / "migrate.py")])
+    subprocess.run([PYTHON_CMD, str(BASE_DIR / "database" / "migrate.py")])
     input("\nNhấn Enter để tiếp tục...")
 
 def show_db_stats():
@@ -434,7 +436,7 @@ def run_customer_by_branch_sync(date_str=None, date_from=None, date_to=None):
     """Chạy sync khách hàng theo branch"""
     print("\n\033[92m👥 Đang chạy Sync Customers by Branch...\033[0m")
     
-    cmd = [sys.executable, str(BASE_DIR / "sync_customer_by_branch.py")]
+    cmd = [PYTHON_CMD, str(BASE_DIR / "sync_customer_by_branch.py")]
     
     if date_from and date_to:
         cmd.extend(["--date-from", date_from, "--date-to", date_to])
@@ -461,7 +463,7 @@ def run_customer_detail_sync(date_str=None, limit=None):
     """Chạy sync chi tiết khách hàng"""
     print("\n\033[92m📋 Đang chạy Sync Customer Detail...\033[0m")
     
-    cmd = [sys.executable, str(BASE_DIR / "sync_customer_detail_full.py")]
+    cmd = [PYTHON_CMD, str(BASE_DIR / "sync_customer_detail_full.py")]
     
     if date_str:
         cmd.extend(["--date", date_str])
@@ -536,7 +538,7 @@ def run_full_customer_sync(date_str=None, date_from=None, date_to=None):
             print("-" * 40)
             
             try:
-                cmd1 = [sys.executable, str(BASE_DIR / "sync_customer_by_branch.py"), "--date", current_date]
+                cmd1 = [PYTHON_CMD, str(BASE_DIR / "sync_customer_by_branch.py"), "--date", current_date]
                 result1 = subprocess.run(cmd1, capture_output=False)
                 
                 if result1.returncode == 0:
@@ -553,7 +555,7 @@ def run_full_customer_sync(date_str=None, date_from=None, date_to=None):
             print("-" * 40)
             
             try:
-                cmd2 = [sys.executable, str(BASE_DIR / "sync_customer_detail_full.py"), "--date", current_date]
+                cmd2 = [PYTHON_CMD, str(BASE_DIR / "sync_customer_detail_full.py"), "--date", current_date]
                 result2 = subprocess.run(cmd2, capture_output=False)
                 
                 if result2.returncode == 0:
@@ -613,7 +615,7 @@ def run_full_customer_sync(date_str=None, date_from=None, date_to=None):
         print("-" * 40)
         
         try:
-            cmd1 = [sys.executable, str(BASE_DIR / "sync_customer_by_branch.py"), "--date", date_str]
+            cmd1 = [PYTHON_CMD, str(BASE_DIR / "sync_customer_by_branch.py"), "--date", date_str]
             result1 = subprocess.run(cmd1, capture_output=False)
             
             if result1.returncode == 0:
@@ -630,7 +632,7 @@ def run_full_customer_sync(date_str=None, date_from=None, date_to=None):
         print("-" * 40)
         
         try:
-            cmd2 = [sys.executable, str(BASE_DIR / "sync_customer_detail_full.py"), "--date", date_str]
+            cmd2 = [PYTHON_CMD, str(BASE_DIR / "sync_customer_detail_full.py"), "--date", date_str]
             result2 = subprocess.run(cmd2, capture_output=False)
             
             if result2.returncode == 0:
