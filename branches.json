@@ -1,0 +1,104 @@
+[
+    {
+        "ID": 1,
+        "Name": "Taza Skin Clinic Thủ Đức",
+        "ShortName": "TAZA Thủ Đức",
+        "IP": ""
+    },
+    {
+        "ID": 2,
+        "Name": "Taza Skin Clinic Quận 10",
+        "ShortName": "Taza Skin Clinic Quận 10",
+        "IP": ""
+    },
+    {
+        "ID": 3,
+        "Name": "Taza Skin Clinic Gò Vấp",
+        "ShortName": "TAZA Gò Vấp",
+        "IP": ""
+    },
+    {
+        "ID": 4,
+        "Name": "Taza Skin Clinic Nha Trang",
+        "ShortName": "TAZA Nha Trang",
+        "IP": ""
+    },
+    {
+        "ID": 6,
+        "Name": "TAZA Skin Clinic Đà Nẵng",
+        "ShortName": "TAZA Skin Clinic Đà Nẵng",
+        "IP": ""
+    },
+    {
+        "ID": 7,
+        "Name": "Văn Phòng",
+        "ShortName": "Taza Văn Phòng",
+        "IP": ""
+    },
+    {
+        "ID": 14,
+        "Name": "Timona Quận 10",
+        "ShortName": "Timona Q10",
+        "IP": ""
+    },
+    {
+        "ID": 15,
+        "Name": "Timona Thủ Đức",
+        "ShortName": "Timona Thủ Đức",
+        "IP": ""
+    },
+    {
+        "ID": 16,
+        "Name": "Timona Gò Vấp",
+        "ShortName": "Timona Gò Vấp",
+        "IP": ""
+    },
+    {
+        "ID": 17,
+        "Name": "Timona Nha Trang",
+        "ShortName": "Timona Nha Trang",
+        "IP": ""
+    },
+    {
+        "ID": 18,
+        "Name": "Timona Đà Nẵng",
+        "ShortName": "Timona Đà Nẵng",
+        "IP": ""
+    },
+    {
+        "ID": 21,
+        "Name": "Building Timona CMT8",
+        "ShortName": "Building Timona CMT8",
+        "IP": ""
+    },
+    {
+        "ID": 22,
+        "Name": "Timona Bình Tân",
+        "ShortName": "Timona Bình Tân",
+        "IP": ""
+    },
+    {
+        "ID": 23,
+        "Name": "Taza Skin Clinic Bình Tân",
+        "ShortName": "Taza Skin Clinic Bình Tân",
+        "IP": ""
+    },
+    {
+        "ID": 24,
+        "Name": "Chi nhánh Hderma",
+        "ShortName": "HDM",
+        "IP": ""
+    },
+    {
+        "ID": 25,
+        "Name": "Timona Tân Phú",
+        "ShortName": "Timona Tân Phú",
+        "IP": ""
+    },
+    {
+        "ID": 26,
+        "Name": "Taza Skin Clinic Tân Phú",
+        "ShortName": "Taza Skin Clinic Tân Phú",
+        "IP": ""
+    }
+]

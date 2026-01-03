@@ -4,9 +4,14 @@ generator client {
   interface            = "sync"
 }
 
+generator client_js {
+  provider = "prisma-client-js"
+  output   = "../vttech-dashboard/node_modules/.prisma/client"
+}
+
 datasource db {
   provider = "postgresql"
-  url      = "postgresql://postgres:postgres@116.118.49.243:18003/tazagroup_vttech_sync"
+  url      = env("DATABASE_URL")
 }
 
 model Branch {
