@@ -1,8 +1,14 @@
 {
+  "name": "vttech-root",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "bun manage.js",
+    "git-commit": "bash push_to_github.sh"
+  },
   "devDependencies": {
     "prisma": "^7.2.0"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0"
+    "@prisma/client": "7.2.0"
   }
 }

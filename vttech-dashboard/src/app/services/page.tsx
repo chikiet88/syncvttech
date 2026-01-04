@@ -28,24 +28,24 @@ export default async function ServicesPage() {
         <div className="space-y-1">
           <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <Package className="w-8 h-8 text-blue-500" />
-            Service Catalog
+            Danh mục Dịch vụ
           </h2>
           <p className="text-muted-foreground">
-            View and manage your clinical procedures, services, and pricing.
+            Xem và quản lý các liệu trình, dịch vụ và bảng giá.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Button className="rounded-xl gap-2 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20">
             <Plus className="w-5 h-5" />
-            New Service
+            Thêm Dịch vụ
           </Button>
         </div>
       </div>
 
       <Card className="glass border-none shadow-2xl rounded-[2rem] overflow-hidden">
         <CardHeader className="p-8 pb-4">
-          <CardTitle>Master List</CardTitle>
-          <CardDescription>All services registered within the VTTech Studio system.</CardDescription>
+          <CardTitle>Danh sách Chính</CardTitle>
+          <CardDescription>Tất cả các dịch vụ đã đăng ký trong hệ thống VTTech Studio.</CardDescription>
         </CardHeader>
         <CardContent className="p-8 pt-4">
           <DataTable columns={columns} data={formattedServices} searchKey="name" />

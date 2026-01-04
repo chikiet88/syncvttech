@@ -30,28 +30,28 @@ export default async function CrawlLogsPage() {
         <div className="space-y-1">
           <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <Activity className="w-8 h-8 text-blue-500" />
-            Sync Monitoring
+            Giám sát Đồng bộ
           </h2>
           <p className="text-muted-foreground">
-            Detailed logs of data synchronization and crawler activities.
+            Nhật ký chi tiết về đồng bộ dữ liệu và hoạt động của trình thu thập.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" className="rounded-xl gap-2 glass border-none">
             <RefreshCcw className="w-4 h-4" />
-            Refresh
+            Làm mới
           </Button>
           <Button className="rounded-xl gap-2 font-bold bg-blue-600 hover:bg-blue-700">
             <History className="w-5 h-5" />
-            Full History
+            Toàn bộ Lịch sử
           </Button>
         </div>
       </div>
 
       <Card className="glass border-none shadow-2xl rounded-[2rem] overflow-hidden">
         <CardHeader className="p-8 pb-4">
-          <CardTitle>Crawl Execution Logs</CardTitle>
-          <CardDescription>Track the performance and health of the automated synchronization process.</CardDescription>
+          <CardTitle>Nhật ký Thực thi Thu thập</CardTitle>
+          <CardDescription>Theo dõi hiệu suất và tình trạng của quy trình đồng bộ tự động.</CardDescription>
         </CardHeader>
         <CardContent className="p-8 pt-4">
           <DataTable columns={columns} data={formattedLogs} searchKey="crawl_type" />

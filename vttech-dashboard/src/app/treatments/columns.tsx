@@ -18,7 +18,7 @@ export type TreatmentColumn = {
 export const columns: ColumnDef<TreatmentColumn>[] = [
   {
     accessorKey: "treatment_date",
-    header: "Date",
+    header: "Ngày",
     cell: ({ row }) => {
       const date = row.getValue("treatment_date") ? new Date(row.getValue("treatment_date") as string) : null
       return (
@@ -31,27 +31,27 @@ export const columns: ColumnDef<TreatmentColumn>[] = [
   },
   {
     accessorKey: "customer_name",
-    header: "Customer",
+    header: "Khách hàng",
     cell: ({ row }) => (
       <div className="flex items-center gap-2 font-semibold uppercase tracking-tight">
         <User className="w-4 h-4 text-muted-foreground" />
-        {row.getValue("customer_name") || "Member"}
+        {row.getValue("customer_name") || "Thành viên"}
       </div>
     )
   },
   {
     accessorKey: "service_name",
-    header: "Treatment Service",
+    header: "Dịch vụ Điều trị",
     cell: ({ row }) => (
       <div className="flex items-center gap-2 font-medium text-blue-500">
         <Stethoscope className="w-4 h-4 opacity-50" />
-        {row.getValue("service_name") || "General Clinic"}
+        {row.getValue("service_name") || "Phòng khám Tổng quát"}
       </div>
     )
   },
   {
     accessorKey: "amount",
-    header: "Total Fees",
+    header: "Tổng chi phí",
     cell: ({ row }) => (
       <div className="flex flex-col">
         <span className="font-extrabold text-sm">{new Intl.NumberFormat('vi-VN').format(row.getValue("amount"))} đ</span>
@@ -65,7 +65,7 @@ export const columns: ColumnDef<TreatmentColumn>[] = [
   },
   {
     accessorKey: "paid",
-    header: "Paid Amount",
+    header: "Đã thanh toán",
     cell: ({ row }) => {
       const amount = row.original.amount
       const paid = row.getValue("paid") as number
@@ -77,7 +77,7 @@ export const columns: ColumnDef<TreatmentColumn>[] = [
           </span>
           <div className="flex items-center gap-1.5 mt-0.5">
              <Badge variant="outline" className={`text-[9px] px-1.5 py-0 border-none glass uppercase font-bold ${isFull ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"}`}>
-               {isFull ? "Full Payment" : "Partial"}
+               {isFull ? "Đã thanh toán" : "Một phần"}
              </Badge>
           </div>
         </div>
@@ -86,12 +86,12 @@ export const columns: ColumnDef<TreatmentColumn>[] = [
   },
   {
     accessorKey: "status",
-    header: "Status",
+    header: "Trạng thái",
     cell: ({ row }) => {
       const status = row.getValue("status")
       return (
-        <Badge variant={status === 1 ? "secondary" : "default"} className={`rounded-full px-3 uppercase text-[10px] font-black ${status === 1 ? "bg-emerald-500/10 text-emerald-500 border-none" : ""}`}>
-          {status === 1 ? "Completed" : "In Progress"}
+        <Badge variant={status === 1 ? "secondary" : "default"} className={`rounded-full px-3 uppercase text-[10px] font-black ${status === 1 ? "bg-emerald-500/10 text-emerald-600 border-none" : ""}`}>
+          {status === 1 ? "Hoàn tất" : "Đang thực hiện"}
         </Badge>
       )
     }

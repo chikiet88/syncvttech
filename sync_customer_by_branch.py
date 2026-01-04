@@ -228,6 +228,11 @@ class VTTechCustomerSync:
             try:
                 customers = self.get_customers_by_branch(bid, date_from, date_to)
                 if customers:
+                    # Inject BranchID if it's not present
+                    for c in customers:
+                        if 'BranchID' not in c:
+                            c['BranchID'] = bid
+                            
                     count = self.db.upsert_customers(customers)
                     self.stats['total_customers'] += len(customers)
                     self.stats['db_saved'] += count

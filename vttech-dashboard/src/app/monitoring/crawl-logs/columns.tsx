@@ -17,7 +17,7 @@ export type CrawlLogColumn = {
 export const columns: ColumnDef<CrawlLogColumn>[] = [
   {
     accessorKey: "crawl_date",
-    header: "Timestamp",
+    header: "Thời gian",
     cell: ({ row }) => {
       const date = new Date(row.getValue("crawl_date"))
       return (
@@ -35,7 +35,7 @@ export const columns: ColumnDef<CrawlLogColumn>[] = [
   },
   {
     accessorKey: "crawl_type",
-    header: "Process Type",
+    header: "Loại quy trình",
     cell: ({ row }) => (
       <Badge variant="outline" className="gap-2 border-white/5 glass font-bold uppercase tracking-tighter text-[10px]">
         <Activity className="w-3 h-3 text-blue-500" />
@@ -45,7 +45,7 @@ export const columns: ColumnDef<CrawlLogColumn>[] = [
   },
   {
     accessorKey: "records_count",
-    header: "Records",
+    header: "Bản ghi",
     cell: ({ row }) => (
       <div className="flex items-center gap-2 font-mono font-bold">
         <Database className="w-4 h-4 text-muted-foreground opacity-50" />
@@ -55,7 +55,7 @@ export const columns: ColumnDef<CrawlLogColumn>[] = [
   },
   {
     accessorKey: "duration_seconds",
-    header: "Duration",
+    header: "Thời lượng",
     cell: ({ row }) => (
       <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
         <Clock className="w-4 h-4" />
@@ -65,23 +65,23 @@ export const columns: ColumnDef<CrawlLogColumn>[] = [
   },
   {
     accessorKey: "status",
-    header: "Status",
+    header: "Trạng thái",
     cell: ({ row }) => {
       const status = row.getValue("status") as string
       const isSuccess = status === "success"
       return (
-        <Badge variant={isSuccess ? "secondary" : "destructive"} className={`rounded-xl px-4 uppercase text-[10px] font-black ${isSuccess ? "bg-emerald-500/10 text-emerald-500 border-none" : ""}`}>
-          {status}
+        <Badge variant={isSuccess ? "secondary" : "destructive"} className={`rounded-xl px-4 uppercase text-[10px] font-black ${isSuccess ? "bg-emerald-500/10 text-emerald-600 border-none" : ""}`}>
+          {isSuccess ? "Thành công" : "Thất bại"}
         </Badge>
       )
     }
   },
   {
     accessorKey: "error_message",
-    header: "Error Details",
+    header: "Chi tiết lỗi",
     cell: ({ row }) => {
       const error = row.getValue("error_message") as string
-      if (!error) return <span className="text-muted-foreground italic text-xs">No errors</span>
+      if (!error) return <span className="text-muted-foreground italic text-xs">Không có lỗi</span>
       return (
         <div className="flex items-center gap-2 text-red-500 text-xs font-medium max-w-[200px] truncate">
           <AlertCircle className="w-4 h-4 shrink-0" />

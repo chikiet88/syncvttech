@@ -11,7 +11,7 @@ git add .
 # Commit với message là thời gian hiện tại
 git commit -m "Auto-sync: $TIMESTAMP"
 
-# Push lên repository
-git push origin main
+# Push lên repository (sử dụng branch hiện tại)
+git push origin $(git branch --show-current)
 
 echo "✅ Đã đẩy code thành công lúc $TIMESTAMP"

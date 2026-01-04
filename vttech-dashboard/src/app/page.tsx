@@ -73,13 +73,13 @@ export default async function DashboardPage() {
             VTTech <span className="gradient-text">Studio</span>
           </h1>
           <p className="text-muted-foreground text-lg">
-            Intelligent synchronization & business analytics.
+            Giải pháp đồng bộ thông minh & phân tích kinh doanh.
           </p>
         </div>
         <div className="flex items-center gap-4">
           <Badge variant="outline" className="px-4 py-2 rounded-full glass border-none text-sm font-medium flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${stats.lastSync?.status === 'success' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-            {stats.lastSync ? `Synced ${new Date(stats.lastSync.created_at).toLocaleTimeString('vi-VN')}` : 'Not Synced'}
+            {stats.lastSync ? `Đã đồng bộ ${new Date(stats.lastSync.created_at).toLocaleTimeString('vi-VN')}` : 'Chưa đồng bộ'}
           </Badge>
           <Button size="icon" variant="ghost" className="rounded-full glass h-12 w-12 hover:rotate-180 transition-transform duration-500">
             <RefreshCcw className="w-5 h-5" />
@@ -90,43 +90,43 @@ export default async function DashboardPage() {
       {/* Stats Grid */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
-          title="Total Branches" 
+          title="Tổng Chi nhánh" 
           value={stats.branchCount} 
           icon={<MapPin className="w-5 h-5 text-blue-500" />} 
-          description="Active locations"
+          description="Cơ sở đang hoạt động"
         />
         <StatCard 
-          title="CRM Customers" 
+          title="Khách hàng CRM" 
           value={stats.customerCount.toLocaleString()} 
           icon={<Users className="w-5 h-5 text-purple-500" />} 
-          description="Registered profiles"
+          description="Hồ sơ đã đăng ký"
         />
         <StatCard 
-          title="Total Revenue" 
+          title="Tổng Doanh thu" 
           value={stats.revenueTotal.toLocaleString()} 
           suffix=" VND"
           icon={<TrendingUp className="w-5 h-5 text-emerald-500" />} 
-          description="Cumulative earnings"
+          description="Doanh thu tích lũy"
         />
         <StatCard 
-          title="Service Health" 
-          value={stats.lastSync?.status === 'success' ? 'Optimal' : 'Issues'} 
+          title="Trạng thái Dịch vụ" 
+          value={stats.lastSync?.status === 'success' ? 'Ổn định' : 'Có lỗi'} 
           icon={stats.lastSync?.status === 'success' ? <CheckCircle2 className="w-5 h-5 text-blue-500" /> : <XCircle className="w-5 h-5 text-red-500" />} 
-          description="Sync connectivity"
+          description="Kết nối đồng bộ"
         />
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Main Chart Card */}
-        <Card className="lg:col-span-8 glass border-none shadow-2xl overflow-hidden rounded-[2rem]">
+        <Card className="lg:col-span-8 glass border border-black/5 shadow-2xl overflow-hidden rounded-[2rem] bg-white/70">
           <CardHeader className="p-8 pb-4">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-2xl font-bold">Revenue Insights</CardTitle>
-                <CardDescription>Visualizing performance over the last 7 days</CardDescription>
+                <CardTitle className="text-2xl font-bold">Phân tích Doanh thu</CardTitle>
+                <CardDescription className="text-muted-foreground/80">Hiệu suất kinh doanh trong 7 ngày qua</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" className="gap-2">
-                View Full Report <ArrowUpRight className="w-4 h-4" />
+              <Button variant="ghost" size="sm" className="gap-2 hover:bg-black/5">
+                Xem báo cáo đầy đủ <ArrowUpRight className="w-4 h-4" />
               </Button>
             </div>
           </CardHeader>
@@ -138,13 +138,13 @@ export default async function DashboardPage() {
         </Card>
 
         {/* Recent Activity Card */}
-        <Card className="lg:col-span-4 glass border-none shadow-2xl rounded-[2rem] flex flex-col">
+        <Card className="lg:col-span-4 glass border border-black/5 shadow-2xl rounded-[2rem] flex flex-col bg-white/70">
           <CardHeader className="p-8 pb-4">
              <CardTitle className="text-2xl font-bold flex items-center gap-2">
                 <Clock className="w-6 h-6 text-blue-500" />
-                Live Sync
+                Đồng bộ Trực tiếp
              </CardTitle>
-             <CardDescription>Real-time processing logs</CardDescription>
+             <CardDescription className="text-muted-foreground/80">Nhật ký xử lý thời gian thực</CardDescription>
           </CardHeader>
           <CardContent className="p-8 pt-4 flex-1">
             <div className="space-y-6">
@@ -154,14 +154,14 @@ export default async function DashboardPage() {
                     <p className="font-semibold text-sm truncate uppercase tracking-tight">{log.crawl_type}</p>
                     <p className="text-xs text-muted-foreground">{new Date(log.created_at).toLocaleTimeString('vi-VN')}</p>
                   </div>
-                  <Badge variant={log.status === 'success' ? 'secondary' : 'destructive'} className={`text-[10px] shadow-sm uppercase px-2 py-0 ${log.status === 'success' ? 'bg-emerald-500/10 text-emerald-500 border-none hover:bg-emerald-500/20' : ''}`}>
-                    {log.status}
+                  <Badge variant={log.status === 'success' ? 'secondary' : 'destructive'} className={`text-[10px] shadow-sm uppercase px-2 py-0 ${log.status === 'success' ? 'bg-emerald-500/10 text-emerald-600 border-none hover:bg-emerald-500/20' : ''}`}>
+                    {log.status === 'success' ? 'Thành công' : 'Lỗi'}
                   </Badge>
                 </div>
               ))}
             </div>
-            <Button variant="ghost" className="w-full mt-8 border border-white/5 hover:bg-white/5 rounded-xl">
-              See All Logs
+            <Button variant="ghost" className="w-full mt-8 border border-black/5 hover:bg-black/5 rounded-xl">
+              Xem tất cả nhật ký
             </Button>
           </CardContent>
         </Card>
@@ -172,10 +172,10 @@ export default async function DashboardPage() {
 
 function StatCard({ title, value, icon, description, suffix = "" }: { title: string, value: string | number, icon: React.ReactNode, description: string, suffix?: string }) {
   return (
-    <Card className="glass border-none shadow-xl hover:shadow-2xl transition-all duration-500 rounded-[2rem] group overflow-hidden">
+    <Card className="glass border border-black/5 shadow-xl hover:shadow-2xl transition-all duration-500 rounded-[2rem] group overflow-hidden bg-white/70">
       <CardHeader className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
         <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
-        <div className="p-2.5 rounded-2xl bg-white/5 group-hover:bg-white/10 transition-colors">
+        <div className="p-2.5 rounded-2xl bg-slate-100 group-hover:bg-slate-200 transition-colors">
           {icon}
         </div>
       </CardHeader>

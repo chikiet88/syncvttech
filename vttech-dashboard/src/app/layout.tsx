@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "VTTech Studio | Dashboard",
-  description: "Advanced synchronization and analytics dashboard",
+  description: "Giải pháp đồng bộ và phân tích dữ liệu tiên tiến",
 };
 
 export default function RootLayout({
@@ -26,17 +26,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="vi">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}>
         <SidebarProvider>
           <AppSidebar />
           <SidebarInset className="bg-background">
-            <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-white/5 px-6 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+            <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-black/5 px-6 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
               <div className="flex items-center gap-2">
-                <SidebarTrigger className="-ml-1 hover:bg-white/5 rounded-lg" />
+                <SidebarTrigger className="-ml-1 hover:bg-black/5 rounded-lg" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
                 <div className="text-sm font-medium text-muted-foreground">
-                  Overview / <span className="text-foreground">Analytics</span>
+                  Tổng quan / <span className="text-foreground">Phân tích</span>
                 </div>
               </div>
             </header>

@@ -31,28 +31,28 @@ export default async function AppointmentsPage() {
         <div className="space-y-1">
           <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <CalendarRange className="w-8 h-8 text-blue-500" />
-            Execution & Bookings
+            Quản lý Lịch hẹn
           </h2>
           <p className="text-muted-foreground">
-            Monitor and manage customer appointments and service schedules.
+            Theo dõi và quản lý lịch hẹn khách hàng và lịch thực hiện dịch vụ.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" className="rounded-xl gap-2 glass border-none">
             <CalendarCheck2 className="w-4 h-4" />
-            Today's View
+            Xem hôm nay
           </Button>
           <Button className="rounded-xl gap-2 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20">
             <Plus className="w-5 h-5" />
-            New Booking
+            Đặt lịch mới
           </Button>
         </div>
       </div>
 
       <Card className="glass border-none shadow-2xl rounded-[2rem] overflow-hidden">
         <CardHeader className="p-8 pb-4">
-          <CardTitle>Appointment Queue</CardTitle>
-          <CardDescription>Live sync of recent customer appointments and their current status.</CardDescription>
+          <CardTitle>Hàng đợi Lịch hẹn</CardTitle>
+          <CardDescription>Đồng bộ trực tiếp các lịch hẹn khách hàng và trạng thái hiện tại.</CardDescription>
         </CardHeader>
         <CardContent className="p-8 pt-4">
           <DataTable columns={columns} data={formattedAppointments} searchKey="customer_name" />

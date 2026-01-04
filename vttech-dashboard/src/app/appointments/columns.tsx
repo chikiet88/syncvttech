@@ -16,16 +16,16 @@ export type AppointmentColumn = {
 }
 
 const statusMap: Record<number, { label: string, variant: "default" | "secondary" | "destructive" | "outline", className?: string }> = {
-  0: { label: "Scheduled", variant: "outline", className: "text-blue-500 border-blue-500/20 bg-blue-500/10" },
-  1: { label: "Confirmed", variant: "secondary", className: "text-emerald-500 bg-emerald-500/10 border-none" },
-  2: { label: "Checked In", variant: "default", className: "bg-blue-600 text-white border-none" },
-  3: { label: "Cancelled", variant: "destructive", className: "opacity-50" },
+  0: { label: "Đã lên lịch", variant: "outline", className: "text-blue-500 border-blue-500/20 bg-blue-500/10" },
+  1: { label: "Đã xác nhận", variant: "secondary", className: "text-emerald-500 bg-emerald-500/10 border-none" },
+  2: { label: "Đã đến", variant: "default", className: "bg-blue-600 text-white border-none" },
+  3: { label: "Đã hủy", variant: "destructive", className: "opacity-50" },
 }
 
 export const columns: ColumnDef<AppointmentColumn>[] = [
   {
     accessorKey: "appointment_date",
-    header: "Date & Time",
+    header: "Ngày & Giờ",
     cell: ({ row }) => {
       const date = row.getValue("appointment_date") ? new Date(row.getValue("appointment_date") as string) : null
       return (
@@ -43,50 +43,50 @@ export const columns: ColumnDef<AppointmentColumn>[] = [
   },
   {
     accessorKey: "customer_name",
-    header: "Customer",
+    header: "Khách hàng",
     cell: ({ row }) => (
       <div className="flex flex-col">
         <span className="font-semibold flex items-center gap-1.5 uppercase tracking-tight">
           <User className="w-3.5 h-3.5 text-muted-foreground" />
-          {row.getValue("customer_name") || "Guest"}
+          {row.getValue("customer_name") || "Khách lẻ"}
         </span>
-        <span className="text-xs text-muted-foreground font-mono ml-5">{row.original.phone || "No Phone"}</span>
+        <span className="text-xs text-muted-foreground font-mono ml-5">{row.original.phone || "Không có số ĐT"}</span>
       </div>
     )
   },
   {
     accessorKey: "branch_name",
-    header: "Location",
+    header: "Chi nhánh",
     cell: ({ row }) => (
       <Badge variant="outline" className="gap-1.5 border-white/5 glass font-medium">
         <Building2 className="w-3 h-3 text-blue-500" />
-        {row.getValue("branch_name") || "HQ"}
+        {row.getValue("branch_name") || "Trụ sở"}
       </Badge>
     )
   },
   {
     accessorKey: "service_name",
-    header: "Service",
+    header: "Dịch vụ",
     cell: ({ row }) => (
       <div className="flex items-center gap-2 font-medium">
         <Scissors className="w-4 h-4 text-muted-foreground opacity-50" />
-        {row.getValue("service_name") || "General"}
+        {row.getValue("service_name") || "Tổng quát"}
       </div>
     )
   },
   {
     accessorKey: "employee_name",
-    header: "Specialist",
+    header: "Chuyên viên",
     cell: ({ row }) => (
       <div className="flex items-center gap-2 text-xs font-semibold">
         <UserCheck className="w-4 h-4 text-purple-500" />
-        {row.getValue("employee_name") || "Assigned"}
+        {row.getValue("employee_name") || "Đã phân công"}
       </div>
     )
   },
   {
     accessorKey: "status",
-    header: "Status",
+    header: "Trạng thái",
     cell: ({ row }) => {
       const status = statusMap[row.getValue("status") as number] || statusMap[0]
       return (

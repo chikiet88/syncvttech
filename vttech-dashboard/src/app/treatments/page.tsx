@@ -31,28 +31,28 @@ export default async function TreatmentsPage() {
         <div className="space-y-1">
           <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <Stethoscope className="w-8 h-8 text-emerald-500" />
-            Clinical Treatments
+            Liệu trình Điều trị
           </h2>
           <p className="text-muted-foreground">
-            History of all medical procedures and clinical sessions performed.
+            Lịch sử các quy trình y tế và các buổi điều trị đã thực hiện.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" className="rounded-xl gap-2 glass border-none">
             <Download className="w-4 h-4" />
-            Report
+            Báo cáo
           </Button>
           <Button className="rounded-xl gap-2 font-bold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20">
             <FileText className="w-5 h-5" />
-            New Record
+            Ghi nhận mới
           </Button>
         </div>
       </div>
 
       <Card className="glass border-none shadow-2xl rounded-[2rem] overflow-hidden">
         <CardHeader className="p-8 pb-4">
-          <CardTitle>Session History</CardTitle>
-          <CardDescription>Detailed tracking of procedures and payment statuses.</CardDescription>
+          <CardTitle>Lịch sử Buổi điều trị</CardTitle>
+          <CardDescription>Theo dõi chi tiết các quy trình và trạng thái thanh toán.</CardDescription>
         </CardHeader>
         <CardContent className="p-8 pt-4">
           <DataTable columns={columns} data={formattedTreatments} searchKey="customer_name" />

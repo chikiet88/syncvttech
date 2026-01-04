@@ -16,12 +16,12 @@ export type ServiceColumn = {
 export const columns: ColumnDef<ServiceColumn>[] = [
   {
     accessorKey: "code",
-    header: "Code",
+    header: "Mã",
     cell: ({ row }) => <span className="font-mono text-xs font-bold text-blue-500">{row.getValue("code") || `SRV-${row.original.id}`}</span>
   },
   {
     accessorKey: "name",
-    header: "Service Name",
+    header: "Tên Dịch vụ",
     cell: ({ row }) => (
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500">
@@ -33,7 +33,7 @@ export const columns: ColumnDef<ServiceColumn>[] = [
   },
   {
     accessorKey: "price",
-    header: "Standard Price",
+    header: "Giá niêm yết",
     cell: ({ row }) => (
       <div className="flex items-center gap-2 font-bold text-emerald-500">
         <Banknote className="w-4 h-4 opacity-50" />
@@ -43,22 +43,22 @@ export const columns: ColumnDef<ServiceColumn>[] = [
   },
   {
     accessorKey: "duration",
-    header: "Duration",
+    header: "Thời lượng",
     cell: ({ row }) => (
       <div className="flex items-center gap-2 text-muted-foreground font-medium">
         <Clock className="w-4 h-4" />
-        {row.getValue("duration")} min
+        {row.getValue("duration")} phút
       </div>
     )
   },
   {
     accessorKey: "is_active",
-    header: "Status",
+    header: "Trạng thái",
     cell: ({ row }) => {
       const isActive = row.getValue("is_active") === 1
       return (
         <Badge variant={isActive ? "secondary" : "destructive"} className={`rounded-xl px-4 ${isActive ? "bg-emerald-500/10 text-emerald-500 border-none" : ""}`}>
-          {isActive ? "Available" : "Discontinued"}
+          {isActive ? "Đang cung cấp" : "Ngừng cung cấp"}
         </Badge>
       )
     }

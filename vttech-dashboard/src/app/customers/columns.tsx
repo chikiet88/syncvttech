@@ -2,7 +2,8 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
-import { Users, Phone, Mail, Landmark, Wallet } from "lucide-react"
+import { Phone, Mail, Landmark, Wallet, MapPin } from "lucide-react"
+import Link from "next/link"
 
 export type CustomerColumn = {
   id: number
@@ -14,20 +15,26 @@ export type CustomerColumn = {
   total_debt: number
   point: number
   is_active: number
+  branch_name?: string
 }
 
 export const columns: ColumnDef<CustomerColumn>[] = [
   {
     accessorKey: "code",
-    header: "ID",
+    header: "Mã KH",
     cell: ({ row }) => <span className="font-mono text-xs font-bold text-blue-500">{row.getValue("code") || `C-${row.original.id}`}</span>
   },
   {
     accessorKey: "name",
-    header: "Customer",
+    header: "Khách hàng",
     cell: ({ row }) => (
       <div className="flex flex-col gap-0.5">
-        <span className="font-semibold">{row.getValue("name")}</span>
+        <Link 
+          href={`/customers/${row.original.id}`}
+          className="font-semibold hover:text-blue-500 transition-colors"
+        >
+          {row.getValue("name")}
+        </Link>
         <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
           {row.original.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {row.original.phone}</span>}
           {row.original.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {row.original.email}</span>}
@@ -36,8 +43,18 @@ export const columns: ColumnDef<CustomerColumn>[] = [
     )
   },
   {
+    accessorKey: "branch_name",
+    header: "Chi nhánh",
+    cell: ({ row }) => (
+      <div className="flex items-center gap-2 text-muted-foreground font-medium italic">
+        <MapPin className="w-3 h-3" />
+        {row.getValue("branch_name")}
+      </div>
+    )
+  },
+  {
     accessorKey: "total_spent",
-    header: "Total Spent",
+    header: "Tổng chi",
     cell: ({ row }) => (
       <div className="flex items-center gap-2 font-bold text-emerald-500">
         <Landmark className="w-4 h-4 opacity-50" />
@@ -47,7 +64,7 @@ export const columns: ColumnDef<CustomerColumn>[] = [
   },
   {
     accessorKey: "total_debt",
-    header: "Debt",
+    header: "Nợ",
     cell: ({ row }) => (
       <div className="flex items-center gap-2 font-bold text-red-500">
         <Wallet className="w-4 h-4 opacity-50" />
@@ -57,16 +74,16 @@ export const columns: ColumnDef<CustomerColumn>[] = [
   },
   {
     accessorKey: "point",
-    header: "Points",
+    header: "Điểm",
     cell: ({ row }) => (
       <Badge variant="outline" className="rounded-full bg-purple-500/10 text-purple-500 border-none font-bold">
-        {row.getValue("point")} pts
+        {row.getValue("point")} đ
       </Badge>
     )
   },
   {
     accessorKey: "is_active",
-    header: "Status",
+    header: "Trạng thái",
     cell: ({ row }) => {
       const isActive = row.getValue("is_active") === 1
       return (

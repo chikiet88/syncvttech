@@ -9,6 +9,10 @@ generator client_js {
   output   = "../vttech-dashboard/node_modules/.prisma/client"
 }
 
+generator client_root {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")

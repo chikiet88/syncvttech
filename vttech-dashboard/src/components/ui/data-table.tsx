@@ -82,7 +82,7 @@ export function DataTable<TData, TValue>({
     <div className="w-full space-y-4">
       <div className="flex items-center gap-4">
         <Input
-          placeholder={`Search ${searchKey}...`}
+          placeholder="Tìm kiếm..."
           value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
           onChange={(event) =>
             table.getColumn(searchKey)?.setFilterValue(event.target.value)
@@ -92,7 +92,7 @@ export function DataTable<TData, TValue>({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="ml-auto glass border-none rounded-xl">
-              Columns <ChevronDown className="ml-2 h-4 w-4" />
+              Cột <ChevronDown className="ml-2 h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="glass border-white/5 rounded-xl">
@@ -160,7 +160,7 @@ export function DataTable<TData, TValue>({
                   colSpan={columns.length}
                   className="h-24 text-center text-muted-foreground"
                 >
-                  No results.
+                  Không có kết quả.
                 </TableCell>
               </TableRow>
             )}
@@ -169,8 +169,8 @@ export function DataTable<TData, TValue>({
       </div>
       <div className="flex items-center justify-between px-2">
         <div className="text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
+          Đã chọn {table.getFilteredSelectedRowModel().rows.length} trên{" "}
+          {table.getFilteredRowModel().rows.length} hàng.
         </div>
         <div className="flex items-center space-x-2">
           <Button
@@ -180,7 +180,7 @@ export function DataTable<TData, TValue>({
             disabled={!table.getCanPreviousPage()}
             className="glass border-none rounded-xl"
           >
-            Previous
+            Trước
           </Button>
           <Button
             variant="outline"
@@ -189,7 +189,7 @@ export function DataTable<TData, TValue>({
             disabled={!table.getCanNextPage()}
             className="glass border-none rounded-xl"
           >
-            Next
+            Tiếp
           </Button>
         </div>
       </div>

@@ -32,28 +32,28 @@ export default async function EmployeesPage() {
         <div className="space-y-1">
           <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <Briefcase className="w-8 h-8 text-blue-500" />
-            Employee Directory
+            Danh bạ Nhân viên
           </h2>
           <p className="text-muted-foreground">
-            Manage your staff across all branch locations and monitor roles.
+            Quản lý nhân viên tại tất cả các chi nhánh và giám sát vai trò.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" className="rounded-xl gap-2 glass border-none">
             <FileDown className="w-4 h-4" />
-            Export CSV
+            Xuất CSV
           </Button>
           <Button className="rounded-xl gap-2 font-bold bg-blue-600 hover:bg-blue-700">
             <UserPlus className="w-5 h-5" />
-            Add Employee
+            Thêm Nhân viên
           </Button>
         </div>
       </div>
 
       <Card className="glass border-none shadow-2xl rounded-[2rem] overflow-hidden">
         <CardHeader className="p-8 pb-4">
-          <CardTitle>Staff List</CardTitle>
-          <CardDescription>Comprehensive view of all employees and their respective branches.</CardDescription>
+          <CardTitle>Danh sách Nhân sự</CardTitle>
+          <CardDescription>Cái nhìn toàn diện về tất cả nhân viên và các chi nhánh tương ứng.</CardDescription>
         </CardHeader>
         <CardContent className="p-8 pt-4">
           <DataTable columns={columns} data={formattedEmployees} searchKey="name" />

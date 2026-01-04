@@ -29,22 +29,22 @@ export default async function BranchesPage() {
         <div className="space-y-1">
           <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <MapPin className="w-8 h-8 text-blue-500" />
-            Branch Management
+            Quản lý Chi nhánh
           </h2>
           <p className="text-muted-foreground">
-            Configure and monitor all business locations.
+            Cấu hình và giám sát tất cả các cơ sở kinh doanh.
           </p>
         </div>
         <Button className="rounded-xl gap-2 font-bold bg-blue-600 hover:bg-blue-700">
           <Plus className="w-5 h-5" />
-          Add Branch
+          Thêm Chi nhánh
         </Button>
       </div>
 
       <Card className="glass border-none shadow-2xl rounded-[2rem] overflow-hidden">
         <CardHeader className="p-8 pb-4">
-          <CardTitle>Locations List</CardTitle>
-          <CardDescription>Manage your active and inactive branches across the city.</CardDescription>
+          <CardTitle>Danh sách Cơ sở</CardTitle>
+          <CardDescription>Quản lý các chi nhánh đang hoạt động và ngừng hoạt động trong toàn hệ thống.</CardDescription>
         </CardHeader>
         <CardContent className="p-8 pt-4">
           <DataTable columns={columns} data={formattedBranches} searchKey="name" />

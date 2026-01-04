@@ -146,21 +146,44 @@ class VTTechUnifiedSync:
                 })
                 self.stats['revenue'] += 1
 
-    def sync_customers(self, date_str: str, max_pages: int = 10):
+    def sync_customers(self, date_str: str, max_pages: int = 100):
         logger.info(f"\n👥 SYNCING CUSTOMERS ({date_str})")
-        page_size = 100
-        for bid in [-1]: # Try all branches
-            start = 0
-            while start < max_pages * page_size:
+        page_size = 500
+        
+        # Fetch branches from DB to sync branch by branch
+        branches = self.db.get_branches()
+        if not branches:
+            logger.warning("⚠️ No branches found in DB. Syncing with branchID=-1 (Note: BranchID will be missing)")
+            branch_list = [{'id': -1, 'name': 'All Branches'}]
+        else:
+            branch_list = branches
+
+        for branch in branch_list:
+            bid = branch['id']
+            logger.info(f"  📍 Syncing branch: {branch['name']} (ID: {bid})")
+            begin_id = 0
+            limit = 500
+            while True:
                 res = self.call_handler('/Customer/ListCustomer/', 'LoadData', {
                     'dateFrom': f'{date_str} 00:00:00', 'dateTo': f'{date_str} 23:59:59', 'branchID': bid,
-                    'start': start, 'length': page_size
+                    'type': 5, # Found in sync_customer_by_branch.py
+                    'BeginID': begin_id, 'Limit': limit
                 })
-                if not res or len(res) == 0: break
+                if not res or not isinstance(res, list) or len(res) == 0: break
+                
+                # Inject BranchID if it's not present (API doesn't return it)
+                if bid != -1:
+                    for c in res:
+                        if 'BranchID' not in c:
+                            c['BranchID'] = bid
+                            
                 count = self.db.upsert_customers(res)
                 self.stats['customers'] += count
-                if len(res) < page_size: break
-                start += page_size
+                logger.info(f"    ✅ Res: {len(res)} customers (StartID: {begin_id})")
+                
+                if len(res) < limit: break
+                begin_id = res[-1].get('CustID', res[-1].get('ID', 0))
+                time.sleep(0.5)
 
     def run_full_sync(self, date_str: str = None):
         if not date_str: date_str = datetime.now().strftime('%Y-%m-%d')
