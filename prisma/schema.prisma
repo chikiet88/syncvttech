@@ -404,6 +404,7 @@ model CustomerServiceTab {
 
   customer Customer @relation(fields: [customer_id], references: [id])
 
+  @@unique([customer_id, service_id])
   @@map("customer_service_tabs")
 }
 
@@ -419,6 +420,7 @@ model CustomerCareHistory {
 
   customer Customer @relation(fields: [customer_id], references: [id])
 
+  @@unique([customer_id, history_id])
   @@map("customer_care_history")
 }
 

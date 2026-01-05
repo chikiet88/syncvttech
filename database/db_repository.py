@@ -26,13 +26,30 @@ class VTTechDB:
 
     def connect(self):
         if not self.is_connected:
-            self.prisma.connect()
-            self.is_connected = True
+            try:
+                # Set a shorter connection timeout for status checks
+                self.prisma.connect()
+                self.is_connected = True
+            except Exception as e:
+                print(f"\n\033[91m❌ Lỗi Kết Nối Database: {e}\033[0m")
+                print("\033[93m💡 Vui lòng kiểm tra lại cấu hình .env hoặc trạng thái server database.\033[0m\n")
+                # Do not set is_connected to True if it fails
+                # Re-raise to let the caller handle it or stop execution
+                raise e
 
     def disconnect(self):
         if self.is_connected:
             self.prisma.disconnect()
             self.is_connected = False
+
+    def get_conn(self):
+        """Get connection to SQLite database (legacy/shortcut for dashboard_server)"""
+        import sqlite3
+        from pathlib import Path
+        db_path = Path(__file__).parent / "vttech.db"
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
 
     def __enter__(self):
         self.connect()
@@ -220,6 +237,23 @@ class VTTechDB:
             except: pass
         return count
 
+    def upsert_memberships(self, memberships: List[Dict]) -> int:
+        self.connect()
+        count = 0
+        for m in memberships:
+            try:
+                mid = int(m.get('ID'))
+                self.prisma.membership.upsert(
+                    where={'id': mid},
+                    data={
+                        'create': {'id': mid, 'code': m.get('Code', ''), 'name': m.get('Name')},
+                        'update': {'code': m.get('Code', ''), 'name': m.get('Name')}
+                    }
+                )
+                count += 1
+            except: pass
+        return count
+
     def upsert_daily_revenue(self, date_str: str, branch_id: int, data: Dict) -> bool:
         self.connect()
         try:
@@ -277,8 +311,8 @@ class VTTechDB:
                 cid = int(cid)
                 
                 # Parse necessary dates
-                birthday = self._parse_date(c.get('Birthday', c.get('BirthDay')))
-                created_at = self._parse_date(c.get('CreatedDate', c.get('CreateDate')))
+                birthday = self._parse_date(c.get('Birth', c.get('Birthday', c.get('BirthDay'))))
+                created_at = self._parse_date(c.get('Created', c.get('CreatedDate', c.get('CreateDate'))))
                 
                 # Validate foreign keys
                 branch_id = c.get('BranchID')
@@ -308,7 +342,7 @@ class VTTechDB:
                             'name': c.get('Name', c.get('CustomerName', c.get('CustName', ''))),
                             'phone': c.get('Phone', c.get('Mobile', c.get('CustPhone', ''))), 
                             'email': c.get('Email', ''),
-                            'gender': int(c.get('Gender', c.get('Sex', 0)) or 0), 
+                            'gender': int(c.get('Gender', c.get('Sex', c.get('GenderID', 0))) or 0), 
                             'birthday': birthday,
                             'address': c.get('Address', ''), 
                             'city_id': c.get('CityID'), 
@@ -317,7 +351,7 @@ class VTTechDB:
                             'branch_id': branch_id, 
                             'source_id': source_id, 
                             'membership_id': membership_id,
-                            'total_spent': float(c.get('TotalSpent', c.get('TotalPaid', 0) or 0)), 
+                            'total_spent': float(c.get('TotalSpent', c.get('TotalRaise', c.get('TotalPaid', 0) or 0)) or 0), 
                             'total_debt': float(c.get('TotalDebt', c.get('Debt', 0) or 0)),
                             'point': int(c.get('Point', 0) or 0), 
                             'created_at': created_at or datetime.now()
@@ -327,7 +361,7 @@ class VTTechDB:
                             'name': c.get('Name', c.get('CustomerName', c.get('CustName', ''))),
                             'phone': c.get('Phone', c.get('Mobile', c.get('CustPhone', ''))), 
                             'email': c.get('Email', ''),
-                            'gender': int(c.get('Gender', c.get('Sex', 0)) or 0), 
+                            'gender': int(c.get('Gender', c.get('Sex', c.get('GenderID', 0))) or 0), 
                             'birthday': birthday,
                             'address': c.get('Address', ''), 
                             'city_id': c.get('CityID'), 
@@ -336,7 +370,7 @@ class VTTechDB:
                             'branch_id': branch_id, 
                             'source_id': source_id, 
                             'membership_id': membership_id,
-                            'total_spent': float(c.get('TotalSpent', c.get('TotalPaid', 0) or 0)), 
+                            'total_spent': float(c.get('TotalSpent', c.get('TotalRaise', c.get('TotalPaid', 0) or 0)) or 0), 
                             'total_debt': float(c.get('TotalDebt', c.get('Debt', 0) or 0)),
                             'point': int(c.get('Point', 0) or 0), 
                             'updated_at': datetime.now()
@@ -385,6 +419,32 @@ class VTTechDB:
         try:
             pid = data.get('ID') or data.get('PaymentID')
             if pid: pid = int(pid)
+            
+            signature = data.get('Signature', '') or ''
+            
+            # Hướng xử lý: Nếu signature quá lớn (> 100KB), lưu ra file để tránh làm chậm DB
+            if len(signature) > 100 * 1024:
+                import logging
+                import uuid
+                
+                # Tạo thư mục nếu chưa có
+                os.makedirs('storage/signatures', exist_ok=True)
+                
+                file_name = f"sig_c{customer_id}_p{pid}_{uuid.uuid4().hex[:8]}.txt"
+                file_path = os.path.join('storage/signatures', file_name)
+                
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(signature)
+                
+                logging.getLogger(__name__).warning(
+                    f"⚠️ Signature too large ({len(signature)} chars) for customer {customer_id}, payment {pid}. "
+                    f"Saved to {file_path}"
+                )
+                # Lưu shortcut path vào DB
+                signature_to_save = f"file://{file_path}"
+            else:
+                signature_to_save = signature
+
             self.prisma.customerpayment.upsert(
                 where={'customer_id_payment_id': {'customer_id': customer_id, 'payment_id': pid}},
                 data={
@@ -392,18 +452,21 @@ class VTTechDB:
                         'customer_id': customer_id, 'payment_id': pid, 'amount': float(data.get('Amount', data.get('Paid', 0)) or 0),
                         'payment_date': self._parse_date(data.get('PaymentDate', data.get('Date'))),
                         'payment_method': data.get('PaymentMethod', data.get('Method', '') or ''),
-                        'note': data.get('Note', data.get('Remark', '') or ''), 'signature_data': data.get('Signature', '') or ''
+                        'note': data.get('Note', data.get('Remark', '') or ''), 'signature_data': signature_to_save
                     },
                     'update': {
                         'amount': float(data.get('Amount', data.get('Paid', 0)) or 0),
                         'payment_date': self._parse_date(data.get('PaymentDate', data.get('Date'))),
                         'payment_method': data.get('PaymentMethod', data.get('Method', '') or ''),
-                        'note': data.get('Note', data.get('Remark', '') or ''), 'signature_data': data.get('Signature', '') or ''
+                        'note': data.get('Note', data.get('Remark', '') or ''), 'signature_data': signature_to_save
                     }
                 }
             )
             return True
-        except: return False
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"❌ Error upserting payment for customer {customer_id}: {e}")
+            return False
 
     def upsert_customer_service_tab(self, customer_id: int, data: Dict) -> bool:
         self.connect()
@@ -441,6 +504,80 @@ class VTTechDB:
             return True
         except: return False
 
+    def upsert_customer_treatment(self, customer_id: int, data: Dict) -> bool:
+        self.connect()
+        try:
+            tid = data.get('ID') or data.get('TreatmentID')
+            if tid: tid = int(tid)
+            self.prisma.treatment.upsert(
+                where={'id': tid},
+                data={
+                    'create': {
+                        'id': tid,
+                        'customer_id': customer_id,
+                        'service_id': data.get('ServiceID'),
+                        'service_name': data.get('ServiceName', data.get('Name')),
+                        'employee_id': data.get('EmployeeID', data.get('DoctorID')),
+                        'employee_name': data.get('EmployeeName', data.get('DoctorName', '')),
+                        'treatment_date': self._parse_date(data.get('TreatmentDate', data.get('Date'))),
+                        'amount': float(data.get('Amount', data.get('Price', 0)) or 0),
+                        'status': int(data.get('Status', 0) or 0),
+                        'note': data.get('Note', '') or ''
+                    },
+                    'update': {
+                        'customer_id': customer_id,
+                        'service_id': data.get('ServiceID'),
+                        'service_name': data.get('ServiceName', data.get('Name')),
+                        'employee_id': data.get('EmployeeID', data.get('DoctorID')),
+                        'employee_name': data.get('EmployeeName', data.get('DoctorName', '')),
+                        'treatment_date': self._parse_date(data.get('TreatmentDate', data.get('Date'))),
+                        'amount': float(data.get('Amount', data.get('Price', 0)) or 0),
+                        'status': int(data.get('Status', 0) or 0),
+                        'note': data.get('Note', '') or ''
+                    }
+                }
+            )
+            return True
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"❌ Error upserting treatment for customer {customer_id}: {e}")
+            return False
+
+    def upsert_customer_treatment_plan(self, customer_id: int, data: Dict) -> bool:
+        self.connect()
+        try:
+            tid = data.get('ID') or data.get('PlanID')
+            if tid: tid = int(tid)
+            import logging
+            logging.getLogger(__name__).info(f"      - Upserting Treatment Plan ID: {tid} for Customer {customer_id}")
+            self.prisma.customertreatmentplan.upsert(
+                where={'id': tid},
+                data={
+                    'create': {
+                        'id': tid,
+                        'customer_id': customer_id,
+                        # 'service_id': data.get('ServiceID'),  <-- REMOVED
+                        'service_name': data.get('ServiceName', data.get('Name')),
+                        # 'total_sessions', 'used_sessions', 'price', 'status' NOT IN SCHEMA
+                        'doctor_name': data.get('EmployeeName', data.get('User', '')), # Map to doctor_name
+                        'note': data.get('Note', '') or ''
+                    },
+                    'update': {
+                        'customer_id': customer_id,
+                        # 'service_id': data.get('ServiceID'), <-- REMOVED
+                        'service_name': data.get('ServiceName', data.get('Name')),
+                         # 'total_sessions', 'used_sessions', 'price', 'status' NOT IN SCHEMA
+                        'doctor_name': data.get('EmployeeName', data.get('User', '')),
+                        'note': data.get('Note', '') or ''
+                    }
+                }
+            )
+            return True
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"❌ Error upserting treatment plan for customer {customer_id}: {e}")
+            return False
+
     def upsert_customer_care_history(self, customer_id: int, data: Dict) -> bool:
         self.connect()
         try:
@@ -455,14 +592,73 @@ class VTTechDB:
                         'action_type': data.get('ActionType', data.get('Type', '')),
                         'action_date': self._parse_date(data.get('ActionDate', data.get('Date'))),
                         'employee_name': data.get('EmployeeName', data.get('User', '')),
-                        'note': data.get('Note', data.get('Content', ''))
+                        'note': str(data.get('Note', data.get('Content', '')) or '')
                     },
                     'update': {
                         'customer_id': customer_id,
                         'action_type': data.get('ActionType', data.get('Type', '')),
                         'action_date': self._parse_date(data.get('ActionDate', data.get('Date'))),
                         'employee_name': data.get('EmployeeName', data.get('User', '')),
-                        'note': data.get('Note', data.get('Content', ''))
+                        'note': str(data.get('Note', data.get('Content', '')) or '')
+                    }
+                }
+            )
+            return True
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"❌ Error upserting care history for customer {customer_id}: {e}")
+            return False
+
+    def upsert_customer_installment(self, customer_id: int, data: Dict) -> bool:
+        self.connect()
+        try:
+            iid = data.get('ID') or data.get('InstallmentID')
+            if not iid: return False
+            iid = int(iid)
+            self.prisma.customerinstallment.upsert(
+                where={'customer_id_installment_id': {'customer_id': customer_id, 'installment_id': iid}},
+                data={
+                    'create': {
+                        'customer_id': customer_id,
+                        'installment_id': iid,
+                        'total_amount': float(data.get('TotalAmount', data.get('Total', 0)) or 0),
+                        'paid_amount': float(data.get('PaidAmount', data.get('Paid', 0)) or 0),
+                        'remain_amount': float(data.get('RemainAmount', data.get('Remain', 0)) or 0),
+                        'created_at': self._parse_date(data.get('CreatedDate', data.get('Date'))),
+                        'note': data.get('Note', '')
+                    },
+                    'update': {
+                        'total_amount': float(data.get('TotalAmount', data.get('Total', 0)) or 0),
+                        'paid_amount': float(data.get('PaidAmount', data.get('Paid', 0)) or 0),
+                        'remain_amount': float(data.get('RemainAmount', data.get('Remain', 0)) or 0),
+                        'created_at': self._parse_date(data.get('CreatedDate', data.get('Date'))),
+                        'note': data.get('Note', '')
+                    }
+                }
+            )
+            return True
+        except: return False
+
+    def upsert_customer_complaint(self, customer_id: int, data: Dict) -> bool:
+        self.connect()
+        try:
+            cid = data.get('ID') or data.get('ComplaintID')
+            if not cid: return False
+            cid = int(cid)
+            self.prisma.customercomplaint.upsert(
+                where={'customer_id_complaint_id': {'customer_id': customer_id, 'complaint_id': cid}},
+                data={
+                    'create': {
+                        'customer_id': customer_id,
+                        'complaint_id': cid,
+                        'content': data.get('Content', data.get('Note', '')),
+                        'status_name': data.get('StatusName', data.get('Status', '')),
+                        'created_at': self._parse_date(data.get('CreatedDate', data.get('Date'))),
+                    },
+                    'update': {
+                        'content': data.get('Content', data.get('Note', '')),
+                        'status_name': data.get('StatusName', data.get('Status', '')),
+                        'created_at': self._parse_date(data.get('CreatedDate', data.get('Date'))),
                     }
                 }
             )
@@ -541,7 +737,11 @@ class VTTechDB:
             'services': self.prisma.service.count(),
             'employees': self.prisma.employee.count(),
             'users': self.prisma.user.count(),
-            'customers': self.prisma.customer.count()
+            'customers': self.prisma.customer.count(),
+            'appointments': self.prisma.appointment.count(),
+            'treatments': self.prisma.treatment.count(),
+            'payments': self.prisma.customerpayment.count(),
+            'histories': self.prisma.customercarehistory.count(),
         }
     
     def get_branches(self) -> List[Dict]:
@@ -587,6 +787,19 @@ class VTTechDB:
         
         query += " GROUP BY branch_id, branch_name ORDER BY total_paid DESC"
         return self.prisma.query_raw(query, *params)
+        
+    def get_customers_by_branch_stats(self) -> List[Dict]:
+        self.connect()
+        query = """
+            SELECT 
+                b.name,
+                COUNT(c.id) as customer_count
+            FROM branches b
+            LEFT JOIN customers c ON b.id = c.branch_id
+            GROUP BY b.id, b.name
+            ORDER BY customer_count DESC
+        """
+        return self.prisma.query_raw(query)
         
     def get_trend(self, days: int = 30) -> List[Dict]:
         return self.get_daily_summary(days)

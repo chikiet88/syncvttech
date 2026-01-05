@@ -132,7 +132,7 @@
 
         <!-- Filters -->
         <div class="bg-white rounded-lg shadow p-4 mb-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Tìm kiếm</label>
                     <input type="text" id="searchInput" placeholder="Tên, SĐT, Mã KH..." 
@@ -153,6 +153,14 @@
                         <option value="100">100 bản ghi</option>
                         <option value="200">200 bản ghi</option>
                     </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Từ ngày</label>
+                    <input type="date" id="dateFrom" class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Đến ngày</label>
+                    <input type="date" id="dateTo" class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
                 <div class="flex items-end">
                     <button onclick="loadCustomers()" class="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
@@ -277,6 +285,11 @@
                     search: search
                 });
                 if (branchId) params.append('branch_id', branchId);
+                
+                const dateFrom = document.getElementById('dateFrom').value;
+                const dateTo = document.getElementById('dateTo').value;
+                if (dateFrom) params.append('from', dateFrom);
+                if (dateTo) params.append('to', dateTo);
 
                 const res = await fetch(`/api/customers?${params}`);
                 const data = await res.json();
@@ -289,7 +302,7 @@
                             <td class="px-4 py-3 text-sm font-medium">${c.name || '-'}</td>
                             <td class="px-4 py-3 text-sm">${c.phone || '-'}</td>
                             <td class="px-4 py-3 text-sm">${c.branch_name || '-'}</td>
-                            <td class="px-4 py-3 text-sm">${formatDate(c.created_date)}</td>
+                            <td class="px-4 py-3 text-sm">${formatDate(c.created_at || c.created_date)}</td>
                             <td class="px-4 py-3 text-center">
                                 <button onclick="showCustomerDetail(${c.id})" 
                                         class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
@@ -415,7 +428,7 @@
                             <div><span class="text-gray-500">Chi nhánh:</span> <strong>${c.branch_name || '-'}</strong></div>
                             <div><span class="text-gray-500">Giới tính:</span> <strong>${c.gender || '-'}</strong></div>
                             <div><span class="text-gray-500">Ngày sinh:</span> <strong>${formatDate(c.birthday)}</strong></div>
-                            <div><span class="text-gray-500">Ngày tạo:</span> <strong>${formatDate(c.created_date)}</strong></div>
+                            <div><span class="text-gray-500">Ngày tạo:</span> <strong>${formatDate(c.created_at || c.created_date)}</strong></div>
                         </div>
                     </div>
 

@@ -640,6 +640,17 @@ def api_customers():
             sql += " AND c.branch_id = ?"
             params.append(branch_id)
         
+        date_from = request.args.get('from', '')
+        date_to = request.args.get('to', '')
+        
+        if date_from:
+            sql += " AND c.created_at >= ?"
+            params.append(f"{date_from} 00:00:00")
+        
+        if date_to:
+            sql += " AND c.created_at <= ?"
+            params.append(f"{date_to} 23:59:59")
+        
         # Count total
         count_sql = sql.replace("SELECT c.*, b.name as branch_name", "SELECT COUNT(*) as total")
         cursor = conn.execute(count_sql, params)

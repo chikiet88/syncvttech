@@ -3,12 +3,13 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "bun manage.js",
-    "git-commit": "bash push_to_github.sh"
+    "git-commit": "bash push_to_github.sh",
+    "db-push": "prisma db push"
   },
   "devDependencies": {
-    "prisma": "^7.2.0"
+    "prisma": "~6.2.1"
   },
   "dependencies": {
-    "@prisma/client": "7.2.0"
+    "@prisma/client": "~6.2.1"
   }
 }

@@ -2,7 +2,7 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
-import { Phone, Mail, Landmark, Wallet, MapPin } from "lucide-react"
+import { Phone, Mail, Landmark, Wallet, MapPin, Calendar, CreditCard, Stethoscope, ConciergeBell } from "lucide-react"
 import Link from "next/link"
 
 export type CustomerColumn = {
@@ -16,6 +16,10 @@ export type CustomerColumn = {
   point: number
   is_active: number
   branch_name?: string
+  appointment_count: number
+  payment_count: number
+  treatment_count: number
+  service_tab_count: number
 }
 
 export const columns: ColumnDef<CustomerColumn>[] = [
@@ -78,6 +82,46 @@ export const columns: ColumnDef<CustomerColumn>[] = [
     cell: ({ row }) => (
       <Badge variant="outline" className="rounded-full bg-purple-500/10 text-purple-500 border-none font-bold">
         {row.getValue("point")} đ
+      </Badge>
+    )
+  },
+  {
+    accessorKey: "appointment_count",
+    header: "Lịch hẹn",
+    cell: ({ row }) => (
+      <Badge variant="outline" className="rounded-xl bg-orange-500/10 text-orange-600 border-none font-bold gap-1">
+        <Calendar className="w-3 h-3" />
+        {row.getValue("appointment_count")}
+      </Badge>
+    )
+  },
+  {
+    accessorKey: "payment_count",
+    header: "Thanh toán",
+    cell: ({ row }) => (
+      <Badge variant="outline" className="rounded-xl bg-blue-500/10 text-blue-600 border-none font-bold gap-1">
+        <CreditCard className="w-3 h-3" />
+        {row.getValue("payment_count")}
+      </Badge>
+    )
+  },
+  {
+    accessorKey: "treatment_count",
+    header: "Điều trị",
+    cell: ({ row }) => (
+      <Badge variant="outline" className="rounded-xl bg-purple-500/10 text-purple-600 border-none font-bold gap-1">
+        <Stethoscope className="w-3 h-3" />
+        {row.getValue("treatment_count")}
+      </Badge>
+    )
+  },
+  {
+    accessorKey: "service_tab_count",
+    header: "Dịch vụ",
+    cell: ({ row }) => (
+      <Badge variant="outline" className="rounded-xl bg-emerald-500/10 text-emerald-600 border-none font-bold gap-1">
+        <ConciergeBell className="w-3 h-3" />
+        {row.getValue("service_tab_count")}
       </Badge>
     )
   },

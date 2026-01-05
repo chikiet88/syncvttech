@@ -15,10 +15,51 @@ const MODELS = [
 
 const BACKUP_DIR = "./backups";
 
-async function runCommand(command, args = []) {
+async function runCommand(command, args = [], options = {}) {
+    const venvBin = path.resolve("./venv/bin");
+
+    // Build the environment
+    const env = {
+        ...process.env,
+        PYTHONUNBUFFERED: "1",
+        PRISMA_PY_DEBUG_GENERATOR: "1" // Skip Prisma version mismatch check
+    };
+
+    // Inject venv/bin into PATH so prisma can find prisma-client-py
+    if (fs.existsSync(venvBin)) {
+        const separator = process.platform === "win32" ? ";" : ":";
+        env.PATH = `${venvBin}${separator}${process.env.PATH}`;
+    }
+
+    // Check if we should use venv python for python3 commands
+    if (command === "python3") {
+        const venvPython = path.join(venvBin, "python3");
+        if (fs.existsSync(venvPython)) {
+            command = venvPython;
+        }
+    }
+
     return new Promise((resolve) => {
-        const proc = spawn(command, args, { stdio: "inherit", shell: true });
-        proc.on("close", (code) => resolve(code));
+        // Pause readline to let the child process own the terminal
+        if (rl) rl.pause();
+
+        const proc = spawn(command, args, {
+            stdio: "inherit",
+            shell: true, // Using shell: true for better compatibility with PATH injection
+            env: env,
+            cwd: options.cwd || process.cwd()
+        });
+
+        proc.on("close", (code) => {
+            if (rl) rl.resume();
+            resolve(code);
+        });
+
+        proc.on("error", (err) => {
+            console.error(`Failed to start process ${command}: ${err.message}`);
+            if (rl) rl.resume();
+            resolve(1);
+        });
     });
 }
 
@@ -134,6 +175,7 @@ main().finally(() => prisma.$disconnect());
 let rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
+    terminal: true
 });
 
 async function prompt() {
@@ -161,6 +203,8 @@ async function mainMenu() {
         console.log("4. Prisma Restore JSON");
         console.log("5. Prisma Reset Data");
         console.log("6. Git Auto Commit (Today)");
+        console.log("7. Prisma DB Push");
+        console.log("8. Chạy VTTech Dashboard (Dev)");
         console.log("0. Exit");
         console.log("========================================");
         process.stdout.write("Chọn option: ");
@@ -198,6 +242,22 @@ async function mainMenu() {
                 console.log("\nPress Enter to return to menu...");
                 await prompt();
                 break;
+            case "7":
+                console.log("\n🚀 Running Prisma DB Push...");
+                // Use --skip-generate to avoid broken shebangs in venv/bin/prisma-client-py
+                const pushCode = await runCommand("bun", ["prisma", "db", "push", "--skip-generate"]);
+                if (pushCode === 0) {
+                    console.log("\n🔄 Generating Prisma Clients...");
+                    await runCommand("python3", ["-m", "prisma", "generate"]);
+                }
+                console.log("\nPress Enter to return to menu...");
+                await prompt();
+                break;
+            case "8":
+                console.log("\n🌐 Khởi động VTTech Dashboard (Next.js)...");
+                console.log("\x1b[90m   Dir: ./vttech-dashboard\x1b[0m");
+                await runCommand("bun", ["dev"], { cwd: "./vttech-dashboard" });
+                break;
             case "0":
                 process.exit(0);
             default:
@@ -206,5 +266,12 @@ async function mainMenu() {
         }
     }
 }
+
+// Handle Ctrl+C gracefully
+process.on("SIGINT", () => {
+    // If a child process is running, it will handle SIGINT
+    // Otherwise, we could exit, but let's keep the menu alive if desired.
+    // However, the default behavior of spawn inherit usually works.
+});
 
 mainMenu();

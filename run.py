@@ -100,22 +100,29 @@ def run_migrate():
     input("\nNhấn Enter để tiếp tục...")
 
 def show_db_stats():
-    """Hiển thị thống kê database"""
-    print("\n\033[92m📊 Thống kê Database:\033[0m\n")
+    """Hiển thị thống kê database từ PostgreSQL/Prisma"""
+    print("\n\033[92m📊 Thống kê PostgreSQL Database:\033[0m\n")
     
     try:
-        
+        from database.db_repository import db
+        db.connect()
         counts = db.get_master_counts()
         summary = db.get_daily_summary(5)
         
         print("\033[96m📦 Master Data:\033[0m")
         for table, count in counts.items():
-            print(f"   • {table}: {count:,} records")
+            print(f"   • {table.capitalize()}: {count:,} records")
         
         if summary:
-            print(f"\n\033[96m💰 Doanh thu gần đây:\033[0m")
-            for s in summary[:5]:
-                print(f"   • {s['date']}: {float(s['total_paid'] or 0):,.0f} VND")
+            print(f"\n\033[96m💰 Doanh thu gần đây (Tổng 5 ngày):\033[0m")
+            for s in summary:
+                # Handle both datetime and string from raw query
+                d_val = s['date']
+                if not isinstance(d_val, str):
+                    d_val = d_val.strftime('%Y-%m-%d')
+                else:
+                    d_val = d_val.split('T')[0]
+                print(f"   • {d_val}: {float(s['total_paid'] or 0):,.0f} VND")
         
     except Exception as e:
         print(f"\033[91m❌ Lỗi: {e}\033[0m")
@@ -453,6 +460,7 @@ def run_customer_detail_sync(date_str=None, limit=None):
     """Chạy sync chi tiết khách hàng"""
     print("\n\033[92m📋 Đang chạy Sync Customer Detail...\033[0m")
     
+    # We use sync_customer_detail_full.py
     cmd = [PYTHON_CMD, str(BASE_DIR / "sync_customer_detail_full.py")]
     
     if date_str:
@@ -470,9 +478,12 @@ def run_customer_detail_sync(date_str=None, limit=None):
     print()
     
     try:
-        subprocess.run(cmd)
+        # Run subprocess and wait
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"\033[91m❌ Lỗi thực thi script sync_customer_detail_full.py: {e}\033[0m")
     except Exception as e:
-        print(f"\033[91m❌ Lỗi: {e}\033[0m")
+        print(f"\033[91m❌ Lỗi không xác định: {e}\033[0m")
     
     input("\nNhấn Enter để tiếp tục...")
 
@@ -492,13 +503,6 @@ def run_full_customer_sync(date_str=None, date_from=None, date_to=None):
         total_days = (end_dt - start_dt).days + 1
         print(f"\033[90m   Tổng: {total_days} ngày (sẽ sync từng ngày một)\033[0m")
         print(f"\033[90m   ⚡ Sync từng ngày để tránh quá tải và đảm bảo toàn vẹn dữ liệu\033[0m")
-        
-        # Confirm
-        confirm = input("\033[93m⚠️  Tiếp tục? (y/n): \033[0m").strip().lower()
-        if confirm != 'y':
-            print("\033[93m⏹️  Đã hủy.\033[0m")
-            input("\nNhấn Enter để tiếp tục...")
-            return
         
         print("\n" + "=" * 70)
         
@@ -591,13 +595,6 @@ def run_full_customer_sync(date_str=None, date_from=None, date_to=None):
         print(f"\033[90m   Ngày: {date_str}\033[0m")
         print()
         
-        # Confirm
-        confirm = input("\033[93m⚠️  Tiếp tục? (y/n): \033[0m").strip().lower()
-        if confirm != 'y':
-            print("\033[93m⏹️  Đã hủy.\033[0m")
-            input("\nNhấn Enter để tiếp tục...")
-            return
-        
         print("\n" + "=" * 60)
         
         # Step 1: Sync customers by branch
@@ -606,7 +603,7 @@ def run_full_customer_sync(date_str=None, date_from=None, date_to=None):
         
         try:
             cmd1 = [PYTHON_CMD, str(BASE_DIR / "sync_customer_by_branch.py"), "--date", date_str]
-            result1 = subprocess.run(cmd1, capture_output=False)
+            result1 = subprocess.run(cmd1)
             
             if result1.returncode == 0:
                 print("\033[92m✅ Bước 1 hoàn thành!\033[0m")
@@ -622,8 +619,8 @@ def run_full_customer_sync(date_str=None, date_from=None, date_to=None):
         print("-" * 40)
         
         try:
-            cmd2 = [PYTHON_CMD, str(BASE_DIR / "sync_customer_detail_full.py"), "--date", date_str]
-            result2 = subprocess.run(cmd2, capture_output=False)
+            cmd2 = [PYTHON_CMD, str(BASE_DIR / "sync_customer_detail_full.py")]
+            result2 = subprocess.run(cmd2)
             
             if result2.returncode == 0:
                 print("\033[92m✅ Bước 2 hoàn thành!\033[0m")
@@ -1035,10 +1032,13 @@ def main():
             elif sub_choice == "3":
                 start_date, end_date = get_date_range()
                 if start_date and end_date:
-                    run_full_customer_sync(
-                        date_from=start_date.strftime("%Y-%m-%d"),
-                        date_to=end_date.strftime("%Y-%m-%d")
-                    )
+                    # Confirm before range sync
+                    print(f"\n\033[93m⚠️  Thực hiện Full Sync từ {start_date.strftime('%Y-%m-%d')} đến {end_date.strftime('%Y-%m-%d')}\033[0m")
+                    if input("   Xác nhận? (y/N): ").lower() == 'y':
+                        run_full_customer_sync(
+                            date_from=start_date.strftime("%Y-%m-%d"),
+                            date_to=end_date.strftime("%Y-%m-%d")
+                        )
         
         elif choice == "25":
             show_customer_sync_stats()

@@ -89,14 +89,14 @@ class VTTechCustomerSync:
         try:
             resp = self.session.post(f"{BASE_URL}/api/Author/Login", json={
                 "username": USERNAME, "password": PASSWORD, "passwordcrypt": "", "from": "", "sso": "", "ssotoken": ""
-            })
+            }, timeout=30)
             data = resp.json()
             if data.get("Session"):
                 self.token = data["Session"]
                 self.session.cookies.set("WebToken", self.token)
                 
                 # IMPORTANT: Must visit a page to initialize session state on server
-                self.session.get(f"{BASE_URL}/Customer/ListCustomer")
+                self.session.get(f"{BASE_URL}/Customer/ListCustomer", timeout=30)
                 
                 logger.info(f"✅ Đăng nhập thành công")
                 return True
@@ -109,7 +109,7 @@ class VTTechCustomerSync:
     def init_page(self, page_url: str) -> bool:
         if page_url in self.xsrf_tokens: return True
         try:
-            resp = self.session.get(f"{BASE_URL}{page_url}")
+            resp = self.session.get(f"{BASE_URL}{page_url}", timeout=30)
             match = re.search(r'name=__RequestVerificationToken[^>]*value=([^\s/>]+)', resp.text)
             if match:
                 self.xsrf_tokens[page_url] = match.group(1)
@@ -126,10 +126,12 @@ class VTTechCustomerSync:
                 headers={
                     'X-Requested-With': 'XMLHttpRequest',
                     'XSRF-TOKEN': self.xsrf_tokens.get(page_url, '')
-                }
+                },
+                timeout=30
             )
             if resp.status_code == 200: return self.decompress(resp.text)
-        except: pass
+        except Exception as e:
+            logger.debug(f"  Handler error {handler}: {e}")
         return None
 
     def call_api(self, endpoint: str, data: Dict = None) -> Any:
@@ -203,7 +205,11 @@ class VTTechCustomerSync:
             if res and isinstance(res, list) and len(res) > 0:
                 all_customers.extend(res)
                 if len(res) < limit: break
-                begin_id = res[-1].get('CustID', res[-1].get('ID', 0))
+                
+                new_begin_id = res[-1].get('CustID', res[-1].get('ID', 0))
+                if new_begin_id == begin_id: # Infinite loop protection
+                    break
+                begin_id = new_begin_id
                 time.sleep(0.5)
             else: break
         return all_customers

@@ -15,7 +15,11 @@ import {
   Clock, 
   CreditCard,
   MessageSquareWarning,
-  ArrowLeft
+  ArrowLeft,
+  ConciergeBell,
+  Receipt,
+  BookOpen,
+  ClipboardList
 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -45,6 +49,22 @@ export default async function CustomerDetailPage(props: {
       },
       payments: {
         orderBy: { payment_date: "desc" },
+        take: 10
+      },
+      service_tabs: {
+        orderBy: { created_at: "desc" },
+        take: 10
+      },
+      treatment_plans: {
+        orderBy: { created_at: "desc" },
+        take: 10
+      },
+      care_history: {
+        orderBy: { action_date: "desc" },
+        take: 10
+      },
+      installments: {
+        orderBy: { created_at: "desc" },
         take: 10
       },
       complaints: {
@@ -236,6 +256,139 @@ export default async function CustomerDetailPage(props: {
                 </div>
               )) : (
                 <div className="text-center py-8 text-muted-foreground italic">Không tìm thấy lịch hẹn</div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Financial & Service History */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Payment History */}
+        <Card className="glass border border-black/5 shadow-2xl rounded-[2rem] overflow-hidden bg-white/70">
+          <CardHeader className="p-8 pb-4">
+            <CardTitle className="flex items-center gap-3">
+              <Receipt className="w-6 h-6 text-emerald-500" />
+              Lịch sử Thanh toán
+            </CardTitle>
+            <CardDescription className="text-muted-foreground/80">10 giao dịch gần nhất</CardDescription>
+          </CardHeader>
+          <CardContent className="p-8 pt-4">
+            <div className="space-y-4">
+              {customer.payments.length > 0 ? customer.payments.map((p) => (
+                <div key={p.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-black/5 hover:bg-slate-100 transition-colors">
+                  <div className="space-y-1">
+                    <p className="font-bold text-slate-800">{p.payment_method || "Tiền mặt"}</p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-2">
+                      <Clock className="w-3 h-3" /> {p.payment_date ? new Date(p.payment_date).toLocaleDateString("vi-VN") : "N/A"}
+                    </p>
+                    {p.note && <p className="text-[10px] text-muted-foreground italic line-clamp-1">{p.note}</p>}
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-emerald-600">+{new Intl.NumberFormat('vi-VN').format(p.amount)} đ</p>
+                  </div>
+                </div>
+              )) : (
+                <div className="text-center py-8 text-muted-foreground italic">Không tìm thấy lịch sử thanh toán</div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Services & Products */}
+        <Card className="glass border border-black/5 shadow-2xl rounded-[2rem] overflow-hidden bg-white/70">
+          <CardHeader className="p-8 pb-4">
+            <CardTitle className="flex items-center gap-3">
+              <ConciergeBell className="w-6 h-6 text-blue-500" />
+              Dịch vụ & Sản phẩm
+            </CardTitle>
+            <CardDescription className="text-muted-foreground/80">Các dịch vụ đã đăng ký</CardDescription>
+          </CardHeader>
+          <CardContent className="p-8 pt-4">
+            <div className="space-y-4">
+              {customer.service_tabs.length > 0 ? customer.service_tabs.map((s) => (
+                <div key={s.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-black/5 hover:bg-slate-100 transition-colors">
+                  <div className="space-y-1">
+                    <p className="font-bold text-slate-800">{s.service_name || "Dịch vụ không tên"}</p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-3">
+                      <span>SL: {s.quantity}</span>
+                      <span>•</span>
+                      <span>Đơn giá: {new Intl.NumberFormat('vi-VN').format(s.price)} đ</span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-blue-600">{new Intl.NumberFormat('vi-VN').format(s.total)} đ</p>
+                    {s.status && (
+                      <Badge variant="outline" className="text-[10px] rounded-full border-none bg-slate-200 text-slate-600 font-bold">
+                        {s.status}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )) : (
+                <div className="text-center py-8 text-muted-foreground italic">Không tìm thấy dịch vụ</div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Care History */}
+        <Card className="glass border border-black/5 shadow-2xl rounded-[2rem] overflow-hidden bg-white/70">
+          <CardHeader className="p-8 pb-4">
+            <CardTitle className="flex items-center gap-3">
+              <ClipboardList className="w-6 h-6 text-purple-500" />
+              Lịch sử Chăm sóc
+            </CardTitle>
+            <CardDescription className="text-muted-foreground/80">Nhật ký tư vấn và hỗ trợ</CardDescription>
+          </CardHeader>
+          <CardContent className="p-8 pt-4">
+            <div className="space-y-4">
+              {customer.care_history.length > 0 ? customer.care_history.map((h) => (
+                <div key={h.id} className="p-4 rounded-2xl bg-slate-50 border border-black/5 hover:bg-slate-100 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <Badge className="bg-purple-500/10 text-purple-600 border-none font-bold text-[10px] uppercase">
+                      {h.action_type || "Chăm sóc"}
+                    </Badge>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> {h.action_date ? new Date(h.action_date).toLocaleDateString("vi-VN") : "N/A"}
+                    </p>
+                  </div>
+                  <p className="text-sm text-slate-800 mb-2">{h.note}</p>
+                  {h.employee_name && (
+                    <p className="text-[10px] text-muted-foreground font-medium">Nhân viên: {h.employee_name}</p>
+                  )}
+                </div>
+              )) : (
+                <div className="text-center py-8 text-muted-foreground italic">Không tìm thấy lịch sử chăm sóc</div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Treatment Plans */}
+        <Card className="glass border border-black/5 shadow-2xl rounded-[2rem] overflow-hidden bg-white/70">
+          <CardHeader className="p-8 pb-4">
+            <CardTitle className="flex items-center gap-3">
+              <BookOpen className="w-6 h-6 text-indigo-500" />
+              Kế hoạch Điều trị
+            </CardTitle>
+            <CardDescription className="text-muted-foreground/80">Phác đồ đề xuất</CardDescription>
+          </CardHeader>
+          <CardContent className="p-8 pt-4">
+            <div className="space-y-4">
+              {customer.treatment_plans.length > 0 ? customer.treatment_plans.map((p) => (
+                <div key={p.id} className="p-4 rounded-2xl bg-slate-50 border border-black/5 hover:bg-slate-100 transition-colors">
+                  <p className="font-bold text-slate-800">{p.service_name}</p>
+                  <p className="text-sm text-slate-600 mt-1">{p.note}</p>
+                  <div className="flex items-center justify-between mt-3">
+                    <p className="text-[10px] text-muted-foreground italic">Bác sĩ: {p.doctor_name || "N/A"}</p>
+                    <p className="text-[10px] text-muted-foreground">{p.created_at ? new Date(p.created_at).toLocaleDateString("vi-VN") : "N/A"}</p>
+                  </div>
+                </div>
+              )) : (
+                <div className="text-center py-8 text-muted-foreground italic">Không tìm thấy kế hoạch điều trị</div>
               )}
             </div>
           </CardContent>

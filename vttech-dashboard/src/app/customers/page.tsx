@@ -39,7 +39,15 @@ export default async function CustomersPage(props: {
       created_at: "desc"
     },
     include: {
-      branch: true
+      branch: true,
+      _count: {
+        select: {
+          appointments: true,
+          payments: true,
+          treatments: true,
+          service_tabs: true,
+        }
+      }
     }
   })
 
@@ -54,7 +62,11 @@ export default async function CustomersPage(props: {
     total_debt: item.total_debt || 0,
     point: item.point || 0,
     is_active: item.is_active || 1,
-    branch_name: item.branch?.name || "N/A"
+    branch_name: item.branch?.name || "N/A",
+    appointment_count: item._count?.appointments || 0,
+    payment_count: item._count?.payments || 0,
+    treatment_count: item._count?.treatments || 0,
+    service_tab_count: item._count?.service_tabs || 0,
   }))
 
   return (
