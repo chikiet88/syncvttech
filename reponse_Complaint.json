@@ -1,0 +1,28 @@
+[
+    {
+        "ID": 63349,
+        "IsDone": 1,
+        "StatusName": "HIỆU QUẢ ĐANG ĐIỀU TRỊ",
+        "StatusParentName": "ĐÁNH GIÁ DỊCH VỤ/ SẢN PHẨM SỬ DỤNG",
+        "ColorCode": "#344767",
+        "Created_By": 333,
+        "Created": "2023-12-25T15:10:31.073",
+        "CreatedAvatar": "",
+        "CreatedName": "LÊ THỊ YẾN THANH",
+        "Content": "25/12, Kh có phản hồi về việc thanh toán Kh có mua 2 gói DV và đã thanh toán 1 gói rồi vẫn chưa sử dụng hết, Kh muốn khi nào tới sử dụng gói thứ 2 KH sẽ thanh toán vì tài chính KH có giới hạn và muốn chi cho những việc quan trọng hơn trước.",
+        "NumTake": 2
+    },
+    {
+        "ID": 46240,
+        "IsDone": 1,
+        "StatusName": "Khách không đồng ý add",
+        "StatusParentName": "TAZA ZALO OA",
+        "ColorCode": "#ffffff",
+        "Created_By": 154,
+        "Created": "2023-10-03T06:03:29.127",
+        "CreatedAvatar": "",
+        "CreatedName": "Cố Vấn CN Nha Trang",
+        "Content": "khách chưa đến chi nhánh ck cọc qua online nên chưa quét oazalo",
+        "NumTake": 1
+    }
+]

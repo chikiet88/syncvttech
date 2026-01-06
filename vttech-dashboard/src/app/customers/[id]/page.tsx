@@ -65,28 +65,28 @@ export default async function CustomerDetailPage(props: {
   }
 
   return (
-    <div className="p-8 space-y-8 animate-fade-in max-w-7xl mx-auto">
+    <div className="p-6 space-y-6 animate-fade-in max-w-7xl mx-auto">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-black/5">
-        <div className="flex items-center gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-black/5">
+        <div className="flex items-center gap-4">
           <Link href="/customers">
-            <Button variant="ghost" size="icon" className="rounded-full glass h-12 w-12 border border-black/5 bg-white/50 shadow-sm">
-              <ArrowLeft className="w-6 h-6 text-slate-600" />
+            <Button variant="ghost" size="icon" className="rounded-lg glass h-10 w-10 border border-black/5 bg-white/50 shadow-sm">
+              <ArrowLeft className="w-5 h-5 text-slate-600" />
             </Button>
           </Link>
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <h2 className="text-4xl font-black tracking-tighter text-slate-900 italic">
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <h2 className="text-3xl font-black tracking-tighter text-slate-900 italic">
                 {customer.name}
               </h2>
-              <Badge variant="outline" className="rounded-full bg-blue-500/10 text-blue-600 border-none font-black px-3 py-1">
+              <Badge variant="outline" className="rounded-md bg-blue-500/10 text-blue-600 border-none font-black px-2 py-0.5 text-[10px]">
                 {customer.code || `C-${customer.id}`}
               </Badge>
             </div>
-            <div className="flex items-center gap-4 text-sm font-medium text-slate-500">
-              <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> {customer.branch?.name || "Chi nhánh chung"}</span>
+            <div className="flex items-center gap-3 text-xs font-medium text-slate-500">
+              <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {customer.branch?.name || "Chi nhánh chung"}</span>
               {customer.membership && (
-                <span className="flex items-center gap-1.5 text-purple-600 font-bold uppercase tracking-widest text-[10px]">
+                <span className="flex items-center gap-1 text-purple-600 font-bold uppercase tracking-widest text-[9px]">
                   • {customer.membership.name}
                 </span>
               )}
@@ -95,7 +95,7 @@ export default async function CustomerDetailPage(props: {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button className="rounded-full bg-slate-900 hover:bg-slate-800 text-white font-bold px-8 shadow-xl">
+          <Button className="rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold px-6 shadow-md text-sm">
             Chỉnh sửa Hồ sơ
           </Button>
         </div>

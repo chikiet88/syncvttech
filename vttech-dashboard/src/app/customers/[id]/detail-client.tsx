@@ -189,31 +189,31 @@ const careColumns: ColumnDef<any>[] = [
 
 export function CustomerDetailContent({ customer }: { customer: any }) {
     return (
-        <div className="space-y-12 pb-20">
+        <div className="space-y-6 pb-12">
             {/* 1. Quick Stats Header */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="p-6 rounded-[2rem] glass bg-white/50 border border-black/5 flex items-center justify-between">
+                <div className="p-4 rounded-xl glass bg-white/50 border border-black/5 flex items-center justify-between">
                     <div className="space-y-1">
                         <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">Tổng chi tiêu</p>
                         <p className="text-2xl font-black text-emerald-600">{new Intl.NumberFormat('vi-VN').format(customer.total_spent)} đ</p>
                     </div>
                     <Landmark className="w-8 h-8 text-emerald-500 opacity-20" />
                 </div>
-                <div className="p-6 rounded-[2rem] glass bg-white/50 border border-black/5 flex items-center justify-between">
+                <div className="p-4 rounded-xl glass bg-white/50 border border-black/5 flex items-center justify-between">
                     <div className="space-y-1">
                         <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">Công nợ</p>
                         <p className="text-2xl font-black text-red-600">{new Intl.NumberFormat('vi-VN').format(customer.total_debt)} đ</p>
                     </div>
                     <Wallet className="w-8 h-8 text-red-500 opacity-20" />
                 </div>
-                <div className="p-6 rounded-[2rem] glass bg-white/50 border border-black/5 flex items-center justify-between">
+                <div className="p-4 rounded-xl glass bg-white/50 border border-black/5 flex items-center justify-between">
                     <div className="space-y-1">
                         <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">Điểm tích lũy</p>
                         <p className="text-2xl font-black text-purple-600">{customer.point}</p>
                     </div>
                     <History className="w-8 h-8 text-purple-500 opacity-20" />
                 </div>
-                <div className="p-6 rounded-[2rem] glass bg-white/50 border border-black/5 flex items-center justify-between">
+                <div className="p-4 rounded-xl glass bg-white/50 border border-black/5 flex items-center justify-between">
                     <div className="space-y-1">
                         <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">Dịch vụ</p>
                         <p className="text-2xl font-black text-blue-600">{customer.service_tabs.length}</p>
@@ -224,227 +224,227 @@ export function CustomerDetailContent({ customer }: { customer: any }) {
 
             {/* 2. Basic Info Section */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="glass border border-black/5 shadow-xl rounded-[2rem] overflow-hidden bg-white/70">
-                    <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                            <User className="w-5 h-5 text-blue-500" />
+                <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                    <CardHeader className="p-4 pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                            <User className="w-4 h-4 text-blue-500" />
                             Thông tin Liên hệ
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="p-4 space-y-4">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-xl bg-slate-100"><Phone className="w-4 h-4" /></div>
+                            <div className="p-1.5 rounded-lg bg-slate-100"><Phone className="w-3.5 h-3.5" /></div>
                             <div>
                                 <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Điện thoại</p>
-                                <p className="font-bold">{customer.phone || "N/A"}</p>
+                                <p className="font-bold text-sm">{customer.phone || "N/A"}</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-xl bg-slate-100"><Mail className="w-4 h-4" /></div>
+                            <div className="p-1.5 rounded-lg bg-slate-100"><Mail className="w-3.5 h-3.5" /></div>
                             <div>
                                 <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Email</p>
-                                <p className="font-bold underline text-blue-500">{customer.email || "N/A"}</p>
+                                <p className="font-bold text-sm underline text-blue-500">{customer.email || "N/A"}</p>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="glass border border-black/5 shadow-xl rounded-[2rem] overflow-hidden bg-white/70">
-                    <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                            <MapPin className="w-5 h-5 text-emerald-500" />
+                <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                    <CardHeader className="p-4 pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-emerald-500" />
                             Địa chỉ & Khu vực
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="p-4 space-y-4">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-xl bg-slate-100"><MapPin className="w-4 h-4" /></div>
+                            <div className="p-1.5 rounded-lg bg-slate-100"><MapPin className="w-3.5 h-3.5" /></div>
                             <div>
                                 <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Địa chỉ</p>
-                                <p className="font-bold">{customer.address || "N/A"}</p>
+                                <p className="font-bold text-sm">{customer.address || "N/A"}</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-xl bg-slate-100"><TrendingUp className="w-4 h-4" /></div>
+                            <div className="p-1.5 rounded-lg bg-slate-100"><TrendingUp className="w-3.5 h-3.5" /></div>
                             <div>
                                 <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Chi nhánh</p>
-                                <p className="font-bold">{customer.branch?.name || "N/A"}</p>
+                                <p className="font-bold text-sm">{customer.branch?.name || "N/A"}</p>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="glass border border-black/5 shadow-xl rounded-[2rem] overflow-hidden bg-white/70">
-                    <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                            <Clock className="w-5 h-5 text-purple-500" />
+                <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                    <CardHeader className="p-4 pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-purple-500" />
                             Ngày tham gia
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="flex flex-col items-center justify-center py-4">
-                        <p className="text-4xl font-black text-slate-800">
+                    <CardContent className="p-4 flex flex-col items-center justify-center py-4">
+                        <p className="text-3xl font-black text-slate-800">
                             {new Date(customer.created_at).toLocaleDateString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric' })}
                         </p>
-                        <p className="text-[10px] text-muted-foreground uppercase font-black tracking-[0.2em] mt-2 italic">Hội viên từ hệ thống</p>
+                        <p className="text-[10px] text-muted-foreground uppercase font-black tracking-[0.2em] mt-1 italic">Hội viên từ hệ thống</p>
                     </CardContent>
                 </Card>
             </div>
 
             {customer.complaints.length > 0 && (
-                <div className="p-6 rounded-[2rem] bg-red-50 border border-red-200 flex items-start gap-4 shadow-lg shadow-red-500/5">
-                    <div className="p-3 rounded-2xl bg-red-100 text-red-600">
-                        <MessageSquareWarning className="w-6 h-6" />
+                <div className="p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-4 shadow-sm">
+                    <div className="p-2 rounded-lg bg-red-100 text-red-600">
+                        <MessageSquareWarning className="w-5 h-5" />
                     </div>
                     <div>
-                        <h3 className="text-red-700 font-bold text-lg mb-1">
-                            Lưu ý quan trọng: Có {customer.complaints.length} khiếu nại chưa xử lý
+                        <h3 className="text-red-700 font-bold text-base mb-1">
+                            Lưu ý: Có {customer.complaints.length} khiếu nại
                         </h3>
-                        <p className="text-red-600/80 text-sm leading-relaxed">{customer.complaints[0].content}</p>
+                        <p className="text-red-600/80 text-xs leading-relaxed">{customer.complaints[0].content}</p>
                     </div>
                 </div>
             )}
 
             {/* 3. Treatments Table Stack */}
-            <Card className="glass border border-black/5 shadow-2xl rounded-[3rem] overflow-hidden bg-white/70">
-                <CardHeader className="p-10 pb-6 bg-slate-50/50">
+            <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                <CardHeader className="p-6 pb-3 bg-slate-50/50">
                     <div className="flex items-center gap-3">
-                        <div className="p-3 rounded-2xl bg-blue-500 text-white shadow-lg shadow-blue-500/30">
-                            <Stethoscope className="w-6 h-6" />
+                        <div className="p-2 rounded-lg bg-blue-500 text-white shadow-md shadow-blue-500/20">
+                            <Stethoscope className="w-5 h-5" />
                         </div>
                         <div>
-                            <CardTitle className="text-2xl font-black tracking-tight">Lịch sử Liệu trình</CardTitle>
-                            <CardDescription className="font-medium">Toàn bộ quá trình thực hiện dịch vụ của khách hàng</CardDescription>
+                            <CardTitle className="text-lg font-black tracking-tight">Lịch sử Liệu trình</CardTitle>
+                            <CardDescription className="text-xs font-medium">Toàn bộ quá trình thực hiện dịch vụ</CardDescription>
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="p-10 pt-6">
+                <CardContent className="p-6 pt-3">
                     <DataTable columns={treatmentColumns} data={customer.treatments} searchKey="service_name" />
                 </CardContent>
             </Card>
 
             {/* 4. Appointments Table Stack */}
-            <Card className="glass border border-black/5 shadow-2xl rounded-[3rem] overflow-hidden bg-white/70">
-                <CardHeader className="p-10 pb-6 bg-slate-50/50">
+            <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                <CardHeader className="p-6 pb-3 bg-slate-50/50">
                     <div className="flex items-center gap-3">
-                        <div className="p-3 rounded-2xl bg-purple-500 text-white shadow-lg shadow-purple-500/30">
-                            <Calendar className="w-6 h-6" />
+                        <div className="p-2 rounded-lg bg-purple-500 text-white shadow-md shadow-purple-500/20">
+                            <Calendar className="w-5 h-5" />
                         </div>
                         <div>
-                            <CardTitle className="text-2xl font-black tracking-tight">Lịch thăm khám & Tư vấn</CardTitle>
-                            <CardDescription className="font-medium">Quản lý các cuộc hẹn hiện tại và lịch sử</CardDescription>
+                            <CardTitle className="text-lg font-black tracking-tight">Lịch thăm khám & Tư vấn</CardTitle>
+                            <CardDescription className="text-xs font-medium">Quản lý các cuộc hẹn hiện tại và lịch sử</CardDescription>
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="p-10 pt-6">
+                <CardContent className="p-6 pt-3">
                     <DataTable columns={appointmentColumns} data={customer.appointments} searchKey="service_name" />
                 </CardContent>
             </Card>
 
             {/* 5. Financial Sections */}
-            <div className="grid grid-cols-1 gap-12">
+            <div className="grid grid-cols-1 gap-6">
                 {/* Payments */}
-                <Card className="glass border border-black/5 shadow-2xl rounded-[3rem] overflow-hidden bg-white/70">
-                    <CardHeader className="p-10 pb-6 bg-slate-50/50">
+                <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                    <CardHeader className="p-6 pb-3 bg-slate-50/50">
                         <div className="flex items-center gap-3">
-                            <div className="p-3 rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/30">
-                                <Receipt className="w-6 h-6" />
+                            <div className="p-2 rounded-lg bg-emerald-500 text-white shadow-md shadow-emerald-500/20">
+                                <Receipt className="w-5 h-5" />
                             </div>
                             <div>
-                                <CardTitle className="text-2xl font-black tracking-tight">Lịch sử Thanh toán</CardTitle>
-                                <CardDescription className="font-medium">Nhật ký giao dịch tài chính chi tiết</CardDescription>
+                                <CardTitle className="text-lg font-black tracking-tight">Lịch sử Thanh toán</CardTitle>
+                                <CardDescription className="text-xs font-medium">Nhật ký giao dịch tài chính chi tiết</CardDescription>
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent className="p-10 pt-6">
+                    <CardContent className="p-6 pt-3">
                         <DataTable columns={paymentColumns} data={customer.payments} searchKey="payment_method" />
                     </CardContent>
                 </Card>
 
                 {/* Installments */}
-                <Card className="glass border border-black/5 shadow-2xl rounded-[3rem] overflow-hidden bg-white/70">
-                    <CardHeader className="p-10 pb-6 bg-slate-50/50">
+                <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                    <CardHeader className="p-6 pb-3 bg-slate-50/50">
                         <div className="flex items-center gap-3">
-                            <div className="p-3 rounded-2xl bg-red-500 text-white shadow-lg shadow-red-500/30">
-                                <CreditCard className="w-6 h-6" />
+                            <div className="p-2 rounded-lg bg-red-500 text-white shadow-md shadow-red-500/20">
+                                <CreditCard className="w-5 h-5" />
                             </div>
                             <div>
-                                <CardTitle className="text-2xl font-black tracking-tight">Lịch trình Trả góp</CardTitle>
-                                <CardDescription className="font-medium">Theo dõi dư nợ và tiến độ hoàn trả</CardDescription>
+                                <CardTitle className="text-lg font-black tracking-tight">Lịch trình Trả góp</CardTitle>
+                                <CardDescription className="text-xs font-medium">Theo dõi dư nợ và tiến độ hoàn trả</CardDescription>
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent className="p-10 pt-6">
+                    <CardContent className="p-6 pt-3">
                         <DataTable columns={installmentColumns} data={customer.installments} searchKey="note" />
                     </CardContent>
                 </Card>
             </div>
 
             {/* 6. Services & Products Stack */}
-            <Card className="glass border border-black/5 shadow-2xl rounded-[3rem] overflow-hidden bg-white/70">
-                <CardHeader className="p-10 pb-6 bg-slate-50/50">
+            <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                <CardHeader className="p-6 pb-3 bg-slate-50/50">
                     <div className="flex items-center gap-3">
-                        <div className="p-3 rounded-2xl bg-indigo-500 text-white shadow-lg shadow-indigo-500/30">
-                            <ConciergeBell className="w-6 h-6" />
+                        <div className="p-2 rounded-lg bg-indigo-500 text-white shadow-md shadow-indigo-500/20">
+                            <ConciergeBell className="w-5 h-5" />
                         </div>
                         <div>
-                            <CardTitle className="text-2xl font-black tracking-tight">Sản phẩm & Dịch vụ</CardTitle>
-                            <CardDescription className="font-medium">Các gói dịch vụ đã đăng ký và sử dụng</CardDescription>
+                            <CardTitle className="text-lg font-black tracking-tight">Sản phẩm & Dịch vụ</CardTitle>
+                            <CardDescription className="text-xs font-medium">Các gói dịch vụ đã đăng ký và sử dụng</CardDescription>
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="p-10 pt-6">
+                <CardContent className="p-6 pt-3">
                     <DataTable columns={serviceColumns} data={customer.service_tabs} searchKey="service_name" />
                 </CardContent>
             </Card>
 
             {/* 7. Care History Stack */}
-            <Card className="glass border border-black/5 shadow-2xl rounded-[3rem] overflow-hidden bg-white/70">
-                <CardHeader className="p-10 pb-6 bg-slate-50/50">
+            <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                <CardHeader className="p-6 pb-3 bg-slate-50/50">
                     <div className="flex items-center gap-3">
-                        <div className="p-3 rounded-2xl bg-purple-600 text-white shadow-lg shadow-purple-600/30">
-                            <ClipboardList className="w-6 h-6" />
+                        <div className="p-2 rounded-lg bg-purple-600 text-white shadow-md shadow-purple-600/20">
+                            <ClipboardList className="w-5 h-5" />
                         </div>
                         <div>
-                            <CardTitle className="text-2xl font-black tracking-tight">Nhật ký Chăm sóc</CardTitle>
-                            <CardDescription className="font-medium">Lịch sử tương tác, tư vấn và hỗ trợ khách hàng</CardDescription>
+                            <CardTitle className="text-lg font-black tracking-tight">Nhật ký Chăm sóc</CardTitle>
+                            <CardDescription className="text-xs font-medium">Lịch sử tương tác, tư vấn và hỗ trợ</CardDescription>
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="p-10 pt-6">
+                <CardContent className="p-6 pt-3">
                     <DataTable columns={careColumns} data={customer.care_history} searchKey="note" />
                 </CardContent>
             </Card>
 
             {/* 8. Proposal Plans Stack */}
-            <Card className="glass border border-black/5 shadow-2xl rounded-[3rem] overflow-hidden bg-white/70">
-                <CardHeader className="p-10 pb-6 bg-slate-50/50">
+            <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                <CardHeader className="p-6 pb-3 bg-slate-50/50">
                     <div className="flex items-center gap-3">
-                        <div className="p-3 rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/30">
-                            <BookOpen className="w-6 h-6" />
+                        <div className="p-2 rounded-lg bg-orange-500 text-white shadow-md shadow-orange-500/20">
+                            <BookOpen className="w-5 h-5" />
                         </div>
                         <div>
-                            <CardTitle className="text-2xl font-black tracking-tight">Kế hoạch & Phác đồ Đề xuất</CardTitle>
-                            <CardDescription className="font-medium">Định hướng điều trị từ bác sĩ và chuyên gia</CardDescription>
+                            <CardTitle className="text-lg font-black tracking-tight">Phác đồ Đề xuất</CardTitle>
+                            <CardDescription className="text-xs font-medium">Định hướng điều trị từ chuyên gia</CardDescription>
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="p-10 pt-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <CardContent className="p-6 pt-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {customer.treatment_plans.length > 0 ? customer.treatment_plans.map((plan: any) => (
-                            <div key={plan.id} className="p-6 rounded-3xl bg-white border border-black/5 shadow-sm hover:shadow-md transition-shadow">
-                                <div className="flex items-center justify-between mb-4">
-                                    <Badge className="bg-orange-500/10 text-orange-600 border-none font-black text-[10px] uppercase px-3 py-1">Phác đồ Đề xuất</Badge>
+                            <div key={plan.id} className="p-4 rounded-xl bg-white border border-black/5 shadow-sm hover:shadow-md transition-shadow">
+                                <div className="flex items-center justify-between mb-2">
+                                    <Badge className="bg-orange-500/10 text-orange-600 border-none font-black text-[10px] uppercase px-2 py-0.5">Đề xuất</Badge>
                                     <span className="text-[10px] text-muted-foreground font-bold italic">{new Date(plan.created_at).toLocaleDateString("vi-VN")}</span>
                                 </div>
-                                <p className="font-black text-slate-800 text-lg mb-2">{plan.service_name}</p>
-                                <p className="text-sm text-slate-600 leading-relaxed mb-4">{plan.note}</p>
-                                <div className="pt-4 border-t border-slate-100 flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black">BS</div>
-                                    <p className="text-[10px] font-black uppercase text-slate-500">Bác sĩ: {plan.doctor_name || "Đang cập nhật"}</p>
+                                <p className="font-black text-slate-800 text-base mb-1">{plan.service_name}</p>
+                                <p className="text-xs text-slate-600 leading-relaxed mb-3">{plan.note}</p>
+                                <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[8px] font-black">BS</div>
+                                    <p className="text-[8px] font-black uppercase text-slate-500">Bác sĩ: {plan.doctor_name || "N/A"}</p>
                                 </div>
                             </div>
                         )) : (
-                            <div className="col-span-full text-center py-12 text-muted-foreground italic font-medium">Không có phác đồ đề xuất nào được ghi nhận.</div>
+                            <div className="col-span-full text-center py-6 text-muted-foreground italic font-medium text-xs">Không có phác đồ nào.</div>
                         )}
                     </div>
                 </CardContent>

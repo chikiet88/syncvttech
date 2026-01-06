@@ -125,15 +125,15 @@ export function DataTable<TData, TValue>({
           placeholder="Tìm kiếm nhanh..."
           defaultValue={pageCount ? (searchParams.get("q") ?? "") : (table.getColumn(searchKey)?.getFilterValue() as string ?? "")}
           onChange={(event) => handleSearch(event.target.value)}
-          className="max-w-sm glass border-none rounded-xl"
+          className="max-w-sm glass border-none rounded-md"
         />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto glass border-none rounded-xl">
+            <Button variant="outline" className="ml-auto glass border-none rounded-md">
               Cột <ChevronDown className="ml-2 h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="glass border-white/5 rounded-xl">
+          <DropdownMenuContent align="end" className="glass border-white/5 rounded-md">
             {table
               .getAllColumns()
               .filter((column) => column.getCanHide())
@@ -154,14 +154,14 @@ export function DataTable<TData, TValue>({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="rounded-2xl border border-white/5 overflow-hidden glass">
+      <div className="rounded-lg border border-white/5 overflow-hidden glass">
         <Table>
           <TableHeader className="bg-white/5">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent border-white/5">
                 {headerGroup.headers.map((header) => {
                   return (
-                    <TableHead key={header.id} className="text-muted-foreground font-bold uppercase tracking-widest text-[10px] h-12">
+                    <TableHead key={header.id} className="text-muted-foreground font-bold uppercase tracking-widest text-[10px] h-10">
                       {header.isPlaceholder
                         ? null
                         : flexRender(
@@ -183,7 +183,7 @@ export function DataTable<TData, TValue>({
                   className="hover:bg-white/5 border-white/5 transition-colors"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-4">
+                    <TableCell key={cell.id} className="py-2.5">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -221,7 +221,7 @@ export function DataTable<TData, TValue>({
                 size="sm"
                 onClick={() => handlePageChange(currentPage! - 1)}
                 disabled={currentPage === 1}
-                className="glass border-none rounded-xl"
+                className="glass border-none rounded-md"
               >
                 Trước
               </Button>
@@ -230,7 +230,7 @@ export function DataTable<TData, TValue>({
                 size="sm"
                 onClick={() => handlePageChange(currentPage! + 1)}
                 disabled={currentPage === pageCount}
-                className="glass border-none rounded-xl"
+                className="glass border-none rounded-md"
               >
                 Tiếp
               </Button>
@@ -242,7 +242,7 @@ export function DataTable<TData, TValue>({
                 size="sm"
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage()}
-                className="glass border-none rounded-xl"
+                className="glass border-none rounded-md"
               >
                 Trước
               </Button>
@@ -251,7 +251,7 @@ export function DataTable<TData, TValue>({
                 size="sm"
                 onClick={() => table.nextPage()}
                 disabled={!table.getCanNextPage()}
-                className="glass border-none rounded-xl"
+                className="glass border-none rounded-md"
               >
                 Tiếp
               </Button>

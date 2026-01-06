@@ -98,20 +98,20 @@ export default async function CustomersPage(props: {
   }))
 
   return (
-    <div className="p-8 space-y-8 animate-fade-in">
+    <div className="p-6 space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div className="space-y-1">
-          <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <Users className="w-8 h-8 text-purple-500" />
+          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3">
+            <Users className="w-6 h-6 text-purple-500" />
             Hồ sơ Khách hàng
           </h2>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Quản lý quan hệ khách hàng và theo dõi lịch sử tài chính.
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button className="rounded-xl gap-2 font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/30">
-            <UserPlus className="w-5 h-5" />
+          <Button className="rounded-lg gap-2 font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-500/20">
+            <UserPlus className="w-4 h-4" />
             Thêm Khách hàng
           </Button>
         </div>
@@ -119,16 +119,16 @@ export default async function CustomersPage(props: {
 
       <CustomerFilters />
 
-      <Card className="glass border border-black/5 shadow-2xl rounded-[2rem] overflow-hidden bg-white/70">
-        <CardHeader className="p-8 pb-4">
-          <CardTitle>Danh sách Khách hàng</CardTitle>
-          <CardDescription className="text-muted-foreground/80">
+      <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+        <CardHeader className="p-6 pb-3">
+          <CardTitle className="text-lg">Danh sách Khách hàng</CardTitle>
+          <CardDescription className="text-xs text-muted-foreground/80">
             {Object.keys(where).length > 0
               ? `Đang hiển thị kết quả lọc (${totalCount} bản ghi)`
-              : `Tổng cộng ${totalCount} khách hàng trong hệ thống.`}
+              : `Tổng cộng ${totalCount} khách hàng.`}
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-8 pt-4">
+        <CardContent className="p-6 pt-3">
           <DataTable
             columns={columns}
             data={formattedCustomers}

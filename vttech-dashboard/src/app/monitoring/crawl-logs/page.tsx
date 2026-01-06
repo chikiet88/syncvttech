@@ -55,14 +55,14 @@ export default async function CrawlLogsPage() {
   }))
 
   return (
-    <div className="p-8 space-y-8 animate-fade-in">
+    <div className="p-6 space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div className="space-y-1">
-          <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <Activity className="w-8 h-8 text-blue-500" />
+          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3">
+            <Activity className="w-6 h-6 text-blue-500" />
             Giám sát Hệ thống
           </h2>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Trung tâm điều khiển và nhật ký đồng bộ dữ liệu toàn hệ thống.
           </p>
         </div>
@@ -70,34 +70,34 @@ export default async function CrawlLogsPage() {
       </div>
 
       <Tabs defaultValue="crm" className="w-full">
-        <TabsList className="bg-slate-100 p-1 rounded-2xl mb-6">
-          <TabsTrigger value="crm" className="rounded-xl px-8 gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+        <TabsList className="bg-slate-100 p-1 rounded-lg mb-4">
+          <TabsTrigger value="crm" className="rounded-md px-6 gap-2 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm">
             <Server className="w-4 h-4" /> CRM VTTech
           </TabsTrigger>
-          <TabsTrigger value="pbx" className="rounded-xl px-8 gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+          <TabsTrigger value="pbx" className="rounded-md px-6 gap-2 text-xs data-[state=active]:bg-white data-[state=active]:shadow-sm">
             <Phone className="w-4 h-4" /> PBX Call Center
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="crm" className="space-y-6">
-          <Card className="glass border-none shadow-2xl rounded-[2rem] overflow-hidden">
-            <CardHeader className="p-8 pb-4">
-              <CardTitle>Nhật ký CRM</CardTitle>
-              <CardDescription>Theo dõi đồng bộ khách hàng, doanh thu và dịch vụ.</CardDescription>
+        <TabsContent value="crm" className="space-y-4">
+          <Card className="glass border-none shadow-xl rounded-xl overflow-hidden">
+            <CardHeader className="p-6 pb-2">
+              <CardTitle className="text-lg">Nhật ký CRM</CardTitle>
+              <CardDescription className="text-xs">Theo dõi đồng bộ khách hàng, doanh thu và dịch vụ.</CardDescription>
             </CardHeader>
-            <CardContent className="p-8 pt-4">
+            <CardContent className="p-6 pt-2">
               <DataTable columns={columns} data={formattedCrmLogs} searchKey="crawl_type" />
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="pbx" className="space-y-6">
-          <Card className="glass border-none shadow-2xl rounded-[2rem] overflow-hidden">
-            <CardHeader className="p-8 pb-4 border-orange-500/10">
-              <CardTitle>Nhật ký PBX</CardTitle>
-              <CardDescription>Theo dõi đồng bộ lịch sử cuộc gọi (CDR) từ máy chủ tổng đài.</CardDescription>
+        <TabsContent value="pbx" className="space-y-4">
+          <Card className="glass border-none shadow-xl rounded-xl overflow-hidden">
+            <CardHeader className="p-6 pb-2">
+              <CardTitle className="text-lg">Nhật ký PBX</CardTitle>
+              <CardDescription className="text-xs">Theo dõi đồng bộ lịch sử cuộc gọi (CDR).</CardDescription>
             </CardHeader>
-            <CardContent className="p-8 pt-4">
+            <CardContent className="p-6 pt-2">
               <DataTable columns={pbxColumns} data={formattedPbxLogs} searchKey="sync_type" />
             </CardContent>
           </Card>
