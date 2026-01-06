@@ -306,6 +306,11 @@ model CrawlLog {
   crawl_type       String
   status           String
   records_count    Int      @default(0)
+  total_branches   Int      @default(0)
+  total_customers  Int      @default(0)
+  total_payments   Int      @default(0)
+  total_treatments Int      @default(0)
+  total_services   Int      @default(0)
   error_message    String?
   duration_seconds Float?
   created_at       DateTime @default(now())

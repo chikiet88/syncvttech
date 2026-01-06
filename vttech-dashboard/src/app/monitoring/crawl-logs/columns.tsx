@@ -2,7 +2,7 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Activity, Database, Clock, AlertCircle } from "lucide-react"
+import { Calendar, Activity, Database, Clock, AlertCircle, ShieldCheck, Users, CreditCard, Stethoscope } from "lucide-react"
 
 export type CrawlLogColumn = {
   id: number
@@ -10,6 +10,11 @@ export type CrawlLogColumn = {
   crawl_type: string
   status: string
   records_count: number
+  total_branches: number
+  total_customers: number
+  total_payments: number
+  total_treatments: number
+  total_services: number
   duration_seconds: number | null
   error_message: string | null
 }
@@ -44,22 +49,50 @@ export const columns: ColumnDef<CrawlLogColumn>[] = [
     )
   },
   {
-    accessorKey: "records_count",
-    header: "Bản ghi",
-    cell: ({ row }) => (
-      <div className="flex items-center gap-2 font-mono font-bold">
-        <Database className="w-4 h-4 text-muted-foreground opacity-50" />
-        {row.getValue("records_count")}
-      </div>
-    )
+    accessorKey: "stats",
+    header: "Thống kê đồng bộ",
+    cell: ({ row }) => {
+      const log = row.original;
+      return (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+          <div className="flex items-center gap-1.5 font-bold">
+            <ShieldCheck className="w-3 h-3 text-blue-500" />
+            <span className="text-muted-foreground min-w-[50px]">Chi nhánh:</span>
+            <span className="text-blue-600">{log.total_branches || 0}</span>
+          </div>
+          <div className="flex items-center gap-1.5 font-bold">
+            <Users className="w-3 h-3 text-emerald-500" />
+            <span className="text-muted-foreground min-w-[50px]">Khách hàng:</span>
+            <span className="text-emerald-600">{log.total_customers || 0}</span>
+          </div>
+          <div className="flex items-center gap-1.5 font-bold">
+            <CreditCard className="w-3 h-3 text-orange-500" />
+            <span className="text-muted-foreground min-w-[50px]">Thanh toán:</span>
+            <span className="text-orange-600">{log.total_payments || 0}</span>
+          </div>
+          <div className="flex items-center gap-1.5 font-bold">
+            <Stethoscope className="w-3 h-3 text-rose-500" />
+            <span className="text-muted-foreground min-w-[50px]">Điều trị:</span>
+            <span className="text-rose-600">{log.total_treatments || 0}</span>
+          </div>
+          <div className="flex items-center gap-1.5 font-bold col-span-2">
+            <Database className="w-3 h-3 text-indigo-500" />
+            <span className="text-muted-foreground min-w-[50px]">Dịch vụ:</span>
+            <span className="text-indigo-600">{log.total_services || 0}</span>
+          </div>
+        </div>
+      )
+    }
   },
   {
     accessorKey: "duration_seconds",
     header: "Thời lượng",
     cell: ({ row }) => (
-      <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-        <Clock className="w-4 h-4" />
-        {(row.getValue("duration_seconds") as number | null)?.toFixed(2) || "0.00"}s
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+          <Clock className="w-4 h-4" />
+          {(row.getValue("duration_seconds") as number | null)?.toFixed(2) || "0.00"}s
+        </div>
       </div>
     )
   },

@@ -37,6 +37,11 @@ export declare class SyncService {
         crawl_type: string;
         status: string;
         records_count: number;
+        total_branches: number;
+        total_customers: number;
+        total_payments: number;
+        total_treatments: number;
+        total_services: number;
         error_message: string | null;
         duration_seconds: number | null;
         created_at: Date;

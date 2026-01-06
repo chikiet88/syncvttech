@@ -93,49 +93,34 @@ This document lists all VTTech API endpoints utilized by the NestJS synchronizat
 
 ## 📊 3. Daily Activity Sync
 
-### 3.1 Revenue Summary (LoadDataTotal)
-- **Method:** `POST` (Handler)
-- **Endpoint:** `/Customer/ListCustomer/?handler=LoadDataTotal`
-- **Payload:**
-```js
-{
-  "dateFrom": "YYYY-MM-DD 00:00:00",
-  "dateTo": "YYYY-MM-DD 23:59:59",
-  "branchID": "0" // or specific ID
-}
-```
-- **Response Structure:**
-```json
-[{
-  "Paid": 15000000,
-  "CustomerCount": 10,
-  "BranchName": "..."
-}]
-```
-
-### 3.2 Customer Discovery (LoadData)
+### 3.1 Customer Discovery & Activity (LoadData)
 - **Method:** `POST` (Handler)
 - **Endpoint:** `/Customer/ListCustomer/?handler=LoadData`
+- **Purpose:** Primary source for discovering modified customers and calculating revenue.
 - **Payload:**
-```js
+```json
 {
-  "dateFrom": "...",
-  "dateTo": "...",
-  "branchID": 0,
-  "type": 1, // 1: New Registration, 2: Transaction/Activity, 3: History Update
+  "dateFrom": "2024-01-01 00:00:00",
+  "dateTo": "2024-01-01 23:59:59",
+  "branchID": "1",
+  "type": 1, 
   "start": 0,
   "length": 100
 }
 ```
+- **Types:**
+    - `type=1`: New Registration.
+    - `type=2`: Transaction/Activity (Sales revenue source).
+    - `type=3`: Profile update/History change.
 - **Response Structure (Object with numeric keys or Table):**
 ```json
 {
-  "0": { "ID": 123, "FullName": "...", "Phone": "..." },
+  "0": { "ID": 123, "FullName": "...", "Amount": 500000, "RemainAmount": 0 },
   "1": { "ID": 124, ... }
 }
 ```
 
-### 3.3 Appointments (AppointmentInDay)
+### 3.2 Appointments (AppointmentInDay)
 - **Method:** `POST` (Handler)
 - **Endpoint:** `/Appointment/AppointmentInDay/?handler=LoadData`
 - **Payload:**
@@ -143,7 +128,7 @@ This document lists all VTTech API endpoints utilized by the NestJS synchronizat
 {
   "dateFrom": "...",
   "dateTo": "...",
-  "branchID": 0
+  "branchID": "1"
 }
 ```
 - **Response Structure:** Array-like object containing fields `ID`, `CustomerID`, `CustomerName`, `Phone`, `Status`.

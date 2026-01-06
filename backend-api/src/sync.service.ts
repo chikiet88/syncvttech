@@ -83,7 +83,6 @@ export class SyncService {
     }
 
     const startTime = Date.now();
-    let recordsCount = 0;
 
     // Reset status
     this.syncStatus = {
@@ -132,78 +131,66 @@ export class SyncService {
       }
 
       const syncedIdsInSession = new Set<number>();
+      const totalSteps = days.length * branches.length;
+      let currentStep = 0;
+
+      const sessionStats = {
+        branches: branches.length,
+        customers: 0, // Will be updated at the end from syncedIdsInSession.size
+        payments: 0,
+        treatments: 0,
+        services: 0,
+      };
 
       for (const dateStr of days) {
-        this.addLog(`📅 Đang thực hiện đồng bộ cho ngày: ${dateStr}`);
-        const dailySyncCustomerIds: number[] = [];
+        this.addLog(`📅 --- Bắt đầu đồng bộ ngày: ${dateStr} ---`);
         
-        // Đồng bộ Revenue cho từng chi nhánh
+        // Đồng bộ từng chi nhánh trong ngày
         for (let i = 0; i < branches.length; i++) {
           if (this.syncStatus.shouldStop) break;
+          currentStep++;
           const branch = branches[i];
-          this.syncStatus.message = `[${dateStr}] Đồng bộ doanh thu: ${branch.name}`;
-          this.syncStatus.current = i + 1;
-          this.syncStatus.progress = Math.round(((i + 1) / branches.length) * 100);
           
-          const res = await this.vttechApi.callHandler('/Customer/ListCustomer/', 'LoadDataTotal', {
-            dateFrom: `${dateStr} 00:00:00`,
-            dateTo: `${dateStr} 23:59:59`,
-            branchID: branch.id.toString(),
-          });
+          this.syncStatus.total = totalSteps;
+          this.syncStatus.current = currentStep;
+          this.syncStatus.progress = Math.round((currentStep / totalSteps) * 100);
+          this.syncStatus.message = `[${dateStr}] Đang xử lý: ${branch.name} (${i + 1}/${branches.length})`;
+          
+          // 1. Tìm kiếm khách hàng theo chi nhánh (LoadData types 1, 2, 3)
+          const branchCustomerIds: number[] = [];
+          
+          this.addLog(`  👥 [${branch.name}] Tìm khách hàng mới/giao dịch/lịch sử...`);
+          branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 1, branch.id));
+          branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 2, branch.id));
+          branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 3, branch.id));
 
-          const revenueData = this.ensureArray(res);
+          // 3. Lấy lịch hẹn của chi nhánh
+          const appointmentIds = await this.syncAppointments(dateStr, dateStr, branch.id);
+          branchCustomerIds.push(...appointmentIds);
 
-          if (revenueData.length > 0) {
-            const data = revenueData[0];
-            const paid = parseFloat(data.Paid || data.total_paid || 0);
-            const customers = parseInt(data.CustomerCount || data.customer_count || 0);
-            
-            this.addLog(`  📊 Chi nhánh ${branch.name}: Doanh thu=${paid.toLocaleString()}, Số khách=${customers}`);
-            this.addLog(`     [DEBUG] Data: ${JSON.stringify(data)}`);
-            
-            await this.prisma.dailyRevenue.upsert({
-              where: { date_branch_id: { date: new Date(dateStr), branch_id: branch.id } },
-              update: { branch_name: branch.name, paid, num_customers: customers },
-              create: { date: new Date(dateStr), branch_id: branch.id, branch_name: branch.name, paid, num_customers: customers },
-            });
-            recordsCount++;
+          // 4. Đồng bộ chi tiết cho các khách hàng mới phát hiện trong chi nhánh này
+          if (syncDetails) {
+            const uniqueBranchIds = [...new Set(branchCustomerIds)].filter(id => !syncedIdsInSession.has(id));
+            if (uniqueBranchIds.length > 0) {
+              const oldMsg = this.syncStatus.message;
+              this.syncStatus.message = `[${dateStr}] ${branch.name}: Sync chi tiết ${uniqueBranchIds.length} khách...`;
+              
+              for (const customerId of uniqueBranchIds) {
+                if (this.syncStatus.shouldStop) break;
+                const stats = await this.syncSingleCustomerDetail(customerId);
+                sessionStats.payments += stats.payments;
+                sessionStats.treatments += stats.treatments;
+                sessionStats.services += stats.services;
+                syncedIdsInSession.add(customerId);
+                // Delay 100ms
+                await new Promise(resolve => setTimeout(resolve, 100));
+              }
+              
+              this.syncStatus.message = oldMsg;
+            }
           }
         }
-
-        // Đồng bộ Khách hàng MỚI trong ngày (Type 1: Registration)
-        if (this.syncStatus.shouldStop) break;
-        this.addLog(`[${dateStr}] 👥 Đang lấy danh sách khách hàng mới...`);
-        const newCustomerIds = await this.syncCustomers(dateStr, dateStr, 1);
-        this.addLog(`[${dateStr}] ✅ Đã tìm thấy ${newCustomerIds.length} khách hàng mới`);
-        dailySyncCustomerIds.push(...newCustomerIds);
-
-        // Đồng bộ Khách hàng CÓ GIAO DỊCH trong ngày (Type 2: Activity)
-        this.addLog(`[${dateStr}] 💸 Đang lấy danh sách khách hàng có giao dịch...`);
-        const activeCustomerIds = await this.syncCustomers(dateStr, dateStr, 2);
-        this.addLog(`[${dateStr}] ✅ Đã tìm thấy ${activeCustomerIds.length} khách hàng có giao dịch`);
-        dailySyncCustomerIds.push(...activeCustomerIds);
-
-        // Đồng bộ Khách hàng CÓ LỊCH SỬ/CẬP NHẬT trong ngày (Type 3: History)
-        this.addLog(`[${dateStr}] 📜 Đang lấy danh sách khách hàng có lịch sử/cập nhật...`);
-        const historyCustomerIds = await this.syncCustomers(dateStr, dateStr, 3);
-        this.addLog(`[${dateStr}] ✅ Đã tìm thấy ${historyCustomerIds.length} khách hàng có lịch sử`);
-        dailySyncCustomerIds.push(...historyCustomerIds);
-
-        // Đồng bộ Lịch hẹn trong ngày
-        this.addLog(`[${dateStr}] 📅 Đang lấy lịch hẹn...`);
-        const appointmentCustomerIds = await this.syncAppointments(dateStr, dateStr);
-        this.addLog(`[${dateStr}] ✅ Đã tìm thấy ${appointmentCustomerIds.length} khách hàng từ lịch hẹn`);
-        dailySyncCustomerIds.push(...appointmentCustomerIds);
-
-        // 3. Đồng bộ chi tiết ngay cho các khách hàng được phát hiện trong ngày này
-        if (syncDetails) {
-          const uniqueDailyIds = [...new Set(dailySyncCustomerIds)].filter(id => !syncedIdsInSession.has(id));
-          if (uniqueDailyIds.length > 0) {
-            this.syncStatus.message = `[${dateStr}] Đang đồng bộ chi tiết cho ${uniqueDailyIds.length} khách hàng...`;
-            await this.syncAllCustomerDetails(dateStr, dateStr, uniqueDailyIds);
-            uniqueDailyIds.forEach(id => syncedIdsInSession.add(id));
-          }
-        }
+        this.addLog(`✅ Hoàn thành đồng bộ dữ liệu cho ngày: ${dateStr}`);
       }
 
       if (this.syncStatus.shouldStop) {
@@ -229,29 +216,43 @@ export class SyncService {
       this.syncStatus.message = 'Hoàn thành!';
       this.syncStatus.endTime = Date.now();
       const duration = (this.syncStatus.endTime - startTime) / 1000;
-      this.addLog(`✅ Hoàn thành trong ${duration}s. Cập nhật tổng cộng ${recordsCount} bản ghi doanh thu.`);
+      this.addLog(`✅ Hoàn tất quá trình đồng bộ trong ${duration}s.`);
 
-      await this.prisma.crawlLog.create({
+      sessionStats.customers = syncedIdsInSession.size;
+
+      await (this.prisma.crawlLog as any).create({
         data: {
           crawl_date: new Date(dateFrom),
           crawl_type: 'full_range_sync',
           status: 'success',
-          records_count: recordsCount,
+          records_count: syncedIdsInSession.size,
+          total_branches: sessionStats.branches,
+          total_customers: sessionStats.customers,
+          total_payments: sessionStats.payments,
+          total_treatments: sessionStats.treatments,
+          total_services: sessionStats.services,
           duration_seconds: duration,
         },
       });
+
+      this.addLog(`📊 THỐNG KÊ: ${sessionStats.branches} CN, ${sessionStats.customers} Khách, ${sessionStats.payments} P/S, ${sessionStats.treatments} Trị, ${sessionStats.services} Dịch vụ`);
 
     } catch (error) {
       this.syncStatus.error = error.message;
       this.syncStatus.message = 'Lỗi đồng bộ!';
       this.addLog(`❌ Lỗi: ${error.message}`);
       
-      await this.prisma.crawlLog.create({
+      await (this.prisma.crawlLog as any).create({
         data: {
           crawl_date: new Date(dateFrom),
           crawl_type: 'full_range_sync',
           status: 'error',
           error_message: error.message,
+          total_branches: 0,
+          total_customers: 0,
+          total_payments: 0,
+          total_treatments: 0,
+          total_services: 0,
         },
       });
     } finally {
@@ -263,7 +264,7 @@ export class SyncService {
     return this.syncByRange(dateStr, dateStr);
   }
 
-  private async syncCustomers(dateFrom: string, dateTo: string, type: number = 1): Promise<number[]> {
+  private async syncCustomers(dateFrom: string, dateTo: string, type: number = 1, branchId: number = 0): Promise<number[]> {
     let start = 0;
     const length = 100;
     let hasMore = true;
@@ -274,44 +275,59 @@ export class SyncService {
       const res = await this.vttechApi.callHandler('/Customer/ListCustomer/', 'LoadData', {
         dateFrom: `${dateFrom} 00:00:00`,
         dateTo: `${dateTo} 23:59:59`,
-        branchID: 0,
+        branchID: branchId.toString(),
         type: type, // 1: RegDate, 2: Transaction/Activity Date, 3: History
-        start: start,
-        length: length,
+        BeginID: start,
+        Limit: length,
       });
 
       const dataItems = this.ensureArray(res);
 
       if (dataItems.length > 0) {
-        this.addLog(`  📥 Nhận được ${dataItems.length} khách hàng từ trang ${start/length + 1}`);
+        this.addLog(`  📥 Nhận được ${dataItems.length} khách hàng từ bản ghi thứ ${start}`);
         for (const c of dataItems) {
           try {
-            const id = parseInt(c.ID || c.id);
+            const id = parseInt(c.CustID || c.ID || c.id);
             if (!id) continue;
+
+            const name = c.CustName || c.FullName || c.Name || 'Unknown';
+            const phone = c.Phone || c.Mobile || '';
+            const email = c.Email || c.Email1 || '';
+            const paid = parseFloat(c.TotalPaid || c.Amount || c.TotalAmount || 0);
+            
+            // Tính toán nợ: Nếu có TotalRaise và TotalPaid thì lấy hiệu, ngược lại dùng Debt/RemainAmount
+            let debt = 0;
+            if (c.TotalRaise !== undefined && c.TotalPaid !== undefined) {
+                debt = parseFloat(c.TotalRaise) - parseFloat(c.TotalPaid);
+            } else {
+                debt = parseFloat(c.Debt || c.RemainAmount || 0);
+            }
+
+            const branchIdFromData = parseInt(c.BranchID || c.branch_id) || branchId || null;
 
             await this.prisma.customer.upsert({
               where: { id },
               update: {
-                name: c.FullName || c.Name || 'Unknown',
-                phone: c.Phone || c.Mobile || '',
-                email: c.Email || '',
-                total_spent: parseFloat(c.Amount || c.TotalAmount || 0),
-                total_debt: parseFloat(c.Debt || c.RemainAmount || 0),
-                branch_id: parseInt(c.BranchID || c.branch_id) || null,
+                name,
+                phone,
+                email,
+                total_spent: paid,
+                total_debt: debt,
+                branch_id: branchIdFromData,
               },
               create: {
                 id,
-                name: c.FullName || c.Name || 'Unknown',
-                phone: c.Phone || c.Mobile || '',
-                email: c.Email || '',
-                total_spent: parseFloat(c.Amount || c.TotalAmount || 0),
-                total_debt: parseFloat(c.Debt || c.RemainAmount || 0),
-                branch_id: parseInt(c.BranchID || c.branch_id) || null,
+                name,
+                phone,
+                email,
+                total_spent: paid,
+                total_debt: debt,
+                branch_id: branchIdFromData,
               },
             });
             customerIds.push(id);
           } catch (e) {
-            this.addLog(`❌ [ID: ${c.ID}] Lỗi upsert khách hàng: ${e.message}`);
+            this.addLog(`❌ [ID: ${c.CustID || c.ID}] Lỗi upsert khách hàng: ${e.message}`);
           }
         }
         start += length;
@@ -323,12 +339,12 @@ export class SyncService {
     return customerIds;
   }
 
-  private async syncAppointments(dateFrom: string, dateTo: string): Promise<number[]> {
+  private async syncAppointments(dateFrom: string, dateTo: string, branchId: number = 0): Promise<number[]> {
     const customerIds: number[] = [];
     const res = await this.vttechApi.callHandler('/Appointment/AppointmentInDay/', 'LoadData', {
       dateFrom: `${dateFrom} 00:00:00`,
       dateTo: `${dateTo} 23:59:59`,
-      branchID: 0,
+      branchID: branchId.toString(),
     });
 
     const dataItems = this.ensureArray(res);
@@ -576,127 +592,279 @@ export class SyncService {
     });
   }
 
-  private async syncSingleCustomerDetail(customerId: number) {
-    this.addLog(`🔍 [ID: ${customerId}] Đang đồng bộ chi tiết...`);
+  private async syncSingleCustomerDetail(customerId: number): Promise<{ payments: number, treatments: number, services: number }> {
+    this.addLog(`🔍 [ID: ${customerId}] 🚀 Bắt đầu Full Sync chi tiết...`);
+    const stats = { payments: 0, treatments: 0, services: 0 };
 
-    // 0. Update Basic Payment Info (PRICE_DISCOUNTED, PAID, etc.)
-    const payInfo = await this.vttechApi.callHandler('/Customer/MainCustomer/', 'LoadPaymentInfo', { CustomerID: customerId });
-    const payInfoItems = this.ensureArray(payInfo);
-    if (payInfoItems.length > 0) {
-      const info = payInfoItems[0];
-      await this.prisma.customer.update({
-        where: { id: customerId },
-        data: {
-          total_spent: parseFloat(info.PAID || info.Paid || 0),
-          total_debt: parseFloat(info.PRICE_DISCOUNTED || 0) - parseFloat(info.PAID || info.Paid || 0),
-        }
-      });
+    // 0. Update Basic Payment Info
+    try {
+      const payInfo = await this.vttechApi.callHandler('/Customer/MainCustomer/', 'LoadPaymentInfo', { CustomerID: customerId });
+      const payInfoItems = this.ensureArray(payInfo);
+      if (payInfoItems.length > 0) {
+        const info = payInfoItems[0];
+        await this.prisma.customer.update({
+          where: { id: customerId },
+          data: {
+            total_spent: parseFloat(info.PAID || info.Paid || 0) || 0,
+            total_debt: (parseFloat(info.PRICE_DISCOUNTED || 0) || 0) - (parseFloat(info.PAID || info.Paid || 0) || 0),
+          }
+        });
+        this.addLog(`   ✅ [ID: ${customerId}] Đã cập nhật Doanh thu & Công nợ`);
+      }
+    } catch (e) {
+      this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadPaymentInfo: ${e.message}`);
     }
 
     // 1. Services Tab
-    const services = await this.vttechApi.callHandler('/Customer/Service/TabList/TabList_Service/', 'LoadataTab', { CustomerID: customerId });
-    if (services && services.Table) {
-      for (const s of services.Table) {
-        try {
+    try {
+      const services = await this.vttechApi.callHandler('/Customer/Service/TabList/TabList_Service/', 'LoadataTab', { CustomerID: customerId });
+      const items = this.ensureArray(services);
+      if (items.length > 0) {
+        stats.services = items.length;
+        for (const s of items) {
+          const sId = parseInt(s.ID || s.id);
+          if (!sId) continue;
+          
+          const price = parseFloat(s.Price || 0) || 0;
+          const qty = parseInt(s.Quantity || 1) || 1;
+          const total = parseFloat(s.Total || 0) || 0;
+
           await this.prisma.customerServiceTab.upsert({
-            where: { customer_id_service_id: { customer_id: customerId, service_id: parseInt(s.ID) } },
-            update: { service_name: s.ServiceName, quantity: parseInt(s.Quantity), price: parseFloat(s.Price), total: parseFloat(s.Total), status: s.StatusName },
-            create: { customer_id: customerId, service_id: parseInt(s.ID), service_name: s.ServiceName, quantity: parseInt(s.Quantity), price: parseFloat(s.Price), total: parseFloat(s.Total), status: s.StatusName }
+            where: { customer_id_service_id: { customer_id: customerId, service_id: sId } },
+            update: { 
+              service_name: s.ServiceName || '', 
+              quantity: qty, 
+              price: price, 
+              total: total, 
+              status: s.StatusName || '' 
+            },
+            create: { 
+              customer: { connect: { id: customerId } },
+              service_id: sId, 
+              service_name: s.ServiceName || '', 
+              quantity: qty, 
+              price: price, 
+              total: total, 
+              status: s.StatusName || '' 
+            }
           });
-        } catch (e) {}
+        }
+        this.addLog(`   ✅ [ID: ${customerId}] Đã đồng bộ ${items.length} Dịch vụ đang sử dụng`);
       }
+    } catch (e) {
+      this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadataTab: ${e.message}`);
     }
 
     // 2. Payments History
-    const payments = await this.vttechApi.callHandler('/Customer/Payment/PaymentList/PaymentList_Service/', 'LoadataPayment', { CustomerID: customerId });
-    const paymentItems = this.ensureArray(payments);
-    for (const p of paymentItems) {
-      try {
-        await this.prisma.customerPayment.upsert({
-          where: { customer_id_payment_id: { customer_id: customerId, payment_id: parseInt(p.ID) } },
-          update: { amount: parseFloat(p.Amount), payment_date: p.Date ? new Date(p.Date) : null, payment_method: p.MethodName, note: p.Note },
-          create: { customer_id: customerId, payment_id: parseInt(p.ID), amount: parseFloat(p.Amount), payment_date: p.Date ? new Date(p.Date) : null, payment_method: p.MethodName, note: p.Note }
-        });
-      } catch (e) {}
+    try {
+      const payments = await this.vttechApi.callHandler('/Customer/Payment/PaymentList/PaymentList_Service/', 'LoadataPayment', { CustomerID: customerId });
+      const items = this.ensureArray(payments);
+      if (items.length > 0) {
+        stats.payments = items.length;
+        for (const p of items) {
+          const pId = parseInt(p.ID || p.id);
+          if (!pId) continue;
+
+          await this.prisma.customerPayment.upsert({
+            where: { customer_id_payment_id: { customer_id: customerId, payment_id: pId } },
+            update: { amount: parseFloat(p.Amount || 0) || 0, payment_date: p.Date ? new Date(p.Date) : null, payment_method: p.MethodName || '', note: p.Note || '' },
+            create: { 
+              customer: { connect: { id: customerId } },
+              payment_id: pId, 
+              amount: parseFloat(p.Amount || 0) || 0, 
+              payment_date: p.Date ? new Date(p.Date) : null, 
+              payment_method: p.MethodName || '', 
+              note: p.Note || '' 
+            }
+          });
+        }
+        this.addLog(`   ✅ [ID: ${customerId}] Đã đồng bộ ${items.length} Lịch sử thanh toán`);
+      }
+    } catch (e) {
+      this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadataPayment: ${e.message}`);
     }
 
     // 3. Treatment
-    const treatments = await this.vttechApi.callHandler('/Customer/Treatment/TreatmentList/TreatmentList_Service/', 'LoadataTreatment', { CustomerID: customerId });
-    const treatmentItems = Array.isArray(treatments) ? treatments : (treatments?.Table || []);
-    for (const t of treatmentItems) {
-      try {
-        await this.prisma.treatment.upsert({
-          where: { id: parseInt(t.ID) },
-          update: { customer_id: customerId, customer_name: t.CustomerName, service_name: t.ServiceName, employee_name: t.EmployeeName, treatment_date: t.Date ? new Date(t.Date) : null, amount: parseFloat(t.Amount || 0) },
-          create: { id: parseInt(t.ID), customer_id: customerId, customer_name: t.CustomerName, service_name: t.ServiceName, employee_name: t.EmployeeName, treatment_date: t.Date ? new Date(t.Date) : null, amount: parseFloat(t.Amount || 0) }
-        });
-      } catch (e) {}
+    try {
+      const treatments = await this.vttechApi.callHandler('/Customer/Treatment/TreatmentList/TreatmentList_Service/', 'LoadataTreatment', { CustomerID: customerId });
+      const items = this.ensureArray(treatments);
+      if (items.length > 0) {
+        stats.treatments = items.length;
+        for (const t of items) {
+          const tId = parseInt(t.ID || t.id);
+          if (!tId) continue;
+
+          await this.prisma.treatment.upsert({
+            where: { id: tId },
+            update: { 
+              customer: { connect: { id: customerId } }, 
+              customer_name: t.CustomerName || '', 
+              service_name: t.ServiceName || '', 
+              employee_name: t.EmployeeName || '', 
+              treatment_date: t.Date ? new Date(t.Date) : null, 
+              amount: parseFloat(t.Amount || 0) || 0 
+            },
+            create: { 
+              id: tId, 
+              customer: { connect: { id: customerId } }, 
+              customer_name: t.CustomerName || '', 
+              service_name: t.ServiceName || '', 
+              employee_name: t.EmployeeName || '', 
+              treatment_date: t.Date ? new Date(t.Date) : null, 
+              amount: parseFloat(t.Amount || 0) || 0 
+            }
+          });
+        }
+        this.addLog(`   ✅ [ID: ${customerId}] Đã đồng bộ ${items.length} Lần điều trị`);
+      }
+    } catch (e) {
+      this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadataTreatment: ${e.message}`);
     }
 
+    // 4. Care History ... (omitted for brevity in thoughts but included in replacement)
+    // skipping full implementation of care history/etc as it's already there, just need to ensure the return type is correct.
+
     // 4. Care History
-    const history = await this.vttechApi.callHandler('/Customer/History/HistoryList_Care/', 'LoadataHistory', { CustomerID: customerId });
-    const historyItems = Array.isArray(history) ? history : (history?.Table || []);
-    for (const h of historyItems) {
-      try {
-        await this.prisma.customerCareHistory.upsert({
-          where: { customer_id_history_id: { customer_id: customerId, history_id: parseInt(h.ID) } },
-          update: { action_type: h.TypeName, action_date: h.Date ? new Date(h.Date) : null, employee_name: h.EmployeeName, note: h.Content },
-          create: { customer_id: customerId, history_id: parseInt(h.ID), action_type: h.TypeName, action_date: h.Date ? new Date(h.Date) : null, employee_name: h.EmployeeName, note: h.Content }
-        });
-      } catch (e) {}
+    try {
+      const history = await this.vttechApi.callHandler('/Customer/History/HistoryList_Care/', 'LoadataHistory', { CustomerID: customerId });
+      const items = this.ensureArray(history);
+      if (items.length > 0) {
+        for (const h of items) {
+          const hId = parseInt(h.ID || h.id);
+          if (!hId) continue;
+
+          await this.prisma.customerCareHistory.upsert({
+            where: { customer_id_history_id: { customer_id: customerId, history_id: hId } },
+            update: { action_type: h.TypeName || '', action_date: h.Date ? new Date(h.Date) : null, employee_name: h.EmployeeName || '', note: h.Content || '' },
+            create: { 
+              customer: { connect: { id: customerId } },
+              history_id: hId, 
+              action_type: h.TypeName || '', 
+              action_date: h.Date ? new Date(h.Date) : null, 
+              employee_name: h.EmployeeName || '', 
+              note: h.Content || '' 
+            }
+          });
+        }
+        this.addLog(`   ✅ [ID: ${customerId}] Đã đồng bộ ${items.length} Lịch sử chăm sóc`);
+      }
+    } catch (e) {
+      this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadataHistory: ${e.message}`);
     }
 
     // 5. Installments
-    const installments = await this.vttechApi.callHandler('/Customer/Installment/InstallmentList/', 'LoadDetail', { CustomerID: customerId });
-    const installmentItems = Array.isArray(installments) ? installments : (installments?.Table || []);
-    for (const i of installmentItems) {
-      try {
-        await this.prisma.customerInstallment.upsert({
-          where: { customer_id_installment_id: { customer_id: customerId, installment_id: parseInt(i.ID) } },
-          update: { total_amount: parseFloat(i.TotalAmount), paid_amount: parseFloat(i.PaidAmount), remain_amount: parseFloat(i.RemainAmount), created_at: i.Date ? new Date(i.Date) : null, note: i.Note },
-          create: { customer_id: customerId, installment_id: parseInt(i.ID), total_amount: parseFloat(i.TotalAmount), paid_amount: parseFloat(i.PaidAmount), remain_amount: parseFloat(i.RemainAmount), created_at: i.Date ? new Date(i.Date) : null, note: i.Note }
-        });
-      } catch (e) {}
+    try {
+      const installments = await this.vttechApi.callHandler('/Customer/Installment/InstallmentList/', 'LoadDetail', { CustomerID: customerId });
+      const items = this.ensureArray(installments);
+      if (items.length > 0) {
+        for (const i of items) {
+          const insId = parseInt(i.ID || i.id);
+          if (!insId) continue;
+
+          await this.prisma.customerInstallment.upsert({
+            where: { customer_id_installment_id: { customer_id: customerId, installment_id: insId } },
+            update: { total_amount: parseFloat(i.TotalAmount || 0) || 0, paid_amount: parseFloat(i.PaidAmount || 0) || 0, remain_amount: parseFloat(i.RemainAmount || 0) || 0, created_at: i.Date ? new Date(i.Date) : null, note: i.Note || '' },
+            create: { 
+              customer: { connect: { id: customerId } },
+              installment_id: insId, 
+              total_amount: parseFloat(i.TotalAmount || 0) || 0, 
+              paid_amount: parseFloat(i.PaidAmount || 0) || 0, 
+              remain_amount: parseFloat(i.RemainAmount || 0) || 0, 
+              created_at: i.Date ? new Date(i.Date) : null, 
+              note: i.Note || '' 
+            }
+          });
+        }
+        this.addLog(`   ✅ [ID: ${customerId}] Đã đồng bộ ${items.length} Hợp đồng trả góp`);
+      }
+    } catch (e) {
+      this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadDetail (Installment): ${e.message}`);
     }
 
     // 6. Complaints
-    const complaints = await this.vttechApi.callHandler('/Customer/ComplaintList/', 'Loadata', { CustomerID: customerId });
-    const complaintItems = Array.isArray(complaints) ? complaints : (complaints?.Table || []);
-    for (const c of complaintItems) {
-      try {
-        await this.prisma.customerComplaint.upsert({
-          where: { customer_id_complaint_id: { customer_id: customerId, complaint_id: parseInt(c.ID) } },
-          update: { content: c.Content, status_name: c.StatusName, created_at: c.Date ? new Date(c.Date) : null },
-          create: { customer_id: customerId, complaint_id: parseInt(c.ID), content: c.Content, status_name: c.StatusName, created_at: c.Date ? new Date(c.Date) : null }
-        });
-      } catch (e) {}
+    try {
+      const complaints = await this.vttechApi.callHandler('/Customer/ComplaintList/', 'Loadata', { CustomerID: customerId });
+      const items = this.ensureArray(complaints);
+      if (items.length > 0) {
+        for (const c of items) {
+          const compId = parseInt(c.ID || c.id);
+          if (!compId) continue;
+
+          await this.prisma.customerComplaint.upsert({
+            where: { customer_id_complaint_id: { customer_id: customerId, complaint_id: compId } },
+            update: { content: c.Content || '', status_name: c.StatusName || '', created_at: c.Date ? new Date(c.Date) : null },
+            create: { 
+              customer: { connect: { id: customerId } },
+              complaint_id: compId, 
+              content: c.Content || '', 
+              status_name: c.StatusName || '', 
+              created_at: c.Date ? new Date(c.Date) : null 
+            }
+          });
+        }
+        this.addLog(`   ✅ [ID: ${customerId}] Đã đồng bộ ${items.length} Khiếu nại`);
+      }
+    } catch (e) {
+      this.addLog(`   ❌ [ID: ${customerId}] Lỗi Loadata (Complaint): ${e.message}`);
     }
 
     // 7. Treatment Plans
-    const plans = await this.vttechApi.callHandler('/Customer/Service/TabList/TabList_Service/', 'LoadataTab_Plan', { CustomerID: customerId });
-    const planItems = Array.isArray(plans) ? plans : (plans?.Table || []);
-    for (const p of planItems) {
-      try {
-        await this.prisma.customerTreatmentPlan.upsert({
-          where: { customer_id_plan_id: { customer_id: customerId, plan_id: parseInt(p.ID) } },
-          update: { service_name: p.ServiceName, doctor_name: p.DoctorName, created_at: p.Date ? new Date(p.Date) : null, note: p.Note },
-          create: { customer_id: customerId, plan_id: parseInt(p.ID), service_name: p.ServiceName, doctor_name: p.DoctorName, created_at: p.Date ? new Date(p.Date) : null, note: p.Note }
-        });
-      } catch (e) {}
+    try {
+      const plans = await this.vttechApi.callHandler('/Customer/Service/TabList/TabList_Service/', 'LoadataTab_Plan', { CustomerID: customerId });
+      const items = this.ensureArray(plans);
+      if (items.length > 0) {
+        for (const p of items) {
+          const pId = parseInt(p.ID || p.id);
+          if (!pId) continue;
+
+          await this.prisma.customerTreatmentPlan.upsert({
+            where: { customer_id_plan_id: { customer_id: customerId, plan_id: pId } },
+            update: { service_name: p.ServiceName || '', doctor_name: p.DoctorName || '', created_at: p.Date ? new Date(p.Date) : null, note: p.Note || '' },
+            create: { 
+              customer: { connect: { id: customerId } },
+              plan_id: pId, 
+              service_name: p.ServiceName || '', 
+              doctor_name: p.DoctorName || '', 
+              created_at: p.Date ? new Date(p.Date) : null, 
+              note: p.Note || '' 
+            }
+          });
+        }
+        this.addLog(`   ✅ [ID: ${customerId}] Đã đồng bộ ${items.length} Phác đồ điều trị`);
+      }
+    } catch (e) {
+      this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadataTab_Plan: ${e.message}`);
     }
 
     // 8. Change History
-    const changeHistory = await this.vttechApi.callHandler('/Customer/MainCustomer/', 'LoadataTab_History_Change', { CustomerID: customerId });
-    const changeItems = this.ensureArray(changeHistory);
-    for (const c of changeItems) {
-      try {
-        await this.prisma.customerChangeHistory.upsert({
-          where: { customer_id_history_id: { customer_id: customerId, history_id: parseInt(c.ID) } },
-          update: { content: c.Content, employee_name: c.EmployeeName, action_date: c.Date ? new Date(c.Date) : null },
-          create: { customer_id: customerId, history_id: parseInt(c.ID), content: c.Content, employee_name: c.EmployeeName, action_date: c.Date ? new Date(c.Date) : null }
-        });
-      } catch (e) {}
+    try {
+      const changeHistory = await this.vttechApi.callHandler('/Customer/MainCustomer/', 'LoadataTab_History_Change', { CustomerID: customerId });
+      const items = this.ensureArray(changeHistory);
+      if (items.length > 0) {
+        for (const c of items) {
+          const hId = parseInt(c.ID || c.id || c.CustID);
+          if (!hId) continue;
+
+          await (this.prisma as any).customerChangeHistory.upsert({
+            where: { customer_id_history_id: { customer_id: customerId, history_id: hId } },
+            update: { content: c.Content || '', employee_name: c.EmployeeName || '', action_date: c.Date ? new Date(c.Date) : null },
+            create: { 
+              customer: { connect: { id: customerId } },
+              history_id: hId, 
+              content: c.Content || '', 
+              employee_name: c.EmployeeName || '', 
+              action_date: c.Date ? new Date(c.Date) : null 
+            }
+          });
+        }
+        this.addLog(`   ✅ [ID: ${customerId}] Đã đồng bộ ${items.length} Lịch sử thay đổi hồ sơ`);
+      }
+    } catch (e) {
+      this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadataTab_History_Change: ${e.message}`);
     }
+    
+    this.addLog(`✅ [ID: ${customerId}] Kết thúc Full Sync.`);
+    return stats;
   }
 
   async getLogs(limit: number = 100) {
