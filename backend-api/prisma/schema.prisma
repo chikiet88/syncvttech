@@ -226,8 +226,30 @@ model Customer {
   service_tabs    CustomerServiceTab[]
   care_history    CustomerCareHistory[]
   change_history  CustomerChangeHistory[]
+  cards           CustomerCard[]
+  prescriptions   CustomerPrescription[]
+  image_folders   CustomerImageFolder[]
+  status_history  CustomerStatusHistory[]
 
   @@map("customers")
+}
+
+model CustomerStatusHistory {
+  id                 Int       @id @default(autoincrement())
+  customer_id        Int
+  history_id         Int?      // ID from Table1
+  content            String?
+  master_status_name String?
+  detail_status_name String?
+  color_code         String?
+  employee_name      String?
+  created_at         DateTime?
+  synced_at          DateTime  @default(now())
+
+  customer Customer @relation(fields: [customer_id], references: [id])
+
+  @@unique([customer_id, history_id])
+  @@map("customer_status_history")
 }
 
 model DailyCustomer {
@@ -433,6 +455,93 @@ model CustomerChangeHistory {
   @@unique([customer_id, history_id])
   @@map("customer_change_history")
 }
+
+model CustomerCard {
+  id              Int       @id @default(autoincrement())
+  customer_id     Int
+  card_id         Int?      // ID from VTTech
+  code            String?
+  card_name       String?
+  price_root      Float     @default(0)
+  price_discounted Float    @default(0)
+  price_use       Float     @default(0)
+  amount_using    Float     @default(0)
+  total_paid      Float     @default(0)
+  quantity        Int       @default(1)
+  note            String?
+  expired_date    DateTime?
+  created_at      DateTime?
+  synced_at       DateTime  @default(now())
+
+  customer Customer @relation(fields: [customer_id], references: [id])
+  logs     CustomerCardLog[]
+
+  @@unique([customer_id, card_id])
+  @@map("customer_cards")
+}
+
+model CustomerCardLog {
+  id           Int      @id @default(autoincrement())
+  card_id      Int      // Internal ID of CustomerCard
+  service_id   Int?
+  amount       Float    @default(0)
+  is_plus      Int      @default(0)
+  reason_name  String?
+  note         String?
+  created_at   DateTime?
+  synced_at    DateTime @default(now())
+
+  card CustomerCard @relation(fields: [card_id], references: [id])
+
+  @@map("customer_card_logs")
+}
+
+model CustomerPrescription {
+  id              Int       @id @default(autoincrement())
+  customer_id     Int
+  prescription_id Int?      // ID from VTTech
+  medicine_name   String?
+  quantity        Int       @default(1)
+  unit_name       String?
+  dosage          String?
+  created_at      DateTime?
+  synced_at       DateTime  @default(now())
+
+  customer Customer @relation(fields: [customer_id], references: [id])
+
+  @@unique([customer_id, prescription_id])
+  @@map("customer_prescriptions")
+}
+
+model CustomerImageFolder {
+  id           Int      @id @default(autoincrement())
+  customer_id  Int
+  folder_id    String?  // ID or Hash from VTTech
+  folder_name  String?
+  created_at   DateTime?
+  synced_at    DateTime @default(now())
+
+  customer Customer @relation(fields: [customer_id], references: [id])
+  images   CustomerImage[]
+
+  @@unique([customer_id, folder_id])
+  @@map("customer_image_folders")
+}
+
+model CustomerImage {
+  id           Int      @id @default(autoincrement())
+  folder_id    Int
+  real_name    String?
+  feature_image String?
+  cloud_id     String?
+  created_at   DateTime?
+  synced_at    DateTime @default(now())
+
+  folder CustomerImageFolder @relation(fields: [folder_id], references: [id])
+
+  @@map("customer_images")
+}
+
 
 model MarketingTicketExtension {
   id        Int      @id

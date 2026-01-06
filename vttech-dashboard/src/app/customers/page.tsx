@@ -72,10 +72,12 @@ export default async function CustomersPage(props: {
             payments: true,
             treatments: true,
             service_tabs: true,
+            cards: true,
+            prescriptions: true,
           }
         }
-      }
-    }),
+      } as any
+    } as any),
     prisma.customer.count({ where })
   ])
 
@@ -95,6 +97,8 @@ export default async function CustomersPage(props: {
     payment_count: item._count?.payments || 0,
     treatment_count: item._count?.treatments || 0,
     service_tab_count: item._count?.service_tabs || 0,
+    card_count: item._count?.cards || 0,
+    prescription_count: item._count?.prescriptions || 0,
   }))
 
   return (

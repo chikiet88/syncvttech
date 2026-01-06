@@ -3,7 +3,7 @@
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Phone, Mail, Landmark, Wallet, MapPin, Calendar, CreditCard, Stethoscope, ConciergeBell, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Phone, Mail, Landmark, Wallet, MapPin, Calendar, CreditCard, Stethoscope, ConciergeBell, ArrowUpDown, ArrowUp, ArrowDown, Pill } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
@@ -22,6 +22,8 @@ export type CustomerColumn = {
   payment_count: number
   treatment_count: number
   service_tab_count: number
+  card_count: number
+  prescription_count: number
 }
 
 const SortableHeader = ({ title, sortKey }: { title: string, sortKey: string }) => {
@@ -164,6 +166,26 @@ export const columns: ColumnDef<CustomerColumn>[] = [
       <Badge variant="outline" className="rounded-xl bg-emerald-500/10 text-emerald-600 border-none font-bold gap-1">
         <ConciergeBell className="w-3 h-3" />
         {row.getValue("service_tab_count")}
+      </Badge>
+    )
+  },
+  {
+    accessorKey: "card_count",
+    header: "Thẻ",
+    cell: ({ row }) => (
+      <Badge variant="outline" className="rounded-xl bg-blue-500/10 text-blue-600 border-none font-bold gap-1">
+        <CreditCard className="w-3 h-3" />
+        {row.getValue("card_count")}
+      </Badge>
+    )
+  },
+  {
+    accessorKey: "prescription_count",
+    header: "Kê đơn",
+    cell: ({ row }) => (
+      <Badge variant="outline" className="rounded-xl bg-red-500/10 text-red-600 border-none font-bold gap-1">
+        <Pill className="w-3 h-3" />
+        {row.getValue("prescription_count")}
       </Badge>
     )
   },

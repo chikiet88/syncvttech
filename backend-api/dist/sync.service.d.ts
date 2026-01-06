@@ -30,6 +30,13 @@ export declare class SyncService {
     private syncAppointments;
     private syncAllCustomerDetails;
     private syncMasterData;
+    private syncCustomerStatus;
+    private syncCustomerGeneralInfo;
+    private syncCustomerCards;
+    private syncCustomerMedicine;
+    private syncCustomerImages;
+    private syncCustomerPayments;
+    private syncCustomerSchedules;
     private syncSingleCustomerDetail;
     getLogs(limit?: number): Promise<{
         status: string;

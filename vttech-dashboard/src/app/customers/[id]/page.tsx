@@ -56,6 +56,20 @@ export default async function CustomerDetailPage(props: {
       complaints: {
         orderBy: { created_at: "desc" },
         take: 20
+      },
+      cards: {
+        include: { logs: true },
+        orderBy: { created_at: "desc" }
+      },
+      prescriptions: {
+        orderBy: { created_at: "desc" }
+      },
+      image_folders: {
+        include: { images: true },
+        orderBy: { created_at: "desc" }
+      },
+      status_history: {
+        orderBy: { created_at: "desc" }
       }
     }
   })
@@ -84,10 +98,10 @@ export default async function CustomerDetailPage(props: {
               </Badge>
             </div>
             <div className="flex items-center gap-3 text-xs font-medium text-slate-500">
-              <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {customer.branch?.name || "Chi nhánh chung"}</span>
-              {customer.membership && (
+              <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {(customer as any).branch?.name || "Chi nhánh chung"}</span>
+              {(customer as any).membership && (
                 <span className="flex items-center gap-1 text-purple-600 font-bold uppercase tracking-widest text-[9px]">
-                  • {customer.membership.name}
+                  • {(customer as any).membership.name}
                 </span>
               )}
             </div>

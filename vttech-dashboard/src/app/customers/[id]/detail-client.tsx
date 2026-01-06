@@ -21,7 +21,12 @@ import {
     CreditCard,
     User,
     History,
-    TrendingUp
+    TrendingUp,
+    ShieldCheck,
+    Pill,
+    Image as ImageIcon,
+    Activity,
+    Folder
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
@@ -184,6 +189,104 @@ const careColumns: ColumnDef<any>[] = [
     {
         accessorKey: "employee_name",
         header: "Nhân viên",
+    }
+]
+
+const cardColumns: ColumnDef<any>[] = [
+    {
+        accessorKey: "card_name",
+        header: "Tên thẻ",
+        cell: ({ row }) => <span className="font-black text-blue-600 uppercase flex items-center gap-2">
+            <CreditCard className="w-3 h-3" />
+            {row.getValue("card_name")}
+        </span>
+    },
+    {
+        accessorKey: "price_root",
+        header: "Mệnh giá",
+        cell: ({ row }) => <span className="font-bold">{new Intl.NumberFormat('vi-VN').format(row.getValue("price_root"))} đ</span>
+    },
+    {
+        accessorKey: "price_use",
+        header: "Giá trị sử dụng",
+        cell: ({ row }) => <span className="font-bold text-emerald-600">{new Intl.NumberFormat('vi-VN').format(row.getValue("price_use"))} đ</span>
+    },
+    {
+        accessorKey: "amount_using",
+        header: "Đã sử dụng",
+        cell: ({ row }) => <span className="font-bold text-red-600">{new Intl.NumberFormat('vi-VN').format(row.getValue("amount_using"))} đ</span>
+    },
+    {
+        accessorKey: "expired_date",
+        header: "Hạn dùng",
+        cell: ({ row }) => row.original.expired_date ? new Date(row.original.expired_date).toLocaleDateString("vi-VN") : "Không thời hạn"
+    },
+    {
+        accessorKey: "status",
+        header: "Trạng thái",
+        cell: ({ row }) => {
+            const amountUsing = parseFloat(row.original.amount_using);
+            const priceUse = parseFloat(row.original.price_use);
+            const isFull = amountUsing >= priceUse;
+            return (
+                <Badge variant="outline" className={`rounded-full border-none font-black text-[10px] ${isFull ? "bg-slate-200 text-slate-500" : "bg-emerald-500/10 text-emerald-600"}`}>
+                    {isFull ? "Đã dùng hết" : "Đang sử dụng"}
+                </Badge>
+            )
+        }
+    }
+]
+
+const prescriptionColumns: ColumnDef<any>[] = [
+    {
+        accessorKey: "created_at",
+        header: "Ngày kê đơn",
+        cell: ({ row }) => row.original.created_at ? new Date(row.original.created_at).toLocaleDateString("vi-VN") : "N/A"
+    },
+    {
+        accessorKey: "medicine_name",
+        header: "Tên thuốc",
+        cell: ({ row }) => <span className="font-black text-slate-800">{row.getValue("medicine_name")}</span>
+    },
+    {
+        accessorKey: "quantity",
+        header: "Số lượng",
+        cell: ({ row }) => <span className="font-bold underlineDecoration-black">{row.getValue("quantity")} {row.original.unit_name}</span>
+    },
+    {
+        accessorKey: "dosage",
+        header: "Liều dùng",
+        cell: ({ row }) => <span className="text-xs italic text-blue-600">{row.getValue("dosage")}</span>
+    }
+]
+
+const statusHistoryColumns: ColumnDef<any>[] = [
+    {
+        accessorKey: "created_at",
+        header: "Thời gian",
+        cell: ({ row }) => row.original.created_at ? new Date(row.original.created_at).toLocaleString("vi-VN") : "N/A"
+    },
+    {
+        accessorKey: "master_status_name",
+        header: "Trạng thái",
+        cell: ({ row }) => (
+            <Badge variant="outline" style={{ backgroundColor: row.original.color_code + '20', color: row.original.color_code, borderColor: 'transparent' }} className="font-black rounded-lg">
+                {row.getValue("master_status_name")}
+            </Badge>
+        )
+    },
+    {
+        accessorKey: "detail_status_name",
+        header: "Chi tiết",
+    },
+    {
+        accessorKey: "content",
+        header: "Ghi chú",
+        cell: ({ row }) => <span className="text-xs">{row.getValue("content") || "-"}</span>
+    },
+    {
+        accessorKey: "employee_name",
+        header: "Nhân viên thực hiện",
     }
 ]
 
@@ -415,7 +518,110 @@ export function CustomerDetailContent({ customer }: { customer: any }) {
                 </CardContent>
             </Card>
 
-            {/* 8. Proposal Plans Stack */}
+            {/* 8. Prescription & Health Stack */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Medicine */}
+                <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                    <CardHeader className="p-6 pb-3 bg-slate-50/50">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-red-600 text-white shadow-md shadow-red-600/20">
+                                <Pill className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg font-black tracking-tight">Đơn thuốc & Thuốc</CardTitle>
+                                <CardDescription className="text-xs font-medium">Lịch sử kê đơn và sử dụng thuốc</CardDescription>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-6 pt-3">
+                        <DataTable columns={prescriptionColumns} data={customer.prescriptions} searchKey="medicine_name" />
+                    </CardContent>
+                </Card>
+
+                {/* Cards Management */}
+                <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                    <CardHeader className="p-6 pb-3 bg-slate-50/50">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-blue-600 text-white shadow-md shadow-blue-600/20">
+                                <ShieldCheck className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg font-black tracking-tight">Thẻ Thành viên & Tài khoản</CardTitle>
+                                <CardDescription className="text-xs font-medium">Quản lý số dư và hạn dùng của các loại thẻ</CardDescription>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-6 pt-3">
+                        <DataTable columns={cardColumns} data={customer.cards} searchKey="card_name" />
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* 9. Image Library Stack */}
+            <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                <CardHeader className="p-6 pb-3 bg-slate-50/50">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-teal-600 text-white shadow-md shadow-teal-600/20">
+                            <ImageIcon className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <CardTitle className="text-lg font-black tracking-tight">Thư viện Hình ảnh</CardTitle>
+                            <CardDescription className="text-xs font-medium">Hình ảnh trước/sau và hồ sơ khách hàng</CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-6 pt-3">
+                    {customer.image_folders.length > 0 ? (
+                        <div className="space-y-8">
+                            {customer.image_folders.map((folder: any) => (
+                                <div key={folder.id} className="space-y-4">
+                                    <div className="flex items-center gap-2 border-b border-black/5 pb-2">
+                                        <Folder className="w-4 h-4 text-slate-400" />
+                                        <h4 className="font-black text-slate-800 uppercase tracking-tighter text-sm">{folder.folder_name}</h4>
+                                        <Badge variant="secondary" className="text-[10px] text-muted-foreground">{folder.images.length} ảnh</Badge>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                        {folder.images.map((img: any) => (
+                                            <div key={img.id} className="group relative aspect-square rounded-xl overflow-hidden border border-black/5 bg-slate-100 hover:scale-105 transition-transform cursor-zoom-in">
+                                                <img
+                                                    src={img.feature_image}
+                                                    alt={img.real_name}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                    <span className="text-[10px] text-white font-black uppercase text-center p-2">{img.real_name}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-12 text-muted-foreground italic font-medium">Chưa có hình ảnh nào trong thư viện.</div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* 10. Status History Stack */}
+            <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                <CardHeader className="p-6 pb-3 bg-slate-50/50">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-slate-800 text-white shadow-md shadow-slate-800/20">
+                            <Activity className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <CardTitle className="text-lg font-black tracking-tight">Lịch sử Chuyển trạng thái</CardTitle>
+                            <CardDescription className="text-xs font-medium">Theo dõi sự thay đổi trạng thái khách hàng trong quá trình CSKH</CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-6 pt-3">
+                    <DataTable columns={statusHistoryColumns} data={customer.status_history} searchKey="master_status_name" />
+                </CardContent>
+            </Card>
+
+            {/* 11. Proposal Plans Stack */}
             <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
                 <CardHeader className="p-6 pb-3 bg-slate-50/50">
                     <div className="flex items-center gap-3">
