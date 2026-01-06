@@ -104,6 +104,16 @@ const data = {
         { title: 'Lịch sử', url: '#', icon: History },
       ],
     },
+    {
+      title: 'Tổng đài (PBX)',
+      url: '#',
+      icon: Briefcase,
+      items: [
+        { title: 'Lịch sử Cuộc gọi', url: '/call-center/records', icon: History },
+        { title: 'Nhân viên Tổng đài', url: '/call-center/employees', icon: Users },
+        { title: 'Cấu hình Extension', url: '/call-center/extensions', icon: Settings },
+      ],
+    },
   ],
 }
 

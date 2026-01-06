@@ -1,10 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  experimental: {
-    turbopack: {
-      root: ".",
-    },
+  // @ts-ignore
+  turbopack: {
+    root: "..",
   },
 };
 

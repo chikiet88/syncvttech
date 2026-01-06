@@ -9,7 +9,8 @@ import {
   CheckCircle2, 
   XCircle,
   Clock,
-  ArrowUpRight
+  ArrowUpRight,
+  Phone
 } from 'lucide-react'
 import RevenueChart from '@/components/RevenueChart'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -19,10 +20,11 @@ import { Separator } from '@/components/ui/separator'
 
 // Fetch Stats
 async function getStats() {
-  const [branchCount, customerCount, revenueTotal, lastSync] = await Promise.all([
+  const [branchCount, customerCount, revenueTotal, callCount, lastSync] = await Promise.all([
     prisma.branch.count(),
     prisma.customer.count(),
     prisma.dailyRevenue.aggregate({ _sum: { paid: true } }),
+    prisma.pbxCallRecord.count(),
     prisma.crawlLog.findFirst({ orderBy: { created_at: 'desc' } })
   ])
 
@@ -30,6 +32,7 @@ async function getStats() {
     branchCount,
     customerCount,
     revenueTotal: revenueTotal._sum.paid || 0,
+    callCount,
     lastSync
   }
 }
@@ -88,31 +91,31 @@ export default async function DashboardPage() {
       </header>
 
       {/* Stats Grid */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Tổng Chi nhánh" 
-          value={stats.branchCount} 
-          icon={<MapPin className="w-5 h-5 text-blue-500" />} 
-          description="Cơ sở đang hoạt động"
+      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Hệ thống VTTech"
+          value={`${stats.branchCount} Chi nhánh`}
+          icon={<MapPin className="w-5 h-5 text-blue-500" />}
+          description="Đang hoạt động"
         />
-        <StatCard 
-          title="Khách hàng CRM" 
-          value={stats.customerCount.toLocaleString()} 
-          icon={<Users className="w-5 h-5 text-purple-500" />} 
+        <StatCard
+          title="Khách hàng CRM"
+          value={stats.customerCount.toLocaleString()}
+          icon={<Users className="w-5 h-5 text-purple-500" />}
           description="Hồ sơ đã đăng ký"
         />
-        <StatCard 
-          title="Tổng Doanh thu" 
-          value={stats.revenueTotal.toLocaleString()} 
+        <StatCard
+          title="Tổng Doanh thu"
+          value={stats.revenueTotal.toLocaleString()}
           suffix=" VND"
-          icon={<TrendingUp className="w-5 h-5 text-emerald-500" />} 
+          icon={<TrendingUp className="w-5 h-5 text-emerald-500" />}
           description="Doanh thu tích lũy"
         />
-        <StatCard 
-          title="Trạng thái Dịch vụ" 
-          value={stats.lastSync?.status === 'success' ? 'Ổn định' : 'Có lỗi'} 
-          icon={stats.lastSync?.status === 'success' ? <CheckCircle2 className="w-5 h-5 text-blue-500" /> : <XCircle className="w-5 h-5 text-red-500" />} 
-          description="Kết nối đồng bộ"
+        <StatCard
+          title="Tổng cuộc gọi"
+          value={stats.callCount.toLocaleString()}
+          icon={<Phone className="w-5 h-5 text-orange-500" />}
+          description="Lịch sử từ PBX"
         />
       </section>
 
