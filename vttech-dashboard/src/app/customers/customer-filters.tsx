@@ -37,7 +37,11 @@ export function CustomerFilters() {
 
   const onApply = () => {
     const params = new URLSearchParams(searchParams.toString())
-    
+
+    // Keep q if it exists
+    const q = searchParams.get("q")
+    if (q) params.set("q", q)
+
     if (selectedBranch && selectedBranch !== "all") {
       params.set("branchId", selectedBranch)
     } else {
@@ -55,6 +59,9 @@ export function CustomerFilters() {
     } else {
       params.delete("to")
     }
+
+    // Reset page to 1 on filter
+    params.set("page", "1")
 
     router.push(`/customers?${params.toString()}`)
   }
@@ -103,17 +110,17 @@ export function CustomerFilters() {
       </div>
 
       <div className="flex items-center gap-2 ml-auto">
-        <Button 
-          variant="outline" 
-          size="sm" 
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onReset}
           className="rounded-xl gap-2 hover:bg-slate-100 border-black/5 bg-white/50"
         >
           <X className="w-4 h-4" />
           Đặt lại
         </Button>
-        <Button 
-          size="sm" 
+        <Button
+          size="sm"
           onClick={onApply}
           className="rounded-xl gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
         >

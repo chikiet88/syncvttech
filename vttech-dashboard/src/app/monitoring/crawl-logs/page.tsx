@@ -31,6 +31,11 @@ export default async function CrawlLogsPage() {
     crawl_type: item.crawl_type,
     status: item.status,
     records_count: item.records_count,
+    total_branches: item.total_branches,
+    total_customers: item.total_customers,
+    total_payments: item.total_payments,
+    total_treatments: item.total_treatments,
+    total_services: item.total_services,
     duration_seconds: item.duration_seconds,
     error_message: item.error_message,
   }))

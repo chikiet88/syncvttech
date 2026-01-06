@@ -2,8 +2,10 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
-import { Phone, Mail, Landmark, Wallet, MapPin, Calendar, CreditCard, Stethoscope, ConciergeBell } from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Phone, Mail, Landmark, Wallet, MapPin, Calendar, CreditCard, Stethoscope, ConciergeBell, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
 
 export type CustomerColumn = {
   id: number
@@ -22,6 +24,46 @@ export type CustomerColumn = {
   service_tab_count: number
 }
 
+const SortableHeader = ({ title, sortKey }: { title: string, sortKey: string }) => {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const currentSortBy = searchParams.get("sortBy")
+  const currentSortOrder = searchParams.get("sortOrder")
+
+  const isSorted = currentSortBy === sortKey
+
+  const handleSort = () => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (isSorted) {
+      if (currentSortOrder === "desc") {
+        params.set("sortOrder", "asc")
+      } else {
+        params.delete("sortBy")
+        params.delete("sortOrder")
+      }
+    } else {
+      params.set("sortBy", sortKey)
+      params.set("sortOrder", "desc")
+    }
+    router.push(`?${params.toString()}`)
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      onClick={handleSort}
+      className={`hover:bg-transparent p-0 font-bold uppercase tracking-widest text-[10px] flex items-center gap-1 ${isSorted ? "text-blue-600" : ""}`}
+    >
+      {title}
+      {isSorted ? (
+        currentSortOrder === "desc" ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />
+      ) : (
+        <ArrowUpDown className="w-3 h-3 opacity-30" />
+      )}
+    </Button>
+  )
+}
+
 export const columns: ColumnDef<CustomerColumn>[] = [
   {
     accessorKey: "code",
@@ -30,10 +72,10 @@ export const columns: ColumnDef<CustomerColumn>[] = [
   },
   {
     accessorKey: "name",
-    header: "Khách hàng",
+    header: () => <SortableHeader title="Khách hàng" sortKey="name" />,
     cell: ({ row }) => (
       <div className="flex flex-col gap-0.5">
-        <Link 
+        <Link
           href={`/customers/${row.original.id}`}
           className="font-semibold hover:text-blue-500 transition-colors"
         >
@@ -58,21 +100,21 @@ export const columns: ColumnDef<CustomerColumn>[] = [
   },
   {
     accessorKey: "total_spent",
-    header: "Tổng chi",
+    header: () => <SortableHeader title="Tổng chi" sortKey="total_spent" />,
     cell: ({ row }) => (
       <div className="flex items-center gap-2 font-bold text-emerald-500">
         <Landmark className="w-4 h-4 opacity-50" />
-        {new Intl.NumberFormat('vi-VN').format(row.getValue("total_spent"))} đ
+        {new Intl.NumberFormat('vi-VN').format(Number(row.getValue("total_spent")))} đ
       </div>
     )
   },
   {
     accessorKey: "total_debt",
-    header: "Nợ",
+    header: () => <SortableHeader title="Nợ" sortKey="total_debt" />,
     cell: ({ row }) => (
       <div className="flex items-center gap-2 font-bold text-red-500">
         <Wallet className="w-4 h-4 opacity-50" />
-        {new Intl.NumberFormat('vi-VN').format(row.getValue("total_debt"))} đ
+        {new Intl.NumberFormat('vi-VN').format(Number(row.getValue("total_debt")))} đ
       </div>
     )
   },
@@ -81,7 +123,7 @@ export const columns: ColumnDef<CustomerColumn>[] = [
     header: "Điểm",
     cell: ({ row }) => (
       <Badge variant="outline" className="rounded-full bg-purple-500/10 text-purple-500 border-none font-bold">
-        {row.getValue("point")} đ
+        {row.getValue("point") as number} đ
       </Badge>
     )
   },
@@ -136,3 +178,4 @@ export const columns: ColumnDef<CustomerColumn>[] = [
     }
   },
 ]
+

@@ -147,10 +147,14 @@ let SyncService = SyncService_1 = class SyncService {
                         const uniqueBranchIds = [...new Set(branchCustomerIds)].filter(id => !syncedIdsInSession.has(id));
                         if (uniqueBranchIds.length > 0) {
                             const oldMsg = this.syncStatus.message;
-                            this.syncStatus.message = `[${dateStr}] ${branch.name}: Sync chi tiết ${uniqueBranchIds.length} khách...`;
+                            let detailedStep = 0;
                             for (const customerId of uniqueBranchIds) {
                                 if (this.syncStatus.shouldStop)
                                     break;
+                                detailedStep++;
+                                if (detailedStep % 5 === 0) {
+                                    this.syncStatus.message = `[${dateStr}] ${branch.name}: Sync chi tiết (${detailedStep}/${uniqueBranchIds.length})`;
+                                }
                                 const stats = await this.syncSingleCustomerDetail(customerId);
                                 sessionStats.payments += stats.payments;
                                 sessionStats.treatments += stats.treatments;
@@ -520,11 +524,13 @@ let SyncService = SyncService_1 = class SyncService {
             const payInfoItems = this.ensureArray(payInfo);
             if (payInfoItems.length > 0) {
                 const info = payInfoItems[0];
+                const paid = parseFloat(info.PAID || info.Paid) || 0;
+                const discounted = parseFloat(info.PRICE_DISCOUNTED || info.PriceDiscounted) || 0;
                 await this.prisma.customer.update({
                     where: { id: customerId },
                     data: {
-                        total_spent: parseFloat(info.PAID || info.Paid || 0) || 0,
-                        total_debt: (parseFloat(info.PRICE_DISCOUNTED || 0) || 0) - (parseFloat(info.PAID || info.Paid || 0) || 0),
+                        total_spent: isNaN(paid) ? 0 : paid,
+                        total_debt: (isNaN(discounted) ? 0 : discounted) - (isNaN(paid) ? 0 : paid),
                     }
                 });
                 this.addLog(`   ✅ [ID: ${customerId}] Đã cập nhật Doanh thu & Công nợ`);
@@ -542,9 +548,12 @@ let SyncService = SyncService_1 = class SyncService {
                     const sId = parseInt(s.ID || s.id);
                     if (!sId)
                         continue;
-                    const price = parseFloat(s.Price || 0) || 0;
-                    const qty = parseInt(s.Quantity || 1) || 1;
-                    const total = parseFloat(s.Total || 0) || 0;
+                    const rawPrice = parseFloat(s.Price);
+                    const price = isNaN(rawPrice) ? 0 : rawPrice;
+                    const rawQty = parseInt(s.Quantity);
+                    const qty = isNaN(rawQty) ? 1 : rawQty;
+                    const rawTotal = parseFloat(s.Total);
+                    const total = isNaN(rawTotal) ? 0 : rawTotal;
                     await this.prisma.customerServiceTab.upsert({
                         where: { customer_id_service_id: { customer_id: customerId, service_id: sId } },
                         update: {

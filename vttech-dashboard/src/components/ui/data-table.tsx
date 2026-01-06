@@ -40,17 +40,32 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination"
 
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { useDebouncedCallback } from "use-debounce"
+
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   searchKey: string
+  pageCount?: number
+  currentPage?: number
+  pageSize?: number
+  totalCount?: number
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
   searchKey,
+  pageCount,
+  currentPage,
+  pageSize,
+  totalCount,
 }: DataTableProps<TData, TValue>) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
@@ -65,11 +80,13 @@ export function DataTable<TData, TValue>({
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    getPaginationRowModel: pageCount ? undefined : getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
+    manualPagination: !!pageCount,
+    pageCount: pageCount,
     state: {
       sorting,
       columnFilters,
@@ -78,15 +95,36 @@ export function DataTable<TData, TValue>({
     },
   })
 
+  const handleSearch = useDebouncedCallback((value: string) => {
+    if (pageCount) {
+      // Server-side search via URL
+      const params = new URLSearchParams(searchParams.toString())
+      if (value) {
+        params.set("q", value)
+        params.set("page", "1")
+      } else {
+        params.delete("q")
+      }
+      router.push(`${pathname}?${params.toString()}`)
+    } else {
+      // Client-side search via table state
+      table.getColumn(searchKey)?.setFilterValue(value)
+    }
+  }, 500)
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("page", newPage.toString())
+    router.push(`${pathname}?${params.toString()}`)
+  }
+
   return (
     <div className="w-full space-y-4">
       <div className="flex items-center gap-4">
         <Input
-          placeholder="Tìm kiếm..."
-          value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
-          onChange={(event) =>
-            table.getColumn(searchKey)?.setFilterValue(event.target.value)
-          }
+          placeholder="Tìm kiếm nhanh..."
+          defaultValue={pageCount ? (searchParams.get("q") ?? "") : (table.getColumn(searchKey)?.getFilterValue() as string ?? "")}
+          onChange={(event) => handleSearch(event.target.value)}
           className="max-w-sm glass border-none rounded-xl"
         />
         <DropdownMenu>
@@ -127,9 +165,9 @@ export function DataTable<TData, TValue>({
                       {header.isPlaceholder
                         ? null
                         : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
                     </TableHead>
                   )
                 })}
@@ -169,30 +207,59 @@ export function DataTable<TData, TValue>({
       </div>
       <div className="flex items-center justify-between px-2">
         <div className="text-sm text-muted-foreground">
-          Đã chọn {table.getFilteredSelectedRowModel().rows.length} trên{" "}
-          {table.getFilteredRowModel().rows.length} hàng.
+          {pageCount ? (
+            `Trang ${currentPage} trên ${pageCount} (${totalCount} bản ghi)`
+          ) : (
+            `Đã chọn ${table.getFilteredSelectedRowModel().rows.length} trên ${table.getFilteredRowModel().rows.length} hàng.`
+          )}
         </div>
         <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-            className="glass border-none rounded-xl"
-          >
-            Trước
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-            className="glass border-none rounded-xl"
-          >
-            Tiếp
-          </Button>
+          {pageCount ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage! - 1)}
+                disabled={currentPage === 1}
+                className="glass border-none rounded-xl"
+              >
+                Trước
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage! + 1)}
+                disabled={currentPage === pageCount}
+                className="glass border-none rounded-xl"
+              >
+                Tiếp
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+                className="glass border-none rounded-xl"
+              >
+                Trước
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+                className="glass border-none rounded-xl"
+              >
+                Tiếp
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>
   )
 }
+

@@ -12,8 +12,7 @@ NC='\033[0m' # No Color
 
 # Helper for Prisma commands
 run_prisma() {
-    cd "$PRISMA_DIR" && bunx prisma "$@"
-    cd ..
+    bun prisma "$@" --schema="$PRISMA_DIR/prisma/schema.prisma"
 }
 
 backup_json() {
@@ -181,13 +180,11 @@ while true; do
             ;;
         7)
             echo -e "\n${BLUE}🌐 Starting VTTech Dashboard...${NC}"
-            cd vttech-dashboard && bun dev
-            cd ..
+            (cd vttech-dashboard && bun dev)
             ;;
         8)
             echo -e "\n${BLUE}⚙️  Starting Backend API...${NC}"
-            cd backend-api && bun run start:dev
-            cd ..
+            (cd backend-api && bun run start:dev)
             ;;
         9)
             echo -e "\n${BLUE}🚀 Starting Full Stack...${NC}"

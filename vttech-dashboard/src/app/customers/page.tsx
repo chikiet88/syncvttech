@@ -11,45 +11,73 @@ export default async function CustomersPage(props: {
     branchId?: string
     from?: string
     to?: string
-    name?: string
+    page?: string
+    limit?: string
+    q?: string
+    sortBy?: string
+    sortOrder?: string
   }>
 }) {
   const searchParams = await props.searchParams
-  const { branchId, from, to } = searchParams
+  const { branchId, from, to, q, sortBy, sortOrder } = searchParams
+
+  const page = parseInt(searchParams.page || "1")
+  const limit = parseInt(searchParams.limit || "20")
+  const skip = (page - 1) * limit
 
   const where: any = {}
-  
+
   if (branchId && branchId !== "all") {
     where.branch_id = parseInt(branchId)
   }
 
-  // Default to today if no dates provided
-  const filterFrom = from || new Date().toISOString().split('T')[0]
-  const filterTo = to || new Date().toISOString().split('T')[0]
-
-  where.created_at = {
-    gte: new Date(filterFrom),
-    lte: new Date(new Date(filterTo).setHours(23, 59, 59, 999))
+  // Handle Search
+  if (q) {
+    where.OR = [
+      { name: { contains: q } },
+      { code: { contains: q } },
+      { phone: { contains: q } }
+    ]
   }
 
-  const customers = await prisma.customer.findMany({
-    where,
-    take: 200, // Increased limit for filtered views
-    orderBy: {
-      created_at: "desc"
-    },
-    include: {
-      branch: true,
-      _count: {
-        select: {
-          appointments: true,
-          payments: true,
-          treatments: true,
-          service_tabs: true,
+  // Date Filtering
+  if (from || to) {
+    const filterFrom = from || "2000-01-01"
+    const filterTo = to || new Date().toISOString().split('T')[0]
+    where.created_at = {
+      gte: new Date(filterFrom),
+      lte: new Date(new Date(filterTo).setHours(23, 59, 59, 999))
+    }
+  }
+
+  // Sorting
+  const orderBy: any = {}
+  if (sortBy) {
+    orderBy[sortBy] = sortOrder || "desc"
+  } else {
+    orderBy.created_at = "desc"
+  }
+
+  const [customers, totalCount] = await Promise.all([
+    prisma.customer.findMany({
+      where,
+      take: limit,
+      skip: skip,
+      orderBy,
+      include: {
+        branch: true,
+        _count: {
+          select: {
+            appointments: true,
+            payments: true,
+            treatments: true,
+            service_tabs: true,
+          }
         }
       }
-    }
-  })
+    }),
+    prisma.customer.count({ where })
+  ])
 
   // Format data for the table
   const formattedCustomers: CustomerColumn[] = customers.map((item: any) => ({
@@ -95,15 +123,24 @@ export default async function CustomersPage(props: {
         <CardHeader className="p-8 pb-4">
           <CardTitle>Danh sách Khách hàng</CardTitle>
           <CardDescription className="text-muted-foreground/80">
-            {Object.keys(where).length > 0 
-              ? `Đang hiển thị kết quả lọc (${customers.length} bản ghi)` 
-              : "Hiển thị 200 bản ghi khách hàng gần đây từ cơ sở dữ liệu."}
+            {Object.keys(where).length > 0
+              ? `Đang hiển thị kết quả lọc (${totalCount} bản ghi)`
+              : `Tổng cộng ${totalCount} khách hàng trong hệ thống.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-8 pt-4">
-          <DataTable columns={columns} data={formattedCustomers} searchKey="name" />
+          <DataTable
+            columns={columns}
+            data={formattedCustomers}
+            searchKey="name"
+            pageCount={Math.ceil(totalCount / limit)}
+            currentPage={page}
+            pageSize={limit}
+            totalCount={totalCount}
+          />
         </CardContent>
       </Card>
     </div>
   )
 }
+
