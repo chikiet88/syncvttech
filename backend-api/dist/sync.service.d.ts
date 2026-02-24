@@ -1,3 +1,4 @@
+import { Queue } from 'bullmq';
 import { VttechApiService } from './vttech-api.service';
 import { PrismaService } from './prisma.service';
 import { PbxSyncService } from './pbx-sync.service';
@@ -5,9 +6,10 @@ export declare class SyncService {
     private vttechApi;
     private prisma;
     private pbxSync;
+    private syncQueue;
     private readonly logger;
     private syncStatus;
-    constructor(vttechApi: VttechApiService, prisma: PrismaService, pbxSync: PbxSyncService);
+    constructor(vttechApi: VttechApiService, prisma: PrismaService, pbxSync: PbxSyncService, syncQueue: Queue);
     getSyncStatus(): {
         isSyncing: boolean;
         progress: number;
@@ -23,7 +25,9 @@ export declare class SyncService {
     stopSync(): void;
     private addLog;
     private ensureArray;
+    private parseDate;
     handleDailySync(): Promise<void>;
+    syncRevenue(dateFrom: string, dateTo: string): Promise<void>;
     syncByRange(dateFrom: string, dateTo: string, forceMaster?: boolean, syncPbx?: boolean, syncDetails?: boolean): Promise<void>;
     syncByDate(dateStr: string): Promise<void>;
     private syncCustomers;
@@ -53,4 +57,12 @@ export declare class SyncService {
         total_services: number;
         duration_seconds: number | null;
     }[]>;
+    private generateHash;
+    processQueuedCustomerDetail(customerId: number): Promise<{
+        payments: number;
+        treatments: number;
+        services: number;
+    }>;
+    private mapRevenueItem;
+    processQueuedRevenueDay(date: string, branchId: number): Promise<void>;
 }

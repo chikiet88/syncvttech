@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { DataTable } from "@/components/ui/data-table"
 import { columns, CrawlLogColumn } from "./columns"
 import { pbxColumns, PbxSyncLogColumn } from "./pbx-columns"

@@ -231,4 +231,24 @@ export class VttechApiService {
     if (!this.xsrfToken) await this.getXsrfToken();
     return this.callHandler('/Marketing/TicketGroupList/', 'LoadData', {});
   }
+
+  async getRevenueByBranch(dateFrom: string, dateTo: string, branchId: number) {
+    if (!this.xsrfToken) await this.getXsrfToken();
+    
+    // Format YYYY-MM-DD -> DD-MM-YYYY
+    const formatDate = (s: string) => {
+      const [y, m, d] = s.split('-');
+      return `${d}-${m}-${y}`;
+    };
+
+    return this.callHandler(
+      '/Report/Revenue/Branch/AllBranchGrid/',
+      'LoadataDetailByBranch',
+      {
+        branchID: branchId,
+        dateFrom: formatDate(dateFrom),
+        dateTo: formatDate(dateTo),
+      }
+    );
+  }
 }

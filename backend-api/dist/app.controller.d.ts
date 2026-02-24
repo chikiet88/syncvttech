@@ -13,6 +13,10 @@ export declare class AppController {
         message: string;
         status: string;
     }>;
+    triggerRevenueSync(from?: string, to?: string, date?: string): Promise<{
+        message: string;
+        status: string;
+    }>;
     stopSync(): Promise<{
         message: string;
     }>;
@@ -67,4 +71,17 @@ export declare class AppController {
         error: string | null;
         shouldStop: boolean;
     }>;
+    getBranches(): Promise<{
+        created_at: Date;
+        updated_at: Date;
+        id: number;
+        name: string;
+        is_active: number;
+        code: string | null;
+        email: string | null;
+        phone: string | null;
+        address: string | null;
+        city_id: number | null;
+        district_id: number | null;
+    }[]>;
 }

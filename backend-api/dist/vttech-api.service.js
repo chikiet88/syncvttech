@@ -267,6 +267,19 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
             await this.getXsrfToken();
         return this.callHandler('/Marketing/TicketGroupList/', 'LoadData', {});
     }
+    async getRevenueByBranch(dateFrom, dateTo, branchId) {
+        if (!this.xsrfToken)
+            await this.getXsrfToken();
+        const formatDate = (s) => {
+            const [y, m, d] = s.split('-');
+            return `${d}-${m}-${y}`;
+        };
+        return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'LoadataDetailByBranch', {
+            branchID: branchId,
+            dateFrom: formatDate(dateFrom),
+            dateTo: formatDate(dateTo),
+        });
+    }
 };
 exports.VttechApiService = VttechApiService;
 exports.VttechApiService = VttechApiService = VttechApiService_1 = __decorate([

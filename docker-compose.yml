@@ -1,0 +1,38 @@
+services:
+  apivttech-backend:
+    build:
+      context: .
+      dockerfile: ./backend-api/Dockerfile
+    container_name: apivttech-backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres_password_123@tazagroupnet-db:5432/db_tazagroup_vttech_sync
+      - REDIS_HOST=tazagroupnet-redis
+      - REDIS_PORT=6379
+      - PORT=3001
+      - NODE_ENV=production
+      - VTTECH_USERNAME=ittest123
+      - VTTECH_PASSWORD=ittest123
+      - VTTECH_BASE_URL=https://tmtaza.vttechsolution.com
+    ports:
+      - "21101:3001"
+    networks:
+      - kata-cells-network
+
+  apivttech-dashboard:
+    build:
+      context: .
+      dockerfile: ./vttech-dashboard/Dockerfile
+    container_name: apivttech-dashboard
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres_password_123@tazagroupnet-db:5432/db_tazagroup_vttech_sync
+      - NODE_ENV=production
+    ports:
+      - "21102:3000"
+    networks:
+      - kata-cells-network
+
+networks:
+  kata-cells-network:
+    external: true

@@ -12,18 +12,28 @@ NC='\033[0m' # No Color
 
 # Helper for Prisma commands
 run_prisma() {
-    bun prisma "$@" --schema="$PRISMA_DIR/prisma/schema.prisma"
+    local DB_URL=""
+    if ! getent hosts tazagroupnet-db &> /dev/null; then
+        DB_URL="postgresql://postgres:postgres_password_123@localhost:18103/db_tazagroup_vttech_sync"
+    fi
+
+    if [ -n "$DB_URL" ]; then
+        (cd "$PRISMA_DIR" && export DATABASE_URL="$DB_URL" && bun prisma "$@")
+    else
+        (cd "$PRISMA_DIR" && bun prisma "$@")
+    fi
 }
 
 backup_json() {
     echo -e "\n${BLUE}📦 Loading Backup to JSON...${NC}"
     mkdir -p "$BACKUP_DIR"
     TIMESTAMP=$(date +"%Y-%m-%dT%H-%M-%S")
-    CURRENT_BACKUP_DIR="$BACKUP_DIR/backup-$TIMESTAMP"
+    ABS_BACKUP_DIR=$(realpath "$BACKUP_DIR")
+    CURRENT_BACKUP_DIR="$ABS_BACKUP_DIR/backup-$TIMESTAMP"
     mkdir -p "$CURRENT_BACKUP_DIR"
 
     cat <<EOF > temp_backup.js
-const { PrismaClient } = require("./backend-api/node_modules/@prisma/client");
+const { PrismaClient } = require("@prisma/client");
 const fs = require("fs");
 const path = require("path");
 
@@ -47,7 +57,7 @@ async function main() {
 main().catch(console.error).finally(() => prisma.\$disconnect());
 EOF
 
-    bun temp_backup.js
+    (cd "$PRISMA_DIR" && bun ../temp_backup.js)
     rm temp_backup.js
     echo -e "${GREEN}✅ Backup completed at: $CURRENT_BACKUP_DIR${NC}"
     read -p "Press Enter to return..."
@@ -83,11 +93,11 @@ restore_json() {
         return
     fi
 
-    SELECTED_DIR="$BACKUP_DIR/${BACKUPS[$IDX]}"
+    SELECTED_DIR=$(realpath "$BACKUP_DIR/${BACKUPS[$IDX]}")
     echo -e "\n${YELLOW}🚀 Restoring from: $SELECTED_DIR${NC}"
 
     cat <<EOF > temp_restore.js
-const { PrismaClient } = require("./backend-api/node_modules/@prisma/client");
+const { PrismaClient } = require("@prisma/client");
 const fs = require("fs");
 const path = require("path");
 
@@ -124,7 +134,7 @@ async function main() {
 main().catch(console.error).finally(() => prisma.\$disconnect());
 EOF
 
-    bun temp_restore.js
+    (cd "$PRISMA_DIR" && bun ../temp_restore.js)
     rm temp_restore.js
     echo -e "${GREEN}✅ Restore completed!${NC}"
     read -p "Press Enter to return..."
@@ -135,15 +145,18 @@ while true; do
     echo "============================================="
     echo -e "   ${BLUE}🛠️  VTTech Sync Consolidated Menu${NC}"
     echo "============================================="
-    echo "1. Prisma Studio"
+    echo "1. Prisma Studio (Port 21103)"
     echo "2. Prisma Backup JSON"
     echo "3. Prisma Restore JSON"
     echo "4. Prisma Reset Data"
     echo "5. Prisma DB Push & Generate"
     echo "6. Git Auto Commit (Today)"
-    echo "7. [Next.js] VTTech Dashboard (Dev)"
-    echo "8. [NestJS]  Backend API (Sync/Cron)"
-    echo "9. 🚀 Chạy Full Stack (Dashboard + API)"
+    echo "7. [Host] VTTech Dashboard (Port 21102)"
+    echo "8. [Host] Backend API (Port 21101)"
+    echo "9. 🚀 Chạy Full Stack (Host - Port 21xxx)"
+    echo "10. 🐳 DOCKER: Start All (Backend + Dashboard)"
+    echo "11. 🐳 DOCKER: Stop All"
+    echo "12. 🐳 DOCKER: View Logs"
     echo "0. Exit"
     echo "============================================="
     echo -ne "Chọn option: "
@@ -179,16 +192,42 @@ while true; do
             read -p "Press Enter to return..."
             ;;
         7)
-            echo -e "\n${BLUE}🌐 Starting VTTech Dashboard...${NC}"
-            (cd vttech-dashboard && bun dev)
+            echo -e "\n${BLUE}🌐 Starting VTTech Dashboard on Port 21102...${NC}"
+            if ! getent hosts tazagroupnet-db &> /dev/null; then
+                (cd vttech-dashboard && rm -rf .next && export DATABASE_URL="postgresql://postgres:postgres_password_123@localhost:18103/db_tazagroup_vttech_sync" && export PORT=21102 && bun dev)
+            else
+                (cd vttech-dashboard && rm -rf .next && export PORT=21102 && bun dev)
+            fi
             ;;
         8)
-            echo -e "\n${BLUE}⚙️  Starting Backend API...${NC}"
-            (cd backend-api && bun run start:dev)
+            echo -e "\n${BLUE}⚙️  Starting Backend API on Port 21101...${NC}"
+            if ! getent hosts tazagroupnet-db &> /dev/null; then
+                (cd backend-api && export DATABASE_URL="postgresql://postgres:postgres_password_123@localhost:18103/db_tazagroup_vttech_sync" && export PORT=21101 && bun run start:dev)
+            else
+                (cd backend-api && export PORT=21101 && bun run start:dev)
+            fi
             ;;
         9)
-            echo -e "\n${BLUE}🚀 Starting Full Stack...${NC}"
-            bunx concurrently "cd vttech-dashboard && bun dev" "cd backend-api && bun run start:dev"
+            echo -e "\n${BLUE}🚀 Starting Full Stack on Host...${NC}"
+            DB_FALLBACK=""
+            if ! getent hosts tazagroupnet-db &> /dev/null; then
+                DB_FALLBACK="DATABASE_URL=postgresql://postgres:postgres_password_123@localhost:18103/db_tazagroup_vttech_sync"
+            fi
+            bunx concurrently "$DB_FALLBACK PORT=21102 cd vttech-dashboard && rm -rf .next && bun dev" "$DB_FALLBACK PORT=21101 cd backend-api && bun run start:dev"
+            ;;
+        10)
+            echo -e "\n${BLUE}🐳 Starting Docker Containers (24/7)...${NC}"
+            docker compose up -d --build
+            echo -e "${GREEN}✅ Services started on ports 21101 (API) and 21102 (Dashboard)${NC}"
+            read -p "Press Enter to return..."
+            ;;
+        11)
+            echo -e "\n${YELLOW}🐳 Stopping Docker Containers...${NC}"
+            docker compose down
+            read -p "Press Enter to return..."
+            ;;
+        12)
+            docker compose logs -f
             ;;
         0)
             echo "Bye! 👋"

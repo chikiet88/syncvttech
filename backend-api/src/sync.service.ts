@@ -1,6 +1,9 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import * as CryptoJS from 'crypto-js';
 import { VttechApiService } from './vttech-api.service';
 import { PrismaService } from './prisma.service';
 import { PbxSyncService } from './pbx-sync.service';
@@ -26,6 +29,7 @@ export class SyncService {
     private vttechApi: VttechApiService,
     private prisma: PrismaService,
     private pbxSync: PbxSyncService,
+    @InjectQueue('sync-queue') private syncQueue: Queue,
   ) {}
 
   getSyncStatus() {
@@ -69,12 +73,172 @@ export class SyncService {
     return [];
   }
 
+  private parseDate(dateValue: any): Date | null {
+    if (!dateValue) return null;
+    
+    let d: Date;
+    if (dateValue instanceof Date) {
+      d = dateValue;
+    } else {
+      d = new Date(dateValue);
+    }
+
+    if (!isNaN(d.getTime())) return d;
+
+    // Try parsing DD/MM/YYYY
+    if (typeof dateValue === 'string') {
+      const parts = dateValue.split(/[\/\-\s:]/);
+      if (parts.length >= 3) {
+        const day = parseInt(parts[0]);
+        const month = parseInt(parts[1]) - 1;
+        const year = parseInt(parts[2]);
+        if (year > 1000 && !isNaN(day) && !isNaN(month)) {
+          const hour = parseInt(parts[3] || '0');
+          const min = parseInt(parts[4] || '0');
+          const sec = parseInt(parts[5] || '0');
+          d = new Date(year, month, day, hour, min, sec);
+          if (!isNaN(d.getTime())) return d;
+        }
+      }
+    }
+
+    return null;
+  }
+
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleDailySync() {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const dateStr = yesterday.toISOString().split('T')[0];
     await this.syncByRange(dateStr, dateStr);
+  }
+
+  async syncRevenue(dateFrom: string, dateTo: string) {
+    if (this.syncStatus.isSyncing) {
+      throw new Error('Một quy trình đồng bộ khác đang chạy.');
+    }
+
+    const startTime = Date.now();
+    this.syncStatus = {
+      isSyncing: true,
+      progress: 0,
+      total: 0,
+      current: 0,
+      message: `Bắt đầu đồng bộ DOANH THU từ ${dateFrom} đến ${dateTo}...`,
+      logs: [],
+      startTime: startTime,
+      endTime: null,
+      error: null,
+      shouldStop: false,
+    };
+
+    this.addLog(`🚀 Bắt đầu đồng bộ DOANH THU (Range: ${dateFrom} - ${dateTo})`);
+
+    try {
+      this.vttechApi.setLogCallback((msg) => this.addLog(msg));
+      await this.vttechApi.login();
+      await this.vttechApi.getXsrfToken();
+
+      const branches = await this.prisma.branch.findMany({ where: { is_active: 1 } });
+      
+      const start = this.parseDate(dateFrom);
+      const end = this.parseDate(dateTo);
+      if (!start || !end) throw new Error('Ngày không hợp lệ');
+
+      const days: string[] = [];
+      let currentDay = new Date(start);
+      while (currentDay <= end) {
+        days.push(currentDay.toISOString().split('T')[0]);
+        currentDay.setDate(currentDay.getDate() + 1);
+      }
+
+      const totalSteps = days.length * branches.length;
+      let currentStep = 0;
+      const syncedCustomerIds = new Set<number>();
+
+      for (const dateStr of days) {
+        if (this.syncStatus.shouldStop) break;
+        
+        // Convert YYYY-MM-DD to DD-MM-YYYY for Revenue API
+        const [y, m, d] = dateStr.split('-');
+        const vttechDateStr = `${d}-${m}-${y}`;
+
+        this.addLog(`📅 Ngày: ${dateStr}`);
+
+        for (const branch of branches) {
+          if (this.syncStatus.shouldStop) break;
+          currentStep++;
+          this.syncStatus.current = currentStep;
+          this.syncStatus.total = totalSteps;
+          this.syncStatus.progress = Math.round((currentStep / totalSteps) * 100);
+          this.syncStatus.message = `[${dateStr}] Đang đẩy queue: ${branch.name}`;
+
+          try {
+            // Push Revenue Sync job for this day/branch
+            await this.syncQueue.add('sync-job', {
+              type: 'sync-revenue-day',
+              data: { date: dateStr, branchId: branch.id }
+            }, {
+              backoff: { type: 'exponential', delay: 1000 },
+              attempts: 3,
+            });
+
+            // Find customers with registration or activity on this day
+            const foundIds = await this.syncCustomers(dateStr, dateStr, 2, branch.id);
+            for (const cId of foundIds) {
+              if (cId && !syncedCustomerIds.has(cId)) {
+                await this.syncQueue.add('sync-job', {
+                  type: 'sync-customer-detail',
+                  data: { customerId: cId }
+                }, {
+                  priority: 10,
+                  attempts: 5,
+                  backoff: { type: 'exponential', delay: 2000 },
+                });
+                syncedCustomerIds.add(cId);
+              }
+            }
+          } catch (e) {
+            this.addLog(`  ❌ [${branch.name}] Lỗi khi đẩy Job vào Queue: ${e.message}`);
+          }
+        }
+      }
+
+      this.syncStatus.progress = 100;
+      this.syncStatus.message = 'Hoàn thành!';
+      this.syncStatus.endTime = Date.now();
+      const duration = (this.syncStatus.endTime - startTime) / 1000;
+
+      this.addLog(`✅ Hoàn thành đồng bộ Doanh thu. Đã cập nhật chi tiết cho ${syncedCustomerIds.size} khách hàng.`);
+
+      // Lưu log vào DB
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: this.parseDate(dateFrom) as Date,
+          crawl_type: 'revenue_sync',
+          status: 'success',
+          records_count: syncedCustomerIds.size,
+          total_branches: branches.length,
+          total_customers: syncedCustomerIds.size,
+          duration_seconds: duration,
+        },
+      });
+
+    } catch (error) {
+      this.syncStatus.error = error.message;
+      this.addLog(`❌ Lỗi đồng bộ doanh thu: ${error.message}`);
+      
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: this.parseDate(dateFrom) as Date,
+          crawl_type: 'revenue_sync',
+          status: 'error',
+          error_message: error.message,
+        },
+      });
+    } finally {
+      this.syncStatus.isSyncing = false;
+    }
   }
 
   async syncByRange(dateFrom: string, dateTo: string, forceMaster: boolean = false, syncPbx: boolean = false, syncDetails: boolean = true) {
@@ -121,8 +285,11 @@ export class SyncService {
       this.syncStatus.total = branches.length;
 
       // 2. Duyệt qua từng ngày trong khoảng
-      const start = new Date(dateFrom);
-      const end = new Date(dateTo);
+      const start = this.parseDate(dateFrom);
+      const end = this.parseDate(dateTo);
+      if (!start || !end) {
+        throw new Error(`Khoảng thời gian không hợp lệ: ${dateFrom} - ${dateTo}`);
+      }
       const days: string[] = [];
       let currentDay = new Date(start);
       while (currentDay <= end) {
@@ -225,7 +392,7 @@ export class SyncService {
 
       await (this.prisma.crawlLog as any).create({
         data: {
-          crawl_date: new Date(dateFrom),
+          crawl_date: this.parseDate(dateFrom) as Date,
           crawl_type: 'full_range_sync',
           status: 'success',
           records_count: syncedIdsInSession.size,
@@ -247,7 +414,7 @@ export class SyncService {
       
       await (this.prisma.crawlLog as any).create({
         data: {
-          crawl_date: new Date(dateFrom),
+          crawl_date: this.parseDate(dateFrom) as Date,
           crawl_type: 'full_range_sync',
           status: 'error',
           error_message: error.message,
@@ -307,45 +474,52 @@ export class SyncService {
 
             const branchIdFromData = parseInt(c.BranchID || c.branch_id) || branchId || null;
             const gender = parseInt(c.GenderID || c.Gender) || null;
-            const birthday = c.Birth || c.Birthday ? new Date(c.Birth || c.Birthday) : null;
+            const birthday = this.parseDate(c.Birth || c.Birthday);
             const address = c.Address || '';
             const sourceId = parseInt(c.SourceID) || null;
 
-            await this.prisma.customer.upsert({
-              where: { id },
-              update: {
-                name,
-                phone,
-                email,
-                total_spent: paid,
-                total_debt: debt,
-                branch_id: branchIdFromData,
-                gender,
-                birthday,
-                address,
-                source_id: sourceId,
-              },
-              create: {
-                id,
-                name,
-                phone,
-                email,
-                total_spent: paid,
-                total_debt: debt,
-                branch_id: branchIdFromData,
-                gender,
-                birthday,
-                address,
-                source_id: sourceId,
-              },
-            });
+            const currentHash = this.generateHash({ name, phone, email, paid, debt, branchIdFromData, gender, birthday, address, sourceId });
+            const existingCustomer = await this.prisma.customer.findUnique({ where: { id } });
+
+            if (!existingCustomer || existingCustomer.last_hash !== currentHash) {
+              await this.prisma.customer.upsert({
+                where: { id },
+                update: {
+                  name,
+                  phone,
+                  email,
+                  total_spent: paid,
+                  total_debt: debt,
+                  branch_id: branchIdFromData,
+                  gender,
+                  birthday,
+                  address,
+                  source_id: sourceId,
+                  last_hash: currentHash,
+                },
+                create: {
+                  id,
+                  name,
+                  phone,
+                  email,
+                  total_spent: paid,
+                  total_debt: debt,
+                  branch_id: branchIdFromData,
+                  gender,
+                  birthday,
+                  address,
+                  source_id: sourceId,
+                  last_hash: currentHash,
+                },
+              });
+            }
 
             // Tracking Daily Activity
             await this.prisma.dailyCustomer.upsert({
-               where: { date_customer_id: { date: new Date(dateFrom), customer_id: id } },
+               where: { date_customer_id: { date: this.parseDate(dateFrom) as Date, customer_id: id } },
                update: { branch_id: branchIdFromData, customer_name: name, phone: phone },
                create: { 
-                 date: new Date(dateFrom), 
+                 date: this.parseDate(dateFrom) as Date, 
                  customer_id: id, 
                  branch_id: branchIdFromData, 
                  customer_name: name, 
@@ -393,7 +567,7 @@ export class SyncService {
               phone: a.Phone,
               branch_id: parseInt(a.BranchID),
               status: parseInt(a.Status),
-              appointment_date: a.Date ? new Date(a.Date) : null,
+              appointment_date: this.parseDate(a.Date),
             },
             create: {
               id,
@@ -402,7 +576,7 @@ export class SyncService {
               phone: a.Phone,
               branch_id: parseInt(a.BranchID),
               status: parseInt(a.Status),
-              appointment_date: a.Date ? new Date(a.Date) : null,
+              appointment_date: this.parseDate(a.Date),
             },
           });
           if (customerId) customerIds.push(customerId);
@@ -422,11 +596,18 @@ export class SyncService {
     } else {
       // Fallback: This is what was causing the bug when running for past dates.
       // We should probably find customers who had activity in our DB for that range.
+      const dFrom = this.parseDate(dateFrom);
+      const dTo = this.parseDate(dateTo);
+      if (!dFrom || !dTo) {
+        this.addLog(`⏩ Bỏ qua bước này do ngày không hợp lệ: ${dateFrom} - ${dateTo}`);
+        return;
+      }
+
       const appointmentIds = await this.prisma.appointment.findMany({
         where: {
           appointment_date: {
-            gte: new Date(new Date(dateFrom).setHours(0,0,0,0)),
-            lte: new Date(new Date(dateTo).setHours(23,59,59,999)),
+            gte: new Date(new Date(dFrom).setHours(0,0,0,0)),
+            lte: new Date(new Date(dTo).setHours(23,59,59,999)),
           }
         },
         select: { customer_id: true }
@@ -465,7 +646,10 @@ export class SyncService {
     this.addLog('✅ Hoàn thành đồng bộ chi tiết khách hàng');
   }
 
-  private async syncMasterData(force: boolean = false) {
+  private async syncMasterData(force: boolean = false): Promise<{ branches: number, services: number }> {
+    const startTime = Date.now();
+    const stats = { branches: 0, services: 0 };
+
     if (!force) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -480,7 +664,7 @@ export class SyncService {
 
       if (lastSync) {
         this.addLog('⏩ Bỏ qua đồng bộ Master Data (Đã đồng bộ hôm nay)');
-        return;
+        return { branches: lastSync.total_branches, services: lastSync.total_services };
       }
     }
 
@@ -488,11 +672,12 @@ export class SyncService {
     const result = await this.vttechApi.callApi('/api/Home/SessionData', {});
     if (!result) {
       this.addLog('⚠️ Không lấy được SessionData');
-      return;
+      return stats;
     }
 
     // 1. Branches (Table)
     if (result.Table) {
+      stats.branches = result.Table.length;
       for (const b of result.Table) {
         await this.prisma.branch.upsert({
           where: { id: parseInt(b.ID) },
@@ -505,6 +690,7 @@ export class SyncService {
 
     // 2. Services (Table2)
     if (result.Table2) {
+      stats.services = result.Table2.length;
       for (const s of result.Table2) {
         await this.prisma.service.upsert({
           where: { id: parseInt(s.ID) },
@@ -612,21 +798,35 @@ export class SyncService {
       this.addLog(`  ✅ Hạng thành viên: ${initData.Membership.length}`);
     }
 
+    const duration = (Date.now() - startTime) / 1000;
+
     // Log successful master sync
     await this.prisma.crawlLog.create({
       data: {
         crawl_date: new Date(),
         crawl_type: 'master_sync',
         status: 'success',
-        records_count: 0
+        records_count: stats.branches + stats.services,
+        total_branches: stats.branches,
+        total_services: stats.services,
+        duration_seconds: duration
       }
     });
+
+    return stats;
   }
 
   private async syncCustomerStatus(customerId: number) {
     try {
-      const res = await this.vttechApi.callHandler('/Special/StatusList/', 'LoadData', { CustomerID: customerId });
-      const items = this.ensureArray(res?.Table1);
+      const res = await this.vttechApi.callHandler('/Customer/StatusList/', 'LoadataStatus', { 
+        CustomerID: customerId, 
+        id: 0, 
+        limit: 100, 
+        beginID: 0, 
+        Type: 0, 
+        TypeParent: 0 
+      });
+      const items = this.ensureArray(res?.Data || res?.Table1);
       for (const item of items) {
         const hId = parseInt(item.ID);
         if (!hId) continue;
@@ -638,7 +838,7 @@ export class SyncService {
             detail_status_name: item.DetailStatusName,
             color_code: item.ColorCode,
             employee_name: item.Employee,
-            created_at: item.Created ? new Date(item.Created) : null,
+            created_at: this.parseDate(item.Created),
           },
           create: {
             customer_id: customerId,
@@ -648,7 +848,7 @@ export class SyncService {
             detail_status_name: item.DetailStatusName,
             color_code: item.ColorCode,
             employee_name: item.Employee,
-            created_at: item.Created ? new Date(item.Created) : null,
+            created_at: this.parseDate(item.Created),
           }
         });
       }
@@ -667,7 +867,9 @@ export class SyncService {
           where: { id: customerId },
           data: {
             gender: parseInt(info.Gender_ID) || null,
-            birthday: info.Birthday ? new Date(info.Birthday) : null,
+            branch_id: parseInt(info.BranchID) || null,
+            birthday: this.parseDate(info.Birthday),
+            phone: info.Phone,
             address: info.Address,
           }
         });
@@ -680,7 +882,12 @@ export class SyncService {
 
   private async syncCustomerCards(customerId: number) {
     try {
-      const res = await this.vttechApi.callHandler('/Customer/Service/TabList/TabList_Card/', 'LoadataCard', { CustomerID: customerId });
+      const res = await this.vttechApi.callHandler('/Customer/Service/TabList/TabList_Card/', 'LoadataCard', { 
+        CustomerID: customerId, 
+        id: 0, 
+        limit: 100, 
+        beginID: 0 
+      });
       const cards = this.ensureArray(res?.Table);
       const allLogs = this.ensureArray(res?.Table1);
       
@@ -699,8 +906,8 @@ export class SyncService {
             total_paid: parseFloat(c.TotalPaid) || 0,
             quantity: parseInt(c.Quantity) || 1,
             note: c.Note,
-            expired_date: c.ExpiredDate ? new Date(c.ExpiredDate) : null,
-            created_at: c.Created ? new Date(c.Created) : null,
+            expired_date: this.parseDate(c.ExpiredDate),
+            created_at: this.parseDate(c.Created),
           },
           create: {
             customer_id: customerId,
@@ -714,8 +921,8 @@ export class SyncService {
             total_paid: parseFloat(c.TotalPaid) || 0,
             quantity: parseInt(c.Quantity) || 1,
             note: c.Note,
-            expired_date: c.ExpiredDate ? new Date(c.ExpiredDate) : null,
-            created_at: c.Created ? new Date(c.Created) : null,
+            expired_date: this.parseDate(c.ExpiredDate),
+            created_at: this.parseDate(c.Created),
           }
         });
 
@@ -723,7 +930,7 @@ export class SyncService {
         const cardLogs = allLogs.filter(l => parseInt(l.CardID) === cardId);
         for (const l of cardLogs) {
            // No unique ID for logs, use composite check
-           const logDate = l.Created ? new Date(l.Created) : null;
+           const logDate = this.parseDate(l.Created);
            const amount = parseFloat(l.Amount) || 0;
            const serviceId = parseInt(l.ServiceID) || null;
            
@@ -759,7 +966,12 @@ export class SyncService {
 
   private async syncCustomerMedicine(customerId: number) {
     try {
-      const res = await this.vttechApi.callHandler('/Customer/Service/TabList/TabList_Medicine/', 'LoadataPrescriptionMedicine', { CustomerID: customerId });
+      const res = await this.vttechApi.callHandler('/Customer/Service/TabList/TabList_Medicine/', 'LoadataPrescriptionMedicine', { 
+        CustomerID: customerId, 
+        id: 0, 
+        limit: 100, 
+        beginID: 0 
+      });
       const items = this.ensureArray(res?.Table || res);
       for (const item of items) {
         const mId = parseInt(item.ID);
@@ -769,14 +981,14 @@ export class SyncService {
           update: {
             medicine_name: item.Name,
             quantity: parseInt(item.Quantity) || 1,
-            created_at: item.Created ? new Date(item.Created) : null,
+            created_at: this.parseDate(item.Created),
           },
           create: {
             customer_id: customerId,
             prescription_id: mId,
             medicine_name: item.Name,
             quantity: parseInt(item.Quantity) || 1,
-            created_at: item.Created ? new Date(item.Created) : null,
+            created_at: this.parseDate(item.Created),
           }
         });
       }
@@ -791,13 +1003,18 @@ export class SyncService {
       const foldersRes = await this.vttechApi.callHandler('/Customer/CustomerImage/', 'LoadAllFolder', { CustomerID: customerId });
       const folders = this.ensureArray(foldersRes);
       for (const f of folders) {
-        const folderId = String(f.FolderID || f.FolderName);
+        const folderId = String(f.ID || f.FolderID || f.FolderName);
         const folder = await this.prisma.customerImageFolder.upsert({
           where: { customer_id_folder_id: { customer_id: customerId, folder_id: folderId } },
-          update: { folder_name: f.FolderName, created_at: f.Created ? new Date(f.Created) : null },
-          create: { customer_id: customerId, folder_id: folderId, folder_name: f.FolderName, created_at: f.Created ? new Date(f.Created) : null }
+          update: { folder_name: f.FolderName, created_at: this.parseDate(f.Created) },
+          create: { customer_id: customerId, folder_id: folderId, folder_name: f.FolderName, created_at: this.parseDate(f.Created) }
         });
-        const imagesRes = await this.vttechApi.callHandler('/Customer/CustomerImage/', 'LoadImageByFolder', { CustomerID: customerId, currentFolderID: folderId });
+        const imagesRes = await this.vttechApi.callHandler('/Customer/CustomerImage/', 'LoadImageByFolder', { 
+          CustomerID: customerId, 
+          currentFolderID: folderId,
+          idetail: 0,
+          type: 0
+        });
         const images = this.ensureArray(imagesRes);
         for (const img of images) {
           if (!img.CloudID) continue;
@@ -809,7 +1026,7 @@ export class SyncService {
                 real_name: img.RealName,
                 feature_image: img.FeatureImage,
                 cloud_id: img.CloudID,
-                created_at: img.Created ? new Date(img.Created) : null,
+                created_at: this.parseDate(img.Created),
               }
             });
           }
@@ -834,7 +1051,7 @@ export class SyncService {
           where: { customer_id_payment_id: { customer_id: customerId, payment_id: pId } },
           update: { 
             amount: parseFloat(p.Amount || 0) || 0, 
-            payment_date: p.Date || p.Created ? new Date(p.Date || p.Created) : null, 
+            payment_date: this.parseDate(p.Date || p.Created), 
             payment_method: p.MethodName || '', 
             note: p.Note || p.Content || '' 
           },
@@ -842,7 +1059,7 @@ export class SyncService {
             customer: { connect: { id: customerId } },
             payment_id: pId, 
             amount: parseFloat(p.Amount || 0) || 0, 
-            payment_date: p.Date || p.Created ? new Date(p.Date || p.Created) : null, 
+            payment_date: this.parseDate(p.Date || p.Created), 
             payment_method: p.MethodName || '', 
             note: p.Note || p.Content || '' 
           }
@@ -851,26 +1068,31 @@ export class SyncService {
       }
 
       // 2. Card Payments
-      const cardPayments = await this.vttechApi.callHandler('/Customer/Payment/PaymentList/PaymentList_Card/', 'LoadataPaymentCard', { CustomerID: customerId });
+      const cardPayments = await this.vttechApi.callHandler('/Customer/Payment/PaymentList/PaymentList_Card/', 'LoadataPaymentCard', { 
+        CustomerID: customerId, 
+        id: 0, 
+        limit: 100, 
+        beginID: 0 
+      });
       const cItems = this.ensureArray(cardPayments);
       for (const p of cItems) {
         const pId = parseInt(p.ID || p.id);
         if (!pId) continue;
         await this.prisma.customerPayment.upsert({
           where: { customer_id_payment_id: { customer_id: customerId, payment_id: pId } },
-          update: { 
-            amount: parseFloat(p.Amount || 0) || 0, 
-            payment_date: p.Date || p.Created ? new Date(p.Date || p.Created) : null, 
-            payment_method: p.MethodName || '', 
-            note: p.Note || p.Content || '' 
+          update: {
+            amount: parseFloat(p.Amount || 0) || 0,
+            payment_date: this.parseDate(p.Date || p.Created),
+            payment_method: p.MethodName || '',
+            note: p.Note || p.Content || ''
           },
-          create: { 
-            customer: { connect: { id: customerId } },
-            payment_id: pId, 
-            amount: parseFloat(p.Amount || 0) || 0, 
-            payment_date: p.Date || p.Created ? new Date(p.Date || p.Created) : null, 
-            payment_method: p.MethodName || '', 
-            note: p.Note || p.Content || '' 
+          create: {
+            customer_id: customerId,
+            payment_id: pId,
+            amount: parseFloat(p.Amount || 0) || 0,
+            payment_date: this.parseDate(p.Date || p.Created),
+            payment_method: p.MethodName || '',
+            note: p.Note || p.Content || ''
           }
         });
         total++;
@@ -895,7 +1117,7 @@ export class SyncService {
           where: { id: sId },
           update: {
             customer_id: customerId,
-            appointment_date: item.Date_From ? new Date(item.Date_From) : null,
+            appointment_date: this.parseDate(item.Date_From),
             note: item.Content || '',
             status: item.IsCancel === 0 ? 1 : 2, // Simplistic mapping
             branch_name: item.Branch || '',
@@ -904,7 +1126,7 @@ export class SyncService {
           create: {
             id: sId,
             customer_id: customerId,
-            appointment_date: item.Date_From ? new Date(item.Date_From) : null,
+            appointment_date: this.parseDate(item.Date_From),
             note: item.Content || '',
             status: item.IsCancel === 0 ? 1 : 2,
             branch_name: item.Branch || '',
@@ -999,7 +1221,16 @@ export class SyncService {
 
     // 3. Treatment
     try {
-      const treatments = await this.vttechApi.callHandler('/Customer/Treatment/TreatmentList/TreatmentList_Service/', 'LoadataTreatment', { CustomerID: customerId });
+      const treatments = await this.vttechApi.callHandler('/Customer/Treatment/TreatmentList/TreatmentList_Service/', 'LoadataTreatment', { 
+        CustomerID: customerId,
+        PatientRecordID: 0,
+        TreatmentPlanID: 0,
+        ServiceTabID: 0,
+        ServiceCatTabID: 0,
+        idbegin: 0,
+        idbeginless: 0,
+        limit: 100
+      });
       const items = this.ensureArray(treatments);
       if (items.length > 0) {
         stats.treatments = items.length;
@@ -1014,7 +1245,7 @@ export class SyncService {
               customer_name: t.CustomerName || '', 
               service_name: t.ServiceName || '', 
               employee_name: t.EmployeeName || '', 
-              treatment_date: t.Date ? new Date(t.Date) : null, 
+              treatment_date: this.parseDate(t.Date), 
               amount: parseFloat(t.Amount || 0) || 0 
             },
             create: { 
@@ -1023,7 +1254,7 @@ export class SyncService {
               customer_name: t.CustomerName || '', 
               service_name: t.ServiceName || '', 
               employee_name: t.EmployeeName || '', 
-              treatment_date: t.Date ? new Date(t.Date) : null, 
+              treatment_date: this.parseDate(t.Date), 
               amount: parseFloat(t.Amount || 0) || 0 
             }
           });
@@ -1036,7 +1267,12 @@ export class SyncService {
 
     // 4. Care History
     try {
-      const history = await this.vttechApi.callHandler('/Customer/History/HistoryList_Care/', 'LoadataHistory', { CustomerID: customerId });
+      const history = await this.vttechApi.callHandler('/Customer/History/HistoryList_Care/', 'LoadataHistory', { 
+        CustomerID: customerId,
+        Type: 0,
+        Limit: 100,
+        BeginID: 0
+      });
       const items = this.ensureArray(history);
       if (items.length > 0) {
         for (const h of items) {
@@ -1045,12 +1281,12 @@ export class SyncService {
 
           await this.prisma.customerCareHistory.upsert({
             where: { customer_id_history_id: { customer_id: customerId, history_id: hId } },
-            update: { action_type: h.TypeName || '', action_date: h.Date ? new Date(h.Date) : null, employee_name: h.EmployeeName || '', note: h.Content || '' },
+            update: { action_type: h.TypeName || '', action_date: this.parseDate(h.Date), employee_name: h.EmployeeName || '', note: h.Content || '' },
             create: { 
               customer: { connect: { id: customerId } },
               history_id: hId, 
               action_type: h.TypeName || '', 
-              action_date: h.Date ? new Date(h.Date) : null, 
+              action_date: this.parseDate(h.Date), 
               employee_name: h.EmployeeName || '', 
               note: h.Content || '' 
             }
@@ -1064,7 +1300,9 @@ export class SyncService {
 
     // 5. Installments
     try {
-      const installments = await this.vttechApi.callHandler('/Customer/Installment/InstallmentList/', 'LoadDetail', { CustomerID: customerId });
+      const installments = await this.vttechApi.callHandler('/Customer/Installment/InstallmentList/', 'LoadDetail', { 
+        CustomerID: customerId 
+      });
       const items = this.ensureArray(installments);
       if (items.length > 0) {
         for (const i of items) {
@@ -1073,14 +1311,14 @@ export class SyncService {
 
           await this.prisma.customerInstallment.upsert({
             where: { customer_id_installment_id: { customer_id: customerId, installment_id: insId } },
-            update: { total_amount: parseFloat(i.TotalAmount || 0) || 0, paid_amount: parseFloat(i.PaidAmount || 0) || 0, remain_amount: parseFloat(i.RemainAmount || 0) || 0, created_at: i.Date ? new Date(i.Date) : null, note: i.Note || '' },
+            update: { total_amount: parseFloat(i.TotalAmount || 0) || 0, paid_amount: parseFloat(i.PaidAmount || 0) || 0, remain_amount: parseFloat(i.RemainAmount || 0) || 0, created_at: this.parseDate(i.Date), note: i.Note || '' },
             create: { 
               customer: { connect: { id: customerId } },
               installment_id: insId, 
               total_amount: parseFloat(i.TotalAmount || 0) || 0, 
               paid_amount: parseFloat(i.PaidAmount || 0) || 0, 
               remain_amount: parseFloat(i.RemainAmount || 0) || 0, 
-              created_at: i.Date ? new Date(i.Date) : null, 
+              created_at: this.parseDate(i.Date), 
               note: i.Note || '' 
             }
           });
@@ -1102,13 +1340,13 @@ export class SyncService {
 
           await this.prisma.customerComplaint.upsert({
             where: { customer_id_complaint_id: { customer_id: customerId, complaint_id: compId } },
-            update: { content: c.Content || '', status_name: c.StatusName || '', created_at: c.Date ? new Date(c.Date) : null },
+            update: { content: c.Content || '', status_name: c.StatusName || '', created_at: this.parseDate(c.Date) },
             create: { 
               customer: { connect: { id: customerId } },
               complaint_id: compId, 
               content: c.Content || '', 
               status_name: c.StatusName || '', 
-              created_at: c.Date ? new Date(c.Date) : null 
+              created_at: this.parseDate(c.Date) 
             }
           });
         }
@@ -1129,13 +1367,13 @@ export class SyncService {
 
           await this.prisma.customerTreatmentPlan.upsert({
             where: { customer_id_plan_id: { customer_id: customerId, plan_id: pId } },
-            update: { service_name: p.ServiceName || '', doctor_name: p.DoctorName || '', created_at: p.Date ? new Date(p.Date) : null, note: p.Note || '' },
+            update: { service_name: p.ServiceName || '', doctor_name: p.DoctorName || '', created_at: this.parseDate(p.Date), note: p.Note || '' },
             create: { 
               customer: { connect: { id: customerId } },
               plan_id: pId, 
               service_name: p.ServiceName || '', 
               doctor_name: p.DoctorName || '', 
-              created_at: p.Date ? new Date(p.Date) : null, 
+              created_at: this.parseDate(p.Date), 
               note: p.Note || '' 
             }
           });
@@ -1157,13 +1395,13 @@ export class SyncService {
 
           await (this.prisma as any).customerChangeHistory.upsert({
             where: { customer_id_history_id: { customer_id: customerId, history_id: hId } },
-            update: { content: c.Content || '', employee_name: c.EmployeeName || '', action_date: c.Date ? new Date(c.Date) : null },
+            update: { content: c.Content || '', employee_name: c.EmployeeName || '', action_date: this.parseDate(c.Date) },
             create: { 
               customer: { connect: { id: customerId } },
               history_id: hId, 
               content: c.Content || '', 
               employee_name: c.EmployeeName || '', 
-              action_date: c.Date ? new Date(c.Date) : null 
+              action_date: this.parseDate(c.Date) 
             }
           });
         }
@@ -1197,5 +1435,80 @@ export class SyncService {
       take: limit,
       orderBy: { created_at: 'desc' },
     });
+  }
+
+  // --- Queue Optimized Methods ---
+
+  private generateHash(data: any): string {
+    return CryptoJS.MD5(JSON.stringify(data)).toString();
+  }
+
+  async processQueuedCustomerDetail(customerId: number) {
+    this.logger.log(`Worker processing customer detail: ${customerId}`);
+    try {
+      await this.vttechApi.login();
+      await this.vttechApi.getXsrfToken();
+      return await this.syncSingleCustomerDetail(customerId);
+    } catch (error) {
+      this.logger.error(`Error in processQueuedCustomerDetail: ${error.message}`);
+      throw error;
+    }
+  }
+
+  private mapRevenueItem(item: any, branchId: number) {
+    return {
+      branch_id: branchId,
+      customer_id: parseInt(item.CustomerID) || 0,
+      customer_name: item.CustomerName || "N/A",
+      customer_code: item.CustomerCode || "",
+      amount: parseFloat(item.Amount) || 0,
+      payment_method: parseInt(item.PaymentMethod) || 0,
+      service_name: item.ServiceName || "",
+      content: item.Content || "",
+      employee_name: item.EmployeeName || "",
+      date: this.parseDate(item.Date) || new Date(),
+    };
+  }
+
+  async processQueuedRevenueDay(date: string, branchId: number) {
+    this.logger.log(`Worker processing revenue day: ${date}, branch: ${branchId}`);
+    try {
+      await this.vttechApi.login();
+      await this.vttechApi.getXsrfToken();
+      
+      const res = await this.vttechApi.getRevenueByBranch(date, date, branchId);
+      const items = this.ensureArray(res);
+      
+      for (const item of items) {
+        // Implement Checksum here
+        const currentHash = this.generateHash(item);
+        const existing = await this.prisma.revenueTransaction.findUnique({
+          where: { id: parseInt(item.ID) }
+        });
+
+        if (existing && existing.last_hash === currentHash) {
+          continue; // Skip if same data
+        }
+
+        const mapped = this.mapRevenueItem(item, branchId);
+
+        await this.prisma.revenueTransaction.upsert({
+          where: { id: parseInt(item.ID) },
+          update: {
+            ...mapped,
+            last_hash: currentHash,
+          },
+          create: {
+            ...mapped,
+            id: parseInt(item.ID),
+            created_at: new Date(), // Add required field
+            last_hash: currentHash,
+          }
+        });
+      }
+    } catch (error) {
+      this.logger.error(`Error in processQueuedRevenueDay: ${error.message}`);
+      throw error;
+    }
   }
 }

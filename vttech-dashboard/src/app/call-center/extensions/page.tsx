@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { DataTable } from "@/components/ui/data-table"
 import { columns, PbxExtensionColumn } from "./columns"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"

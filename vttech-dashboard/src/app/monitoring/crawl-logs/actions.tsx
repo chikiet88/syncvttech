@@ -35,7 +35,7 @@ export function CrawlLogActions() {
     const [isOpen, setIsOpen] = useState(false)
     const [status, setStatus] = useState<SyncStatus | null>(null)
     const [isStarting, setIsStarting] = useState(false)
-    
+
     // New date range states
     const [dateFrom, setDateFrom] = useState(new Date().toISOString().split('T')[0])
     const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0])
@@ -44,7 +44,7 @@ export function CrawlLogActions() {
     const [syncDetails, setSyncDetails] = useState(true)
     const [isStopping, setIsStopping] = useState(false)
     const [isCopied, setIsCopied] = useState(false)
-    
+
     const router = useRouter()
     const logContainerRef = useRef<HTMLDivElement>(null)
     const [autoScroll, setAutoScroll] = useState(true)
@@ -111,6 +111,23 @@ export function CrawlLogActions() {
         }
     }
 
+    const handleStartRevenueSync = async () => {
+        setIsStarting(true)
+        try {
+            const response = await fetch(`http://localhost:3001/sync/revenue?from=${dateFrom}&to=${dateTo}`)
+            if (response.ok) {
+                setIsOpen(true)
+            } else {
+                const error = await response.json()
+                alert(error.message || "Không thể bắt đầu đồng bộ doanh thu")
+            }
+        } catch (error) {
+            alert("Lỗi kết nối Server")
+        } finally {
+            setIsStarting(false)
+        }
+    }
+
     const handleStopSync = async () => {
         setIsStopping(true)
         try {
@@ -157,6 +174,14 @@ export function CrawlLogActions() {
                 >
                     <RefreshCw className="w-4 h-4" />
                     Làm mới
+                </Button>
+                <Button
+                    className="rounded-xl gap-2 font-bold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20"
+                    onClick={handleOpenDialog}
+                    disabled={isStarting}
+                >
+                    {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                    {status?.isSyncing ? "Đang Đồng bộ..." : "Đồng bộ Doanh thu"}
                 </Button>
                 <Button
                     className="rounded-xl gap-2 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20"
@@ -221,8 +246,8 @@ export function CrawlLogActions() {
 
                                 <div className="col-span-1 md:col-span-2 space-y-4 pt-2">
                                     <div className="flex items-start gap-3 px-1 group cursor-pointer" onClick={() => setForceMaster(!forceMaster)}>
-                                        <Checkbox 
-                                            id="forceMaster" 
+                                        <Checkbox
+                                            id="forceMaster"
                                             checked={forceMaster}
                                             onCheckedChange={(checked) => setForceMaster(!!checked)}
                                             className="mt-0.5 rounded-md border-muted-foreground/30 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
@@ -233,8 +258,8 @@ export function CrawlLogActions() {
                                     </div>
 
                                     <div className="flex items-start gap-3 px-1 group cursor-pointer" onClick={() => setSyncPbx(!syncPbx)}>
-                                        <Checkbox 
-                                            id="syncPbx" 
+                                        <Checkbox
+                                            id="syncPbx"
                                             checked={syncPbx}
                                             onCheckedChange={(checked) => setSyncPbx(!!checked)}
                                             className="mt-0.5 rounded-md border-muted-foreground/30 data-[state=checked]:bg-orange-600 data-[state=checked]:border-orange-600"
@@ -245,8 +270,8 @@ export function CrawlLogActions() {
                                     </div>
 
                                     <div className="flex items-start gap-3 px-1 group cursor-pointer" onClick={() => setSyncDetails(!syncDetails)}>
-                                        <Checkbox 
-                                            id="syncDetails" 
+                                        <Checkbox
+                                            id="syncDetails"
                                             checked={syncDetails}
                                             onCheckedChange={(checked) => setSyncDetails(!!checked)}
                                             className="mt-0.5 rounded-md border-muted-foreground/30 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
@@ -257,13 +282,20 @@ export function CrawlLogActions() {
                                     </div>
                                 </div>
 
-                                <div className="col-span-1 md:col-span-2 pt-2 flex gap-3">
-                                    <Button 
+                                <div className="col-span-1 md:col-span-2 pt-2 flex flex-col sm:flex-row gap-3">
+                                    <Button
+                                        className="flex-1 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20 h-11"
+                                        onClick={handleStartRevenueSync}
+                                        disabled={isStarting}
+                                    >
+                                        Đồng bộ Doanh thu
+                                    </Button>
+                                    <Button
                                         className="flex-1 rounded-xl font-bold bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 h-11"
                                         onClick={handleStartSync}
                                         disabled={isStarting}
                                     >
-                                        Bắt đầu Đồng bộ dữ liệu
+                                        Đồng bộ Tổng thể
                                     </Button>
                                 </div>
                             </div>
@@ -280,7 +312,7 @@ export function CrawlLogActions() {
                                         </div>
                                         {status?.logs && status.logs.length > 0 && (
                                             <Button
-                                                variant="ghost" 
+                                                variant="ghost"
                                                 size="sm"
                                                 className="h-7 rounded-lg text-[10px] font-bold gap-2 hover:bg-emerald-500/10 hover:text-emerald-500"
                                                 onClick={handleCopyLogs}
@@ -310,7 +342,7 @@ export function CrawlLogActions() {
                                 </div>
 
                                 <div className="bg-[#0f172a] rounded-[1.5rem] p-4 sm:p-5 border border-slate-800 shadow-inner flex flex-col group relative">
-                                    <div 
+                                    <div
                                         ref={logContainerRef}
                                         onScroll={handleScroll}
                                         className="font-mono text-[10px] sm:text-[11px] leading-relaxed overflow-y-auto custom-scrollbar h-[350px] sm:h-[400px] pr-2 space-y-1 scroll-smooth"
@@ -322,19 +354,19 @@ export function CrawlLogActions() {
                                                 </span>
                                                 <span className={cn(
                                                     "break-all",
-                                                    log.includes('❌') ? 'text-rose-400 font-bold' : 
-                                                    log.includes('⚠️') ? 'text-amber-400' :
-                                                    log.includes('✅') ? 'text-emerald-400 font-bold' :
-                                                    log.includes('📡') ? 'text-blue-400' :
-                                                    log.includes('📅') ? 'text-white font-black bg-blue-500/20 px-2 rounded mt-2' :
-                                                    'text-slate-400'
+                                                    log.includes('❌') ? 'text-rose-400 font-bold' :
+                                                        log.includes('⚠️') ? 'text-amber-400' :
+                                                            log.includes('✅') ? 'text-emerald-400 font-bold' :
+                                                                log.includes('📡') ? 'text-blue-400' :
+                                                                    log.includes('📅') ? 'text-white font-black bg-blue-500/20 px-2 rounded mt-2' :
+                                                                        'text-slate-400'
                                                 )}>
                                                     {log.includes(']') ? log.substring(log.indexOf(']') + 1) : log}
                                                 </span>
                                             </div>
                                         ))}
                                     </div>
-                                    
+
                                     {/* Glass gradient overlay on top/bottom */}
                                     <div className="absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-[#0f172a] to-transparent rounded-t-[1.5rem]" />
                                     <div className="absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-[#0f172a] to-transparent rounded-b-[1.5rem]" />

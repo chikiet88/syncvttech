@@ -45,6 +45,25 @@ export class AppController {
     };
   }
 
+  @Get('sync/revenue')
+  async triggerRevenueSync(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('date') date?: string,
+  ) {
+    const dateFrom = from || date || new Date().toISOString().split('T')[0];
+    const dateTo = to || date || dateFrom;
+
+    this.syncService.syncRevenue(dateFrom, dateTo).catch(err => {
+      console.error('Background revenue sync failed:', err);
+    });
+
+    return {
+      message: `Đã bắt đầu đồng bộ doanh thu từ: ${dateFrom} đến ${dateTo}`,
+      status: 'processing'
+    };
+  }
+
   @Get('sync/stop')
   async stopSync() {
     this.syncService.stopSync();
@@ -96,5 +115,13 @@ export class AppController {
   @Get('sync/status')
   async getSyncStatus() {
     return this.syncService.getSyncStatus();
+  }
+
+  @Get('branches')
+  async getBranches() {
+    return this.prisma.branch.findMany({
+      where: { is_active: 1 },
+      orderBy: { name: 'asc' },
+    });
   }
 }

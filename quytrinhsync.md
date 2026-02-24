@@ -104,3 +104,8 @@ Reponse : reponse_Schedule.json
 Endpoint : https://tmtaza.vttechsolution.com/Customer/ComplaintList/?handler=Loadata
 Formdata : CustomerID=110362&currentID=0
 Reponse : reponse_Complaint.json
+
+14. Doanh Thu Chi Nhánh
+Endpoint : https://tmtaza.vttechsolution.com/Report/Revenue/Branch/AllBranchGrid/?handler=LoadataDetailByBranch
+FormData : branchID=21&dateFrom=05-01-2026&dateTo=07-01-2026
+Reponse : quytrinh_reponse_LoadataDetailByBranch.json

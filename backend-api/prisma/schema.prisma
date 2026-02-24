@@ -27,6 +27,7 @@ model Branch {
   customers       Customer[]
   appointments    Appointment[]
   treatments      Treatment[]
+  revenue_transactions RevenueTransaction[]
 
   @@map("branches")
 }
@@ -191,6 +192,36 @@ model DailyRevenue {
   @@map("daily_revenue")
 }
 
+model RevenueTransaction {
+  id            Int      @id @default(autoincrement())
+  date          DateTime
+  created_at    DateTime
+  branch_id     Int
+  branch_name   String?
+  customer_id   Int?
+  customer_name String?
+  customer_code String?
+  phone         String?
+  service_id    Int?
+  service_name  String?
+  category_id   Int?
+  category_name String?
+  amount        Float    @default(0)
+  paid          Float    @default(0)
+  is_new        Int      @default(0)
+  type          Int?
+  payment_method Int?
+  doc_code      String?
+  source_id     Int?
+  
+  last_hash     String?
+  synced_at     DateTime @default(now())
+
+  branch        Branch   @relation(fields: [branch_id], references: [id])
+
+  @@map("revenue_transactions")
+}
+
 model Customer {
   id            Int       @id
   code          String?
@@ -210,6 +241,7 @@ model Customer {
   total_debt    Float     @default(0)
   point         Int       @default(0)
   is_active     Int       @default(1)
+  last_hash     String?
   created_at    DateTime  @default(now())
   updated_at    DateTime  @default(now()) @updatedAt
 

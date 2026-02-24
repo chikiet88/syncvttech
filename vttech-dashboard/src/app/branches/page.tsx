@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import prisma from "@/lib/db"
 import { DataTable } from "@/components/ui/data-table"
 import { columns, BranchColumn } from "./columns"

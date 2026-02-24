@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "./manage.sh",
+    "dev:host": "cross-env DATABASE_URL=postgresql://postgres:postgres_password_123@localhost:18103/db_tazagroup_vttech_sync concurrently \"npm run frontend\" \"npm run backend\"",
     "manage": "./manage.sh",
     "backend": "cd backend-api && bun run start:dev",
-    "frontend": "cd vttech-dashboard && bun dev"
+    "frontend": "cd vttech-dashboard && bun dev",
+    "backend:host": "cd backend-api && DATABASE_URL=postgresql://postgres:postgres_password_123@localhost:18103/db_tazagroup_vttech_sync bun run start:dev",
+    "frontend:host": "cd vttech-dashboard && DATABASE_URL=postgresql://postgres:postgres_password_123@localhost:18103/db_tazagroup_vttech_sync bun dev"
   },
   "devDependencies": {
     "prisma": "~6.2.1"

@@ -64,6 +64,14 @@ const data = {
       ],
     },
     {
+      title: 'Báo cáo',
+      url: '#',
+      icon: TrendingUp,
+      items: [
+        { title: 'Doanh thu', url: '/reports/revenue', icon: BadgeDollarSign },
+      ],
+    },
+    {
       title: 'Dữ liệu Cốt lõi',
       url: '#',
       icon: Building2,

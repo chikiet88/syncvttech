@@ -46,6 +46,17 @@ let AppController = class AppController {
             status: 'processing'
         };
     }
+    async triggerRevenueSync(from, to, date) {
+        const dateFrom = from || date || new Date().toISOString().split('T')[0];
+        const dateTo = to || date || dateFrom;
+        this.syncService.syncRevenue(dateFrom, dateTo).catch(err => {
+            console.error('Background revenue sync failed:', err);
+        });
+        return {
+            message: `Đã bắt đầu đồng bộ doanh thu từ: ${dateFrom} đến ${dateTo}`,
+            status: 'processing'
+        };
+    }
     async stopSync() {
         this.syncService.stopSync();
         return { message: 'Đang gửi yêu cầu dừng đồng bộ...' };
@@ -81,6 +92,12 @@ let AppController = class AppController {
     async getSyncStatus() {
         return this.syncService.getSyncStatus();
     }
+    async getBranches() {
+        return this.prisma.branch.findMany({
+            where: { is_active: 1 },
+            orderBy: { name: 'asc' },
+        });
+    }
 };
 exports.AppController = AppController;
 __decorate([
@@ -101,6 +118,15 @@ __decorate([
     __metadata("design:paramtypes", [String, String, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], AppController.prototype, "triggerSync", null);
+__decorate([
+    (0, common_1.Get)('sync/revenue'),
+    __param(0, (0, common_1.Query)('from')),
+    __param(1, (0, common_1.Query)('to')),
+    __param(2, (0, common_1.Query)('date')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String]),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "triggerRevenueSync", null);
 __decorate([
     (0, common_1.Get)('sync/stop'),
     __metadata("design:type", Function),
@@ -142,6 +168,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], AppController.prototype, "getSyncStatus", null);
+__decorate([
+    (0, common_1.Get)('branches'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "getBranches", null);
 exports.AppController = AppController = __decorate([
     (0, common_1.Controller)(),
     __metadata("design:paramtypes", [app_service_1.AppService,

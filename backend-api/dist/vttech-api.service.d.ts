@@ -18,4 +18,5 @@ export declare class VttechApiService {
     callApi(endpoint: string, data?: any): Promise<any>;
     fetchExtensions(): Promise<any>;
     fetchTicketGroups(): Promise<any>;
+    getRevenueByBranch(dateFrom: string, dateTo: string, branchId: number): Promise<any>;
 }
