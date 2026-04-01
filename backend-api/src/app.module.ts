@@ -30,7 +30,7 @@ import { PbxSyncService } from './pbx-sync.service';
         // If not in docker environment, use host port 18104
         if (host === 'tazagroupnet-redis' && process.env.NODE_ENV !== 'production') {
            host = 'localhost';
-           port = 18104;
+           port = 12004;
         }
 
         return {

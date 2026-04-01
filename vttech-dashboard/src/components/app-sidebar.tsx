@@ -68,6 +68,7 @@ const data = {
       url: '#',
       icon: TrendingUp,
       items: [
+        { title: 'Tổng hợp Chi nhánh', url: '/reports', icon: Building2 },
         { title: 'Doanh thu', url: '/reports/revenue', icon: BadgeDollarSign },
       ],
     },

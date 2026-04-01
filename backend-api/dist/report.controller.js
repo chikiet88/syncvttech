@@ -23,11 +23,14 @@ let ReportController = class ReportController {
         this.vttechApi = vttechApi;
         this.prisma = prisma;
     }
-    async getRevenue(branchID, dateFrom, dateTo, search, page = '1', limit = '20', sortBy = 'created_at', sortOrder = 'desc') {
+    async getRevenue(branchID, dateFrom, dateTo, search, page = '1', limit = '20', sortBy = 'created_at', sortOrder = 'desc', serviceOnly) {
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
         const where = {};
+        if (serviceOnly === 'true') {
+            where.service_id = { not: null };
+        }
         if (branchID && branchID !== '0') {
             where.branch_id = parseInt(branchID);
         }
@@ -125,6 +128,179 @@ let ReportController = class ReportController {
             }
         };
     }
+    async getBranchSummary(dateFrom, dateTo) {
+        const parseDate = (dStr) => {
+            if (!dStr)
+                return new Date();
+            const [d, m, y] = dStr.split('-');
+            return new Date(`${y}-${m}-${d}`);
+        };
+        const start = parseDate(dateFrom);
+        const end = parseDate(dateTo);
+        end.setHours(23, 59, 59, 999);
+        const branches = await this.prisma.branch.findMany({
+            where: { is_active: 1 },
+            orderBy: { id: 'asc' }
+        });
+        const summaries = await Promise.all(branches.map(async (branch) => {
+            const [customerCount, serviceCount, treatmentCount, appointmentCount, revenueAgg] = await Promise.all([
+                this.prisma.dailyCustomer.count({
+                    where: {
+                        branch_id: branch.id,
+                        date: { gte: start, lte: end }
+                    }
+                }),
+                this.prisma.revenueTransaction.count({
+                    where: {
+                        branch_id: branch.id,
+                        date: { gte: start, lte: end },
+                        service_id: { not: null }
+                    }
+                }),
+                this.prisma.treatment.count({
+                    where: {
+                        branch_id: branch.id,
+                        treatment_date: { gte: start, lte: end }
+                    }
+                }),
+                this.prisma.appointment.count({
+                    where: {
+                        branch_id: branch.id,
+                        appointment_date: { gte: start, lte: end }
+                    }
+                }),
+                this.prisma.revenueTransaction.aggregate({
+                    where: {
+                        branch_id: branch.id,
+                        date: { gte: start, lte: end }
+                    },
+                    _sum: {
+                        amount: true,
+                        paid: true
+                    }
+                })
+            ]);
+            return {
+                id: branch.id,
+                name: branch.name,
+                customerCount: customerCount || 0,
+                serviceCount: serviceCount || 0,
+                treatmentCount: treatmentCount || 0,
+                appointmentCount: appointmentCount || 0,
+                totalSales: revenueAgg._sum?.amount || 0,
+                totalRevenue: revenueAgg._sum?.paid || 0,
+            };
+        }));
+        return summaries;
+    }
+    async getCustomersDetails(branchId, from, to, page = '1', limit = '20') {
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+        const parseDate = (dStr) => {
+            if (!dStr)
+                return new Date();
+            const [d, m, y] = dStr.split('-');
+            return new Date(`${y}-${m}-${d}`);
+        };
+        const start = parseDate(from || '');
+        const end = parseDate(to || '');
+        end.setHours(23, 59, 59, 999);
+        const where = { date: { gte: start, lte: end } };
+        if (branchId && branchId !== '0')
+            where.branch_id = parseInt(branchId);
+        const [data, total] = await Promise.all([
+            this.prisma.dailyCustomer.findMany({
+                where,
+                skip,
+                take: limitNum,
+                orderBy: { date: 'desc' },
+            }),
+            this.prisma.dailyCustomer.count({ where }),
+        ]);
+        const customerIds = [...new Set(data.map((t) => t.customer_id).filter(Boolean))];
+        const customers = await this.prisma.customer.findMany({
+            where: { id: { in: customerIds } },
+            select: { id: true, name: true, code: true, phone: true }
+        });
+        const customerMap = new Map(customers.map(c => [c.id, c]));
+        const mappedData = data.map((item) => {
+            const c = customerMap.get(item.customer_id);
+            return {
+                id: item.id,
+                date: item.date,
+                customerId: item.customer_id,
+                customerName: c?.name || item.customer_name || 'N/A',
+                customerCode: c?.code || '',
+                phone: c?.phone || item.phone || '',
+                branchId: item.branch_id,
+            };
+        });
+        return {
+            data: mappedData,
+            pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
+        };
+    }
+    async getTreatmentsDetails(branchId, from, to, page = '1', limit = '20') {
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+        const parseDate = (dStr) => {
+            if (!dStr)
+                return new Date();
+            const [d, m, y] = dStr.split('-');
+            return new Date(`${y}-${m}-${d}`);
+        };
+        const start = parseDate(from || '');
+        const end = parseDate(to || '');
+        end.setHours(23, 59, 59, 999);
+        const where = { treatment_date: { gte: start, lte: end } };
+        if (branchId && branchId !== '0')
+            where.branch_id = parseInt(branchId);
+        const [data, total] = await Promise.all([
+            this.prisma.treatment.findMany({
+                where,
+                skip,
+                take: limitNum,
+                orderBy: { treatment_date: 'desc' },
+            }),
+            this.prisma.treatment.count({ where }),
+        ]);
+        return {
+            data,
+            pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
+        };
+    }
+    async getAppointmentsDetails(branchId, from, to, page = '1', limit = '20') {
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+        const parseDate = (dStr) => {
+            if (!dStr)
+                return new Date();
+            const [d, m, y] = dStr.split('-');
+            return new Date(`${y}-${m}-${d}`);
+        };
+        const start = parseDate(from || '');
+        const end = parseDate(to || '');
+        end.setHours(23, 59, 59, 999);
+        const where = { appointment_date: { gte: start, lte: end } };
+        if (branchId && branchId !== '0')
+            where.branch_id = parseInt(branchId);
+        const [data, total] = await Promise.all([
+            this.prisma.appointment.findMany({
+                where,
+                skip,
+                take: limitNum,
+                orderBy: { appointment_date: 'desc' },
+            }),
+            this.prisma.appointment.count({ where }),
+        ]);
+        return {
+            data,
+            pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
+        };
+    }
 };
 exports.ReportController = ReportController;
 __decorate([
@@ -137,10 +313,52 @@ __decorate([
     __param(5, (0, common_1.Query)('limit')),
     __param(6, (0, common_1.Query)('sortBy')),
     __param(7, (0, common_1.Query)('sortOrder')),
+    __param(8, (0, common_1.Query)('service_only')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String, String, String, String, String, String]),
+    __metadata("design:paramtypes", [String, String, String, String, String, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], ReportController.prototype, "getRevenue", null);
+__decorate([
+    (0, common_1.Get)('branches'),
+    __param(0, (0, common_1.Query)('dateFrom')),
+    __param(1, (0, common_1.Query)('dateTo')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], ReportController.prototype, "getBranchSummary", null);
+__decorate([
+    (0, common_1.Get)('customers/details'),
+    __param(0, (0, common_1.Query)('branchId')),
+    __param(1, (0, common_1.Query)('from')),
+    __param(2, (0, common_1.Query)('to')),
+    __param(3, (0, common_1.Query)('page')),
+    __param(4, (0, common_1.Query)('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, String, String]),
+    __metadata("design:returntype", Promise)
+], ReportController.prototype, "getCustomersDetails", null);
+__decorate([
+    (0, common_1.Get)('treatments/details'),
+    __param(0, (0, common_1.Query)('branchId')),
+    __param(1, (0, common_1.Query)('from')),
+    __param(2, (0, common_1.Query)('to')),
+    __param(3, (0, common_1.Query)('page')),
+    __param(4, (0, common_1.Query)('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, String, String]),
+    __metadata("design:returntype", Promise)
+], ReportController.prototype, "getTreatmentsDetails", null);
+__decorate([
+    (0, common_1.Get)('appointments/details'),
+    __param(0, (0, common_1.Query)('branchId')),
+    __param(1, (0, common_1.Query)('from')),
+    __param(2, (0, common_1.Query)('to')),
+    __param(3, (0, common_1.Query)('page')),
+    __param(4, (0, common_1.Query)('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, String, String]),
+    __metadata("design:returntype", Promise)
+], ReportController.prototype, "getAppointmentsDetails", null);
 exports.ReportController = ReportController = __decorate([
     (0, common_1.Controller)('reports'),
     __metadata("design:paramtypes", [vttech_api_service_1.VttechApiService,

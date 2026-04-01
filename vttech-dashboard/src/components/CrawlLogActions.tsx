@@ -63,7 +63,7 @@ export function CrawlLogActions() {
         if (isOpen || (status?.isSyncing)) {
             const fetchStatus = async () => {
                 try {
-                    const res = await fetch("http://localhost:3001/sync/status")
+                    const res = await fetch("http://localhost:5001/sync/status")
                     if (res.ok) {
                         const data = await res.json()
                         setStatus(data)
@@ -97,7 +97,7 @@ export function CrawlLogActions() {
     const handleStartSync = async () => {
         setIsStarting(true)
         try {
-            const response = await fetch(`http://localhost:3001/sync?from=${dateFrom}&to=${dateTo}&forceMaster=${forceMaster}&syncPbx=${syncPbx}&syncDetails=${syncDetails}`)
+            const response = await fetch(`http://localhost:5001/sync?from=${dateFrom}&to=${dateTo}&forceMaster=${forceMaster}&syncPbx=${syncPbx}&syncDetails=${syncDetails}`)
             if (response.ok) {
                 setIsOpen(true)
             } else {
@@ -114,7 +114,7 @@ export function CrawlLogActions() {
     const handleStartRevenueSync = async () => {
         setIsStarting(true)
         try {
-            const response = await fetch(`http://localhost:3001/sync/revenue?from=${dateFrom}&to=${dateTo}`)
+            const response = await fetch(`http://localhost:5001/sync/revenue?from=${dateFrom}&to=${dateTo}`)
             if (response.ok) {
                 setIsOpen(true)
             } else {
@@ -131,7 +131,7 @@ export function CrawlLogActions() {
     const handleStopSync = async () => {
         setIsStopping(true)
         try {
-            const response = await fetch("http://localhost:3001/sync/stop")
+            const response = await fetch("http://localhost:5001/sync/stop")
             if (response.ok) {
                 // Request sent
             }
@@ -153,7 +153,7 @@ export function CrawlLogActions() {
     const handleOpenDialog = async () => {
         // Check if a sync is already in progress before opening
         try {
-            const res = await fetch("http://localhost:3001/sync/status")
+            const res = await fetch("http://localhost:5001/sync/status")
             if (res.ok) {
                 const data = await res.json()
                 setStatus(data)

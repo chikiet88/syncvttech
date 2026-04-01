@@ -15,4 +15,9 @@ export declare class PbxSyncService {
     }>;
     syncExtensions(): Promise<number>;
     syncPbxEmployees(): Promise<number>;
+    syncVttechCallHistory(dateFrom: string, dateTo: string): Promise<{
+        total: number;
+        success: number;
+        failed: number;
+    }>;
 }

@@ -19,6 +19,7 @@ export class ReportController {
     @Query('limit') limit: string = '20',
     @Query('sortBy') sortBy: string = 'created_at',
     @Query('sortOrder') sortOrder: 'asc' | 'desc' = 'desc',
+    @Query('service_only') serviceOnly?: string,
   ) {
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
@@ -26,6 +27,10 @@ export class ReportController {
 
     // Build filters
     const where: any = {};
+
+    if (serviceOnly === 'true') {
+      where.service_id = { not: null };
+    }
 
     if (branchID && branchID !== '0') {
       where.branch_id = parseInt(branchID);
@@ -145,6 +150,238 @@ export class ReportController {
         limit: limitNum,
         totalPages: Math.ceil(total / limitNum),
       }
+    };
+  }
+
+  @Get('branches')
+  async getBranchSummary(
+    @Query('dateFrom') dateFrom: string,
+    @Query('dateTo') dateTo: string,
+  ) {
+    // Parse dates (Input format: DD-MM-YYYY)
+    const parseDate = (dStr: string) => {
+      if (!dStr) return new Date();
+      const [d, m, y] = dStr.split('-');
+      return new Date(`${y}-${m}-${d}`);
+    };
+    
+    const start = parseDate(dateFrom);
+    const end = parseDate(dateTo);
+    end.setHours(23, 59, 59, 999);
+
+    // Get all branches
+    const branches = await this.prisma.branch.findMany({
+      where: { is_active: 1 },
+      orderBy: { id: 'asc' }
+    });
+
+    const summaries = await Promise.all(branches.map(async (branch) => {
+      // Aggregate data for this branch in range
+      const [
+        customerCount,
+        serviceCount,
+        treatmentCount,
+        appointmentCount,
+        revenueAgg
+      ] = await Promise.all([
+        // Count distinct customers using dailyCustomer activity tracking
+        (this.prisma as any).dailyCustomer.count({
+          where: {
+            branch_id: branch.id,
+            date: { gte: start, lte: end }
+          }
+        }),
+        // Count services in revenue transactions
+        (this.prisma as any).revenueTransaction.count({
+          where: {
+            branch_id: branch.id,
+            date: { gte: start, lte: end },
+            service_id: { not: null }
+          }
+        }),
+        // Count treatments
+        this.prisma.treatment.count({
+          where: {
+            branch_id: branch.id,
+            treatment_date: { gte: start, lte: end }
+          }
+        }),
+        // Count appointments
+        this.prisma.appointment.count({
+          where: {
+            branch_id: branch.id,
+            appointment_date: { gte: start, lte: end }
+          }
+        }),
+        // Sum amount and paid from revenueTransactions
+        (this.prisma as any).revenueTransaction.aggregate({
+          where: {
+            branch_id: branch.id,
+            date: { gte: start, lte: end }
+          },
+          _sum: {
+            amount: true,
+            paid: true
+          }
+        })
+      ]);
+
+      return {
+        id: branch.id,
+        name: branch.name,
+        customerCount: customerCount || 0,
+        serviceCount: serviceCount || 0,
+        treatmentCount: treatmentCount || 0,
+        appointmentCount: appointmentCount || 0,
+        totalSales: revenueAgg._sum?.amount || 0,
+        totalRevenue: revenueAgg._sum?.paid || 0,
+      };
+    }));
+
+    return summaries;
+  }
+
+  @Get('customers/details')
+  async getCustomersDetails(
+    @Query('branchId') branchId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+  ) {
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const parseDate = (dStr: string) => {
+      if (!dStr) return new Date();
+      const [d, m, y] = dStr.split('-');
+      return new Date(`${y}-${m}-${d}`);
+    };
+
+    const start = parseDate(from || '');
+    const end = parseDate(to || '');
+    end.setHours(23, 59, 59, 999);
+
+    const where: any = { date: { gte: start, lte: end } };
+    if (branchId && branchId !== '0') where.branch_id = parseInt(branchId);
+
+    const [data, total] = await Promise.all([
+      (this.prisma as any).dailyCustomer.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { date: 'desc' },
+      }),
+      (this.prisma as any).dailyCustomer.count({ where }),
+    ]);
+
+    // Map names from Customer table
+    const customerIds = [...new Set(data.map((t: any) => t.customer_id).filter(Boolean))];
+    const customers = await this.prisma.customer.findMany({
+      where: { id: { in: customerIds as number[] } },
+      select: { id: true, name: true, code: true, phone: true }
+    });
+    const customerMap = new Map(customers.map(c => [c.id, c]));
+
+    const mappedData = data.map((item: any) => {
+      const c = customerMap.get(item.customer_id);
+      return {
+        id: item.id,
+        date: item.date,
+        customerId: item.customer_id,
+        customerName: c?.name || item.customer_name || 'N/A',
+        customerCode: c?.code || '',
+        phone: c?.phone || item.phone || '',
+        branchId: item.branch_id,
+      };
+    });
+
+    return {
+      data: mappedData,
+      pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
+    };
+  }
+
+  @Get('treatments/details')
+  async getTreatmentsDetails(
+    @Query('branchId') branchId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+  ) {
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const parseDate = (dStr: string) => {
+      if (!dStr) return new Date();
+      const [d, m, y] = dStr.split('-');
+      return new Date(`${y}-${m}-${d}`);
+    };
+
+    const start = parseDate(from || '');
+    const end = parseDate(to || '');
+    end.setHours(23, 59, 59, 999);
+
+    const where: any = { treatment_date: { gte: start, lte: end } };
+    if (branchId && branchId !== '0') where.branch_id = parseInt(branchId);
+
+    const [data, total] = await Promise.all([
+      this.prisma.treatment.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { treatment_date: 'desc' },
+      }),
+      this.prisma.treatment.count({ where }),
+    ]);
+
+    return {
+      data,
+      pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
+    };
+  }
+
+  @Get('appointments/details')
+  async getAppointmentsDetails(
+    @Query('branchId') branchId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+  ) {
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const parseDate = (dStr: string) => {
+      if (!dStr) return new Date();
+      const [d, m, y] = dStr.split('-');
+      return new Date(`${y}-${m}-${d}`);
+    };
+
+    const start = parseDate(from || '');
+    const end = parseDate(to || '');
+    end.setHours(23, 59, 59, 999);
+
+    const where: any = { appointment_date: { gte: start, lte: end } };
+    if (branchId && branchId !== '0') where.branch_id = parseInt(branchId);
+
+    const [data, total] = await Promise.all([
+      this.prisma.appointment.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { appointment_date: 'desc' },
+      }),
+      this.prisma.appointment.count({ where }),
+    ]);
+
+    return {
+      data,
+      pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
     };
   }
 }

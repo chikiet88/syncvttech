@@ -38,7 +38,7 @@ exports.AppModule = AppModule = __decorate([
                     let port = configService.get('REDIS_PORT') || 6379;
                     if (host === 'tazagroupnet-redis' && process.env.NODE_ENV !== 'production') {
                         host = 'localhost';
-                        port = 18104;
+                        port = 12004;
                     }
                     return {
                         connection: {

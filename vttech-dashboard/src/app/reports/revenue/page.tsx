@@ -15,13 +15,31 @@ function RevenueReportContent() {
   const searchParams = useSearchParams()
   const q = searchParams.get("q") ?? ""
   const page = searchParams.get("page") ?? "1"
+  
+  // Parse drill-down params
+  const paramBranchId = searchParams.get("branchId")
+  const paramDateFrom = searchParams.get("dateFrom")
+  const paramDateTo = searchParams.get("dateTo")
+
+  // Helper to convert DD-MM-YYYY to YYYY-MM-DD for input type="date"
+  const parseInitDate = (dStr: string | null) => {
+    if (!dStr) return new Date().toISOString().split('T')[0]
+    const parts = dStr.split('-')
+    if (parts.length === 3) {
+      // If it's already DD-MM-YYYY, convert to YYYY-MM-DD
+      if (parts[0].length === 2) return `${parts[2]}-${parts[1]}-${parts[0]}`
+      // If it's YYYY-MM-DD, return as is
+      return dStr
+    }
+    return new Date().toISOString().split('T')[0]
+  }
 
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<RevenueColumn[]>([])
   const [branches, setBranches] = useState<{id: number, name: string}[]>([])
-  const [dateFrom, setDateFrom] = useState(new Date().toISOString().split('T')[0])
-  const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0])
-  const [branchID, setBranchID] = useState("0")
+  const [dateFrom, setDateFrom] = useState(parseInitDate(paramDateFrom))
+  const [dateTo, setDateTo] = useState(parseInitDate(paramDateTo))
+  const [branchID, setBranchID] = useState(paramBranchId || "0")
   
   const [pagination, setPagination] = useState({
     total: 0,
@@ -34,7 +52,7 @@ function RevenueReportContent() {
   useEffect(() => {
     const fetchBranches = async () => {
       try {
-        const res = await fetch("http://localhost:3001/branches")
+        const res = await fetch("http://localhost:5001/branches")
         if (res.ok) {
           const data = await res.json()
           setBranches(data)
@@ -56,7 +74,7 @@ function RevenueReportContent() {
         return `${d}-${m}-${y}`
       }
 
-      const url = new URL("http://localhost:3001/reports/revenue")
+      const url = new URL("http://localhost:5001/reports/revenue")
       url.searchParams.set("branchID", branchID)
       url.searchParams.set("dateFrom", formatDate(dateFrom))
       url.searchParams.set("dateTo", formatDate(dateTo))

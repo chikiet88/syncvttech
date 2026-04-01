@@ -4,7 +4,7 @@ import { columns, CrawlLogColumn } from "./columns"
 import { pbxColumns, PbxSyncLogColumn } from "./pbx-columns"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Activity, Phone, Server } from "lucide-react"
-import { CrawlLogActions } from "./actions"
+import { CrawlLogActions } from "@/components/CrawlLogActions"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 async function getData(url: string) {
@@ -20,9 +20,11 @@ async function getData(url: string) {
 }
 
 export default async function CrawlLogsPage() {
+  const backendUrl = process.env.NODE_ENV === "production" ? "http://apivttech-backend:5001" : "http://localhost:5001"
+
   const [crmLogs, pbxLogs] = await Promise.all([
-    getData("http://localhost:3001/monitoring/logs"),
-    getData("http://localhost:3001/monitoring/pbx-logs")
+    getData(`${backendUrl}/monitoring/logs`),
+    getData(`${backendUrl}/monitoring/pbx-logs`)
   ])
 
   // Format data for the tables

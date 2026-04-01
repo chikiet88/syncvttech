@@ -42,6 +42,8 @@ export declare class SyncService {
     private syncCustomerPayments;
     private syncCustomerSchedules;
     private syncSingleCustomerDetail;
+    private syncCustomerAnamnesis;
+    private syncCustomerVttechCalls;
     getLogs(limit?: number): Promise<{
         status: string;
         error_message: string | null;

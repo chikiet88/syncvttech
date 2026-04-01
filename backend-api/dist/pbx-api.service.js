@@ -37,6 +37,10 @@ let PbxApiService = PbxApiService_1 = class PbxApiService {
         };
     }
     async fetchCdrRecords(dateFrom, dateTo, offset = 0) {
+        if (!this.apiUrl) {
+            this.logger.warn('PBX_API_URL is not configured. Skipping fetch.');
+            return { data: [], total: 0 };
+        }
         const fromStr = `${dateFrom} 00:00:00`;
         const toStr = `${dateTo} 23:59:59`;
         try {

@@ -50,9 +50,14 @@ let PbxSyncService = PbxSyncService_1 = class PbxSyncService {
             let successCount = 0;
             let failedCount = 0;
             for (const record of records) {
+                if (!record || !record.uuid) {
+                    this.logger.warn(`Skipping CDR record without UUID: ${JSON.stringify(record)}`);
+                    failedCount++;
+                    continue;
+                }
                 try {
                     await this.prisma.pbxCallRecord.upsert({
-                        where: { uuid: record.uuid },
+                        where: { uuid: String(record.uuid) },
                         create: {
                             uuid: record.uuid,
                             direction: record.direction,
@@ -127,21 +132,35 @@ let PbxSyncService = PbxSyncService_1 = class PbxSyncService {
         this.logger.log('🔄 Syncing Extensions from VTTech...');
         try {
             const result = await this.vttechApi.fetchExtensions();
-            const records = result || [];
+            let records = [];
+            if (Array.isArray(result)) {
+                records = result;
+            }
+            else if (result && typeof result === 'object') {
+                records = result.data || result.Data || result.Table || result.Items || [];
+            }
+            if (!Array.isArray(records)) {
+                this.logger.warn('No valid extension records found in API response');
+                return 0;
+            }
             let count = 0;
             for (const record of records) {
+                if (!record || typeof record !== 'object' || !record.ID || !record.Extension) {
+                    this.logger.warn(`Skipping invalid extension record: ${JSON.stringify(record)}`);
+                    continue;
+                }
                 await this.prisma.pbxExtension.upsert({
-                    where: { vttech_id: record.ID },
+                    where: { vttech_id: parseInt(record.ID) },
                     create: {
-                        vttech_id: record.ID,
-                        extension: record.Extension,
-                        password: record.Password,
+                        vttech_id: parseInt(record.ID),
+                        extension: String(record.Extension),
+                        password: record.Password ? String(record.Password) : null,
                         is_active: 1,
                         raw_data: record,
                     },
                     update: {
-                        extension: record.Extension,
-                        password: record.Password,
+                        extension: String(record.Extension),
+                        password: record.Password ? String(record.Password) : null,
                         raw_data: record,
                     },
                 });
@@ -159,35 +178,55 @@ let PbxSyncService = PbxSyncService_1 = class PbxSyncService {
         this.logger.log('🔄 Syncing Call Center Employees from VTTech...');
         try {
             const groups = await this.vttechApi.fetchTicketGroups();
-            const records = groups || [];
+            let groupList = [];
+            if (Array.isArray(groups)) {
+                groupList = groups;
+            }
+            else if (groups && typeof groups === 'object') {
+                groupList = groups.data || groups.Data || groups.Table || groups.Items || [];
+            }
+            if (!Array.isArray(groupList)) {
+                this.logger.warn('No valid ticket group records found in API response');
+                return 0;
+            }
             let count = 0;
-            for (const group of records) {
-                const members = group.Members || [];
+            for (const group of groupList) {
+                if (!group || typeof group !== 'object')
+                    continue;
+                const members = group.Members || group.data || group.Data || [];
+                if (!Array.isArray(members))
+                    continue;
                 for (const member of members) {
+                    const memberId = member.EmployeeId || member.Id;
+                    const memberName = member.EmployeeName || member.Name;
+                    if (!memberId || !memberName) {
+                        this.logger.warn(`Skipping invalid employee record: ${JSON.stringify(member)}`);
+                        continue;
+                    }
                     await this.prisma.pbxEmployee.upsert({
-                        where: { vttech_id: member.EmployeeId || member.Id },
+                        where: { vttech_id: parseInt(memberId) },
                         create: {
-                            vttech_id: member.EmployeeId || member.Id,
-                            name: member.EmployeeName || member.Name,
-                            code: member.EmployeeCode || member.Code,
-                            phone: member.Mobile || member.Phone,
-                            extension: member.Extension || member.Ext,
-                            group_id: group.Id,
-                            group_name: group.Name,
-                            department: member.Department,
-                            position: member.Position,
+                            vttech_id: parseInt(memberId),
+                            name: String(memberName),
+                            code: member.EmployeeCode || member.Code ? String(member.EmployeeCode || member.Code) : null,
+                            phone: member.Mobile || member.Phone ? String(member.Mobile || member.Phone) : null,
+                            extension: member.Extension || member.Ext ? String(member.Extension || member.Ext) : null,
+                            group_id: group.Id ? parseInt(group.Id) : null,
+                            group_name: group.Name ? String(group.Name) : null,
+                            department: member.Department ? String(member.Department) : null,
+                            position: member.Position ? String(member.Position) : null,
                             is_active: 1,
                             raw_data: member,
                         },
                         update: {
-                            name: member.EmployeeName || member.Name,
-                            code: member.EmployeeCode || member.Code,
-                            phone: member.Mobile || member.Phone,
-                            extension: member.Extension || member.Ext,
-                            group_id: group.Id,
-                            group_name: group.Name,
-                            department: member.Department,
-                            position: member.Position,
+                            name: String(memberName),
+                            code: member.EmployeeCode || member.Code ? String(member.EmployeeCode || member.Code) : null,
+                            phone: member.Mobile || member.Phone ? String(member.Mobile || member.Phone) : null,
+                            extension: member.Extension || member.Ext ? String(member.Extension || member.Ext) : null,
+                            group_id: group.Id ? parseInt(group.Id) : null,
+                            group_name: group.Name ? String(group.Name) : null,
+                            department: member.Department ? String(member.Department) : null,
+                            position: member.Position ? String(member.Position) : null,
                             raw_data: member,
                         },
                     });
@@ -199,6 +238,109 @@ let PbxSyncService = PbxSyncService_1 = class PbxSyncService {
         }
         catch (error) {
             this.logger.error(`Error syncing PBX employees: ${error.message}`);
+            throw error;
+        }
+    }
+    async syncVttechCallHistory(dateFrom, dateTo) {
+        this.logger.log(`🔄 Syncing Call History from VTTech Portal (${dateFrom} - ${dateTo})...`);
+        const syncLog = await this.prisma.pbxSyncLog.create({
+            data: {
+                sync_type: 'vttech_call_history',
+                status: 'running',
+                date_from: new Date(dateFrom),
+                date_to: new Date(dateTo),
+            },
+        });
+        try {
+            const result = await this.vttechApi.fetchCallHistory(dateFrom, dateTo);
+            let records = [];
+            if (Array.isArray(result)) {
+                records = result;
+            }
+            else if (result && typeof result === 'object') {
+                records = result.Table || result.data || result.Data || result.Items || [];
+            }
+            this.logger.log(`📥 Fetched ${records.length} call history records from VTTech Portal`);
+            let successCount = 0;
+            let failedCount = 0;
+            for (const record of records) {
+                if (!record)
+                    continue;
+                const callId = String(record.CallID || record.ID || record.id || '');
+                if (!callId) {
+                    failedCount++;
+                    continue;
+                }
+                try {
+                    let statusStr = String(record.StatusName || record.Status || '');
+                    let callStatus = 'UNKNOWN';
+                    if (statusStr.includes('Hoàn tất') || statusStr.toLowerCase().includes('answered'))
+                        callStatus = 'ANSWERED';
+                    else if (statusStr.includes('Gọi nhỡ') || statusStr.toLowerCase().includes('no answer'))
+                        callStatus = 'NO_ANSWER';
+                    else if (statusStr.includes('Bận') || statusStr.toLowerCase().includes('busy'))
+                        callStatus = 'BUSY';
+                    else if (statusStr.includes('Hủy'))
+                        callStatus = 'CANCELED';
+                    const duration = parseInt(record.Duration || '0');
+                    const startTime = record.DateCall ? new Date(record.DateCall) : (record.Time ? new Date(record.Time) : null);
+                    const direction = record.Direction || (record.Type === '1' ? 'outbound' : 'inbound');
+                    await this.prisma.pbxCallRecord.upsert({
+                        where: { uuid: callId },
+                        create: {
+                            uuid: callId,
+                            direction: direction,
+                            caller_id_number: String(record.From || ''),
+                            destination_number: String(record.To || record.Phone || ''),
+                            duration: duration,
+                            billsec: duration,
+                            call_status: callStatus,
+                            record_path: record.LinkRecord || record.LinkAudio || record.Link || null,
+                            start_time: startTime,
+                            raw_data: record,
+                        },
+                        update: {
+                            direction: direction,
+                            caller_id_number: String(record.From || ''),
+                            destination_number: String(record.To || record.Phone || ''),
+                            duration: duration,
+                            billsec: duration,
+                            call_status: callStatus,
+                            record_path: record.LinkRecord || record.LinkAudio || record.Link || null,
+                            start_time: startTime,
+                            raw_data: record,
+                            updated_at: new Date(),
+                        },
+                    });
+                    successCount++;
+                }
+                catch (error) {
+                    this.logger.error(`Error upserting VTTech call record ${callId}: ${error.message}`);
+                    failedCount++;
+                }
+            }
+            await this.prisma.pbxSyncLog.update({
+                where: { id: syncLog.id },
+                data: {
+                    status: failedCount === 0 ? 'success' : 'partial',
+                    end_time: new Date(),
+                    total_records: records.length,
+                    success_count: successCount,
+                    failed_count: failedCount,
+                },
+            });
+            return { total: records.length, success: successCount, failed: failedCount };
+        }
+        catch (error) {
+            this.logger.error(`Error in syncVttechCallHistory: ${error.message}`);
+            await this.prisma.pbxSyncLog.update({
+                where: { id: syncLog.id },
+                data: {
+                    status: 'failed',
+                    end_time: new Date(),
+                    error_message: error.message,
+                },
+            });
             throw error;
         }
     }

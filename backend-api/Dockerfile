@@ -9,7 +9,7 @@ RUN bun install
 COPY backend-api/ .
 
 # Generate Prisma Client
-RUN bun prisma generate
+RUN ./node_modules/.bin/prisma generate
 
 # Build the application
 RUN bun run build

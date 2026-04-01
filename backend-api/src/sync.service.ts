@@ -377,9 +377,14 @@ export class SyncService {
         await this.pbxSync.syncPbxEmployees();
         this.addLog('✅ Đã cập nhật Extensions/Employees');
 
-        // Đồng bộ CDR
+        // Đồng bộ CDR từ API chuyên dụng
         const cdrResult = await this.pbxSync.syncCdr(dateFrom, dateTo);
-        this.addLog(`✅ Đã đồng bộ ${cdrResult.success} cuộc gọi (${cdrResult.failed} lỗi)`);
+        this.addLog(`✅ Đã đồng bộ ${cdrResult.success} cuộc gọi PBX API (${cdrResult.failed} lỗi)`);
+
+        // Đồng bộ Lịch sử cuộc gọi từ Portal VTTech (Mới)
+        this.addLog('📞 Đang lấy lịch sử cuộc gọi từ Portal VTTech...');
+        const portalCdrResult = await this.pbxSync.syncVttechCallHistory(dateFrom, dateTo);
+        this.addLog(`✅ Đã đồng bộ ${portalCdrResult.success} cuộc gọi từ Portal (${portalCdrResult.failed} lỗi)`);
       }
 
       this.syncStatus.progress = 100;
@@ -443,10 +448,10 @@ export class SyncService {
     while (hasMore) {
       if (this.syncStatus.shouldStop) break;
       const res = await this.vttechApi.callHandler('/Customer/ListCustomer/', 'LoadData', {
-        dateFrom: `${dateFrom} 00:00:00`,
-        dateTo: `${dateTo} 23:59:59`,
-        branchID: branchId.toString(),
-        type: type, // 1: RegDate, 2: Transaction/Activity Date, 3: History
+        DateFrom: `${dateFrom} 00:00:00`,
+        DateTo: `${dateTo} 23:59:59`,
+        BranchID: branchId.toString(),
+        Type: type, // 1: RegDate, 2: Transaction/Activity Date, 3: History
         BeginID: start,
         Limit: length,
       });
@@ -546,10 +551,13 @@ export class SyncService {
 
   private async syncAppointments(dateFrom: string, dateTo: string, branchId: number = 0): Promise<number[]> {
     const customerIds: number[] = [];
-    const res = await this.vttechApi.callHandler('/Appointment/AppointmentInDay/', 'LoadData', {
-      dateFrom: `${dateFrom} 00:00:00`,
-      dateTo: `${dateTo} 23:59:59`,
-      branchID: branchId.toString(),
+    const res = await this.vttechApi.callHandler('/Desk/Appointment/AppointmentInDay_Desk_Branch/', 'LoadataAppointmentList', {
+      DateFrom: `${dateFrom} 00:00:00`,
+      BranchID: branchId.toString(),
+      AppID: '0',
+      StatusID: '0',
+      DoctorID: '0',
+      TypeApp: '1',
     });
 
     const dataItems = this.ensureArray(res);
@@ -669,7 +677,12 @@ export class SyncService {
     }
 
     this.addLog('📦 Đang đồng bộ Master Data (Danh mục)...');
-    const result = await this.vttechApi.callApi('/api/Home/SessionData', {});
+    let result: any = {};
+    try {
+      result = await this.vttechApi.callApi('/api/Home/SessionData', {});
+    } catch (e) {
+      this.addLog(`⚠️ Cảnh báo: Không thể lấy SessionData (/api/Home/SessionData): ${e.message}. Sẽ thử các nguồn khác...`);
+    }
     if (!result) {
       this.addLog('⚠️ Không lấy được SessionData');
       return stats;
@@ -863,9 +876,20 @@ export class SyncService {
       const res = await this.vttechApi.callHandler('/Customer/GeneralInfo/', 'LoadData', { CustomerID: customerId });
       if (res && res.Table && res.Table[0]) {
         const info = res.Table[0];
-        await this.prisma.customer.update({
+        const name = info.CustName || info.FullName || info.Name || 'Unknown';
+        await this.prisma.customer.upsert({
           where: { id: customerId },
-          data: {
+          update: {
+            name,
+            gender: parseInt(info.Gender_ID) || null,
+            branch_id: parseInt(info.BranchID) || null,
+            birthday: this.parseDate(info.Birthday),
+            phone: info.Phone,
+            address: info.Address,
+          },
+          create: {
+            id: customerId,
+            name,
             gender: parseInt(info.Gender_ID) || null,
             branch_id: parseInt(info.BranchID) || null,
             birthday: this.parseDate(info.Birthday),
@@ -1425,9 +1449,92 @@ export class SyncService {
 
     // 13. Schedules (Historical)
     await this.syncCustomerSchedules(customerId);
+
+    // 14. Anamnesis (Tiền sử)
+    await this.syncCustomerAnamnesis(customerId);
+
+    // 15. Call History from VTTech
+    const phone = (await this.prisma.customer.findUnique({ where: { id: customerId } }))?.phone;
+    if (phone) {
+      await this.syncCustomerVttechCalls(customerId, phone);
+    }
     
     this.addLog(`✅ [ID: ${customerId}] Kết thúc Full Sync.`);
     return stats;
+  }
+
+  private async syncCustomerAnamnesis(customerId: number) {
+    try {
+      const res = await this.vttechApi.callHandler('/Customer/Anamnesis/CustomerAnamnesisList/', 'LoadataPatientHistory', { CustomerID: customerId });
+      const items = this.ensureArray(res);
+      for (const item of items) {
+        const id = parseInt(item.ID);
+        if (!id) continue;
+        await this.prisma.customerAnamnesis.upsert({
+          where: { id: id },
+          update: {
+            content: item.Content || item.Name,
+            note: item.Note,
+            created_at: this.parseDate(item.Created)
+          },
+          create: {
+            id: id,
+            customer_id: customerId,
+            content: item.Content || item.Name,
+            note: item.Note,
+            created_at: this.parseDate(item.Created)
+          }
+        });
+      }
+      if (items.length > 0) this.addLog(`   ✅ [ID: ${customerId}] Đã đồng bộ ${items.length} Tiền sử (Anamnesis)`);
+    } catch (e) {
+      this.addLog(`   ❌ [ID: ${customerId}] Lỗi syncCustomerAnamnesis: ${e.message}`);
+    }
+  }
+
+  private async syncCustomerVttechCalls(customerId: number, phone: string) {
+    try {
+      if (!phone || phone.length < 9) return;
+      
+      // VTTech doesn't store Call History directly in its DB for this endpoint (it returns an HTML view that queries the PBX API live).
+      // Since we already sync PBX CDRs into `pbx_call_records` via PbxSyncService, we just need to map them locally.
+      const pbxCalls = await this.prisma.pbxCallRecord.findMany({
+        where: {
+          OR: [
+            { destination_number: { contains: phone } },
+            { outbound_caller_id_number: { contains: phone } },
+            { caller_id_number: { contains: phone } }
+          ]
+        },
+        orderBy: { start_time: 'desc' }
+      });
+
+      for (const call of pbxCalls) {
+        if (!call.uuid) continue;
+        await this.prisma.customerCall.upsert({
+          where: { call_id: call.uuid },
+          update: {
+            duration: call.duration,
+            link_audio: call.record_path,
+            employee_name: call.caller_id_number || call.outbound_caller_id_number,
+            created_at: call.start_time
+          },
+          create: {
+            customer_id: customerId,
+            call_id: call.uuid,
+            phone: phone,
+            duration: call.duration,
+            link_audio: call.record_path,
+            content: call.direction, // Inbound/Outbound
+            employee_name: call.caller_id_number || call.outbound_caller_id_number,
+            created_at: call.start_time
+          }
+        });
+      }
+      if (pbxCalls.length > 0) this.addLog(`   ✅ [ID: ${customerId}] Đã map ${pbxCalls.length} Cuộc gọi PBX vào hồ sơ Khách hàng`);
+    } catch (e) {
+      this.addLog(`   ❌ [ID: ${customerId}] Lỗi syncCustomerVttechCalls: ${e.message}`);
+    }
   }
 
   async getLogs(limit: number = 100) {

@@ -10,11 +10,14 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Catch Ctrl+C and exit cleanly instead of looping back to the menu
+trap "echo -e '\n${GREEN}Đã thoát! 👋${NC}'; exit 0" SIGINT SIGTERM
+
 # Helper for Prisma commands
 run_prisma() {
     local DB_URL=""
     if ! getent hosts tazagroupnet-db &> /dev/null; then
-        DB_URL="postgresql://postgres:postgres_password_123@localhost:18103/db_tazagroup_vttech_sync"
+        DB_URL="postgresql://postgres:postgres@localhost:12003/db_tazagroup_vttech_sync"
     fi
 
     if [ -n "$DB_URL" ]; then
@@ -140,6 +143,25 @@ EOF
     read -p "Press Enter to return..."
 }
 
+clear_ports() {
+    echo -e "\n${RED}💀 Killing processes on ports 5000, 5001, 21100, 21101...${NC}"
+    for port in 5000 5001 21100 21101; do
+        PID=$(lsof -t -i:$port)
+        if [ -n "$PID" ]; then
+            echo -e "${YELLOW}  Stopping process on port $port (PID: $PID)...${NC}"
+            kill -9 $PID 2>/dev/null
+        else
+            echo -e "  Port $port is already free."
+        fi
+    done
+    echo -e "${GREEN}✅ Check completed.${NC}"
+}
+
+kill_ports() {
+    clear_ports
+    read -p "Press Enter to return..."
+}
+
 while true; do
     clear
     echo "============================================="
@@ -151,16 +173,20 @@ while true; do
     echo "4. Prisma Reset Data"
     echo "5. Prisma DB Push & Generate"
     echo "6. Git Auto Commit (Today)"
-    echo "7. [Host] VTTech Dashboard (Port 21102)"
-    echo "8. [Host] Backend API (Port 21101)"
-    echo "9. 🚀 Chạy Full Stack (Host - Port 21xxx)"
-    echo "10. 🐳 DOCKER: Start All (Backend + Dashboard)"
+    echo "7. [Host] VTTech Dashboard (Port 5000)"
+    echo "8. [Host] Backend API (Port 5001)"
+    echo "9. 🚀 Chạy Full Stack (Port 5000 & 5001)"
+    echo "10. 🐳 DOCKER: Start All (Port 21100 & 21101)"
     echo "11. 🐳 DOCKER: Stop All"
     echo "12. 🐳 DOCKER: View Logs"
+    echo "13. 💀 Kill Ports (5000, 5001, 21100, 21101)"
     echo "0. Exit"
     echo "============================================="
     echo -ne "Chọn option: "
-    read OPT
+    if ! read OPT; then
+        echo -e "\nĐã thoát! 👋"
+        exit 0
+    fi
 
     case $OPT in
         1)
@@ -192,33 +218,36 @@ while true; do
             read -p "Press Enter to return..."
             ;;
         7)
-            echo -e "\n${BLUE}🌐 Starting VTTech Dashboard on Port 21102...${NC}"
+            clear_ports
+            echo -e "\n${BLUE}🌐 Starting VTTech Dashboard on Port 5000...${NC}"
             if ! getent hosts tazagroupnet-db &> /dev/null; then
-                (cd vttech-dashboard && rm -rf .next && export DATABASE_URL="postgresql://postgres:postgres_password_123@localhost:18103/db_tazagroup_vttech_sync" && export PORT=21102 && bun dev)
+                (cd vttech-dashboard && rm -rf .next && export DATABASE_URL="postgresql://postgres:postgres@localhost:12003/db_tazagroup_vttech_sync" && export PORT=5000 && bun dev)
             else
-                (cd vttech-dashboard && rm -rf .next && export PORT=21102 && bun dev)
+                (cd vttech-dashboard && rm -rf .next && export PORT=5000 && bun dev)
             fi
             ;;
         8)
-            echo -e "\n${BLUE}⚙️  Starting Backend API on Port 21101...${NC}"
+            clear_ports
+            echo -e "\n${BLUE}⚙️  Starting Backend API on Port 5001...${NC}"
             if ! getent hosts tazagroupnet-db &> /dev/null; then
-                (cd backend-api && export DATABASE_URL="postgresql://postgres:postgres_password_123@localhost:18103/db_tazagroup_vttech_sync" && export PORT=21101 && bun run start:dev)
+                (cd backend-api && export DATABASE_URL="postgresql://postgres:postgres@localhost:12003/db_tazagroup_vttech_sync" && export PORT=5001 && bun run start:dev)
             else
-                (cd backend-api && export PORT=21101 && bun run start:dev)
+                (cd backend-api && export PORT=5001 && bun run start:dev)
             fi
             ;;
         9)
+            clear_ports
             echo -e "\n${BLUE}🚀 Starting Full Stack on Host...${NC}"
             DB_FALLBACK=""
             if ! getent hosts tazagroupnet-db &> /dev/null; then
-                DB_FALLBACK="DATABASE_URL=postgresql://postgres:postgres_password_123@localhost:18103/db_tazagroup_vttech_sync"
+                DB_FALLBACK="DATABASE_URL=postgresql://postgres:postgres@localhost:12003/db_tazagroup_vttech_sync"
             fi
-            bunx concurrently "$DB_FALLBACK PORT=21102 cd vttech-dashboard && rm -rf .next && bun dev" "$DB_FALLBACK PORT=21101 cd backend-api && bun run start:dev"
+            bunx concurrently "cd vttech-dashboard && rm -rf .next && $DB_FALLBACK PORT=5000 bun dev" "cd backend-api && $DB_FALLBACK PORT=5001 bun run start:dev"
             ;;
         10)
             echo -e "\n${BLUE}🐳 Starting Docker Containers (24/7)...${NC}"
             docker compose up -d --build
-            echo -e "${GREEN}✅ Services started on ports 21101 (API) and 21102 (Dashboard)${NC}"
+            echo -e "${GREEN}✅ Services started on ports 21101 (API) and 21100 (Dashboard)${NC}"
             read -p "Press Enter to return..."
             ;;
         11)
@@ -228,6 +257,9 @@ while true; do
             ;;
         12)
             docker compose logs -f
+            ;;
+        13)
+            kill_ports
             ;;
         0)
             echo "Bye! 👋"

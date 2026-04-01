@@ -29,8 +29,8 @@ WORKDIR /app
 # Copy all from builder
 COPY --from=builder /app ./
 
-# Expose port (Internal 3000)
-EXPOSE 3000
+# Expose port (Internal 5000)
+EXPOSE 5000
 
 # Start the app
 CMD ["bun", "run", "start"]

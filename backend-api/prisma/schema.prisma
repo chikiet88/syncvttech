@@ -262,6 +262,8 @@ model Customer {
   prescriptions   CustomerPrescription[]
   image_folders   CustomerImageFolder[]
   status_history  CustomerStatusHistory[]
+  anamnesis       CustomerAnamnesis[]
+  vttech_calls    CustomerCall[]
 
   @@map("customers")
 }
@@ -572,6 +574,36 @@ model CustomerImage {
   folder CustomerImageFolder @relation(fields: [folder_id], references: [id])
 
   @@map("customer_images")
+}
+
+model CustomerAnamnesis {
+  id          Int      @id @default(autoincrement())
+  customer_id Int
+  content     String?
+  note        String?
+  created_at  DateTime?
+  synced_at   DateTime @default(now())
+
+  customer Customer @relation(fields: [customer_id], references: [id])
+
+  @@map("customer_anamnesis")
+}
+
+model CustomerCall {
+  id            Int      @id @default(autoincrement())
+  customer_id   Int
+  call_id       String?  @unique
+  phone         String?
+  duration      Int      @default(0)
+  link_audio    String?
+  content       String?
+  employee_name String?
+  created_at    DateTime?
+  synced_at     DateTime @default(now())
+
+  customer Customer @relation(fields: [customer_id], references: [id])
+
+  @@map("customer_calls")
 }
 
 
