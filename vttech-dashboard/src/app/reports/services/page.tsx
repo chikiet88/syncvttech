@@ -48,7 +48,7 @@ function ServicesReportContent() {
   useEffect(() => {
     const fetchBranches = async () => {
       try {
-        const res = await fetch("http://localhost:5001/branches")
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"}/branches`)
         if (res.ok) setBranches(await res.json())
       } catch (e) {
         console.error("Failed to fetch branches", e)
@@ -65,7 +65,7 @@ function ServicesReportContent() {
         return `${d}-${m}-${y}`
       }
 
-      const url = new URL("http://localhost:5001/reports/revenue")
+      const url = new URL(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"}/reports/revenue`)
       url.searchParams.set("branchID", branchID) // Backend uses branchID
       url.searchParams.set("dateFrom", formatDate(dateFrom)) // Backend uses dateFrom
       url.searchParams.set("dateTo", formatDate(dateTo)) // Backend uses dateTo

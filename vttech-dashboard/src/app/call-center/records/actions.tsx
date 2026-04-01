@@ -30,7 +30,7 @@ export function PbxActions() {
     const handleStartPbxSync = async () => {
         setIsSyncing(true)
         try {
-            const response = await fetch(`http://localhost:5001/sync/pbx?from=${dateFrom}&to=${dateTo}`)
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"}/sync/pbx?from=${dateFrom}&to=${dateTo}`)
             if (response.ok) {
                 alert("Đã bắt đầu đồng bộ PBX CDR trong background")
                 setIsOpen(false)
@@ -48,7 +48,7 @@ export function PbxActions() {
     const handleSyncMaster = async () => {
         setIsSyncingMaster(true)
         try {
-            const response = await fetch("http://localhost:5001/sync/pbx-master")
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"}/sync/pbx-master`)
             if (response.ok) {
                 alert("Đã bắt đầu đồng bộ Extensions và Employees")
             }

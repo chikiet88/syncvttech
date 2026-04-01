@@ -30,7 +30,7 @@ function BranchReportContent() {
         return `${d}-${m}-${y}`
       }
 
-      const url = new URL("http://localhost:5001/reports/branches")
+      const url = new URL(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"}/reports/branches`)
       url.searchParams.set("dateFrom", formatDate(dateFrom))
       url.searchParams.set("dateTo", formatDate(dateTo))
 
