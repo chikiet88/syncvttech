@@ -1,9 +1,11 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Logger } from '@nestjs/common';
 import { VttechApiService } from './vttech-api.service';
 import { PrismaService } from './prisma.service';
 
 @Controller('reports')
 export class ReportController {
+  private readonly logger = new Logger(ReportController.name);
+
   constructor(
     private vttechApi: VttechApiService,
     private prisma: PrismaService,
@@ -36,21 +38,19 @@ export class ReportController {
       where.branch_id = parseInt(branchID);
     }
 
+    const parseDate = (dStr: string) => {
+      if (!dStr) return new Date();
+      const separator = dStr.includes('/') ? '/' : '-';
+      const parts = dStr.split(separator);
+      if (parts.length === 3) {
+          if (parts[0].length === 4) return new Date(dStr);
+          const [d, m, y] = parts;
+          return new Date(`${y}-${m}-${d}`);
+      }
+      return new Date(dStr);
+    };
+
     if (dateFrom && dateTo) {
-      // Input is DD-MM-YYYY, convert to Date
-      const parseDate = (dStr: string) => {
-        if (!dStr) return new Date();
-        const separator = dStr.includes('/') ? '/' : '-';
-        const parts = dStr.split(separator);
-        if (parts.length === 3) {
-            // Assume DD-MM-YYYY or YYYY-MM-DD
-            if (parts[0].length === 4) return new Date(dStr);
-            const [d, m, y] = parts;
-            return new Date(`${y}-${m}-${d}`);
-        }
-        return new Date(dStr);
-      };
-      
       const start = parseDate(dateFrom);
       const end = parseDate(dateTo);
       end.setHours(23, 59, 59, 999);
@@ -84,35 +84,52 @@ export class ReportController {
 
     // Fallback if DB is empty for this range: try live fetch
     if (total === 0 && !search && pageNum === 1) {
-        await this.vttechApi.login();
-        await this.vttechApi.getXsrfToken();
-        const res = await this.vttechApi.callHandler(
-            '/Report/Revenue/Branch/AllBranchGrid/',
-            'LoadataDetailByBranch',
-            { branchID: branchID || "0", dateFrom: dateFrom, dateTo: dateTo }
-        );
-        
-        const table = res?.Table || [];
-        if (table.length > 0) {
-            // Return live data immediately to fix the "not loading" bug
-            transactions = table.map((item: any, idx: number) => ({
-                id: idx,
-                customer_name: item.CustName,
-                customer_code: item.CustCode,
-                phone: null, // Phone not in Table, requires detailed sync
-                service_name: null,
-                service_id: item.Service ? parseInt(item.Service) : null,
-                amount: parseFloat(item.Amount),
-                paid: parseFloat(item.Paid),
-                is_new: parseInt(item.IsNew),
-                created_at: item.Created,
-                branch_id: item.BranchID,
-            }));
-            total = transactions.length;
+        try {
+            await this.vttechApi.login();
+            
+            const toVTTechDate = (d: string) => {
+                if (!d) return '';
+                if (d.includes('-') && d.split('-')[0].length === 4) {
+                    const [y, m, d_] = d.split('-');
+                    return `${d_}-${m}-${y}`;
+                }
+                return d.replace(/\//g, '-');
+            };
+
+            const vtDateFrom = toVTTechDate(dateFrom);
+            const vtDateTo = toVTTechDate(dateTo);
+            
+            this.logger.log(`📡 Live fetching revenue from VTTech: Branch ${branchID}, Range ${vtDateFrom} to ${vtDateTo}`);
+            
+            const res = await this.vttechApi.callHandler(
+                '/Report/Revenue/Branch/AllBranchGrid/',
+                'LoadataDetailByBranch',
+                { branchID: branchID || "0", dateFrom: vtDateFrom, dateTo: vtDateTo }
+            );
+            
+            const table = res?.Table || [];
+            if (table.length > 0) {
+                this.logger.log(`✅ Live fetch success: Found ${table.length} revenue records.`);
+                transactions = table.map((item: any, idx: number) => ({
+                    id: idx,
+                    customer_name: item.CustName,
+                    customer_code: item.CustCode,
+                    phone: null,
+                    service_name: item.ServiceName || item.Service,
+                    service_id: item.ServiceID ? parseInt(item.ServiceID) : (item.Service ? parseInt(item.Service) : null),
+                    amount: parseFloat(item.Amount || 0),
+                    paid: parseFloat(item.Paid || 0),
+                    is_new: parseInt(item.IsNew || 0),
+                    created_at: item.Created || item.Date,
+                    branch_id: parseInt(item.BranchID || branchID),
+                }));
+                total = transactions.length;
+            }
+        } catch (e) {
+            this.logger.error(`Live Fetch Revenue Error: ${e.message}`);
         }
     }
 
-    // Map names from local DB for accuracy (though already partially stored)
     const [services, branches, serviceGroups] = await Promise.all([
       this.prisma.service.findMany({ select: { id: true, name: true, group_id: true } }),
       this.prisma.branch.findMany({ select: { id: true, name: true } }),
@@ -123,7 +140,6 @@ export class ReportController {
     const branchMap = new Map(branches.map(b => [b.id, b.name]));
     const groupMap = new Map(serviceGroups.map(g => [g.id, g.name]));
 
-    // Fetch phones from Customer table for these transactions
     const customerIds = [...new Set(transactions.map((t: any) => t.customer_id).filter(Boolean))];
     const customers = await this.prisma.customer.findMany({
       where: { id: { in: customerIds as number[] } },
@@ -141,23 +157,15 @@ export class ReportController {
             CustomerCode: item.customer_code || "",
             Phone: item.phone || phoneMap.get(item.customer_id) || "",
             ServiceName: service?.name || item.service_name || `Dịch vụ #${item.service_id}`,
-            CategoryName: groupName || item.category_name || "Khác",
-            BranchName: branchMap.get(item.branch_id) || item.branch_name || `CN #${item.branch_id}`,
+            CategoryName: groupName || "Khác",
+            BranchName: branchMap.get(item.branch_id) || `CN #${item.branch_id}`,
             Created: item.created_at,
-            Amount: item.amount,
-            Paid: item.paid,
-            IsNew: item.is_new,
         };
     });
 
     return {
       Table: detailedData,
-      pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        totalPages: Math.ceil(total / limitNum),
-      }
+      pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
     };
   }
 
@@ -166,25 +174,28 @@ export class ReportController {
     @Query('dateFrom') dateFrom: string,
     @Query('dateTo') dateTo: string,
   ) {
-    // Parse dates (Input format: DD-MM-YYYY)
     const parseDate = (dStr: string) => {
       if (!dStr) return new Date();
-      const [d, m, y] = dStr.split('-');
-      return new Date(`${y}-${m}-${d}`);
+      const separator = dStr.includes('/') ? '/' : '-';
+      const parts = dStr.split(separator);
+      if (parts.length === 3) {
+          if (parts[0].length === 4) return new Date(dStr);
+          const [d, m, y] = parts;
+          return new Date(`${y}-${m}-${d}`);
+      }
+      return new Date(dStr);
     };
     
     const start = parseDate(dateFrom);
     const end = parseDate(dateTo);
     end.setHours(23, 59, 59, 999);
 
-    // Get all branches
     const branches = await this.prisma.branch.findMany({
       where: { is_active: 1 },
       orderBy: { id: 'asc' }
     });
 
     const summaries = await Promise.all(branches.map(async (branch) => {
-      // Aggregate data for this branch in range
       const [
         customerCount,
         serviceCount,
@@ -192,45 +203,21 @@ export class ReportController {
         appointmentCount,
         revenueAgg
       ] = await Promise.all([
-        // Count distinct customers using dailyCustomer activity tracking
         (this.prisma as any).dailyCustomer.count({
-          where: {
-            branch_id: branch.id,
-            date: { gte: start, lte: end }
-          }
+          where: { branch_id: branch.id, date: { gte: start, lte: end } }
         }),
-        // Count services in revenue transactions
         (this.prisma as any).revenueTransaction.count({
-          where: {
-            branch_id: branch.id,
-            date: { gte: start, lte: end },
-            service_id: { not: null }
-          }
+          where: { branch_id: branch.id, date: { gte: start, lte: end }, service_id: { not: null } }
         }),
-        // Count treatments
         this.prisma.treatment.count({
-          where: {
-            branch_id: branch.id,
-            treatment_date: { gte: start, lte: end }
-          }
+          where: { branch_id: branch.id, treatment_date: { gte: start, lte: end } }
         }),
-        // Count appointments
         this.prisma.appointment.count({
-          where: {
-            branch_id: branch.id,
-            appointment_date: { gte: start, lte: end }
-          }
+          where: { branch_id: branch.id, appointment_date: { gte: start, lte: end } }
         }),
-        // Sum amount and paid from revenueTransactions
         (this.prisma as any).revenueTransaction.aggregate({
-          where: {
-            branch_id: branch.id,
-            date: { gte: start, lte: end }
-          },
-          _sum: {
-            amount: true,
-            paid: true
-          }
+          where: { branch_id: branch.id, date: { gte: start, lte: end } },
+          _sum: { amount: true, paid: true }
         })
       ]);
 
@@ -254,6 +241,7 @@ export class ReportController {
     @Query('branchId') branchId: string,
     @Query('from') from: string,
     @Query('to') to: string,
+    @Query('type') type?: string,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '20',
   ) {
@@ -280,7 +268,6 @@ export class ReportController {
     const where: any = { date: { gte: start, lte: end } };
     if (branchId && branchId !== '0') where.branch_id = parseInt(branchId);
 
-    // Query DB
     let [data, total] = await Promise.all([
       (this.prisma as any).dailyCustomer.findMany({
         where,
@@ -291,43 +278,52 @@ export class ReportController {
       (this.prisma as any).dailyCustomer.count({ where }),
     ]);
 
-    /**
-     * FALLBACK: Nếu DB trống cho ngày hôm nay/ngày được chọn, thử Live Fetch từ Portal
-     */
     if (total === 0 && pageNum === 1 && branchId && branchId !== '0') {
-        const dateObj = start;
-        const yyyy = dateObj.getFullYear();
-        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const dd = String(dateObj.getDate()).padStart(2, '0');
-        const formattedDate = `${yyyy}-${mm}-${dd} 00:00:00`;
-        
         try {
             await this.vttechApi.login();
-            const res = await this.vttechApi.callHandler(
+            const yyyy = start.getFullYear();
+            const mm = String(start.getMonth() + 1).padStart(2, '0');
+            const dd = String(start.getDate()).padStart(2, '0');
+            const formattedDate = `${yyyy}-${mm}-${dd} 00:00:00`;
+            
+            const fetchType = type ? parseInt(type) : 1;
+            this.logger.log(`📡 Live fetching customers: Branch ${branchId}, Date ${formattedDate}, Type ${fetchType}`);
+            
+            let res = await this.vttechApi.callHandler(
                 '/Customer/ListCustomer/',
                 'LoadData',
-                { branchID: branchId, dateFrom: formattedDate, dateTo: formattedDate, type: 5 }
+                { branchID: branchId, dateFrom: formattedDate, dateTo: formattedDate, type: fetchType }
             );
 
-            const table = res?.Table || [];
+            let table = res?.Table || [];
+            if (table.length === 0 && !type) {
+                this.logger.log(`   🔸 No results for Type 1, trying Type 2 (Activity)...`);
+                res = await this.vttechApi.callHandler(
+                    '/Customer/ListCustomer/',
+                    'LoadData',
+                    { branchID: branchId, dateFrom: formattedDate, dateTo: formattedDate, type: 2 }
+                );
+                table = res?.Table || [];
+            }
+
             if (table.length > 0) {
+                this.logger.log(`✅ Live fetch success: Found ${table.length} customers.`);
                 data = table.map((item: any, idx: number) => ({
                     id: `live-${idx}`,
-                    customer_id: parseInt(item.CustID),
-                    customer_name: item.CustName,
-                    customer_code: item.CustCode,
-                    phone: item.Phone,
+                    customer_id: parseInt(item.CustID || item.ID),
+                    customer_name: item.CustName || item.FullName,
+                    customer_code: item.CustCode || item.Code,
+                    phone: item.Phone || item.Mobile,
                     date: start,
                     branch_id: parseInt(branchId),
                 }));
                 total = data.length;
             }
         } catch (e) {
-            console.error('Live Fetch Registrations Error:', e.message);
+            this.logger.error(`Live Fetch Registrations Error: ${e.message}`);
         }
     }
 
-    // Map names from Customer table
     const customerIds = [...new Set(data.map((t: any) => t.customer_id).filter(Boolean))];
     const customers = await this.prisma.customer.findMany({
       where: { id: { in: customerIds as number[] } },
@@ -368,8 +364,14 @@ export class ReportController {
 
     const parseDate = (dStr: string) => {
       if (!dStr) return new Date();
-      const [d, m, y] = dStr.split('-');
-      return new Date(`${y}-${m}-${d}`);
+      const separator = dStr.includes('/') ? '/' : '-';
+      const parts = dStr.split(separator);
+      if (parts.length === 3) {
+          if (parts[0].length === 4) return new Date(dStr);
+          const [d, m, y] = parts;
+          return new Date(`${y}-${m}-${d}`);
+      }
+      return new Date(dStr);
     };
 
     const start = parseDate(from || '');
@@ -409,8 +411,14 @@ export class ReportController {
 
     const parseDate = (dStr: string) => {
       if (!dStr) return new Date();
-      const [d, m, y] = dStr.split('-');
-      return new Date(`${y}-${m}-${d}`);
+      const separator = dStr.includes('/') ? '/' : '-';
+      const parts = dStr.split(separator);
+      if (parts.length === 3) {
+          if (parts[0].length === 4) return new Date(dStr);
+          const [d, m, y] = parts;
+          return new Date(`${y}-${m}-${d}`);
+      }
+      return new Date(dStr);
     };
 
     const start = parseDate(from || '');

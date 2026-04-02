@@ -154,107 +154,88 @@ export class SyncService {
       this.vttechApi.setLogCallback((msg) => this.addLog(msg));
       await this.vttechApi.login();
       await this.vttechApi.getXsrfToken();
-
       const branches = await this.prisma.branch.findMany({ where: { is_active: 1 } });
       
-      const start = this.parseDate(dateFrom);
-      const end = this.parseDate(dateTo);
-      if (!start || !end) throw new Error('Ngày không hợp lệ');
+      await this.executeRevenueSync(dateFrom, dateTo, branches);
 
-      const days: string[] = [];
-      let currentDay = new Date(start);
-      while (currentDay <= end) {
-        days.push(currentDay.toISOString().split('T')[0]);
-        currentDay.setDate(currentDay.getDate() + 1);
-      }
-
-      const totalSteps = days.length * branches.length;
-      let currentStep = 0;
-      const syncedCustomerIds = new Set<number>();
-
-      for (const dateStr of days) {
-        if (this.syncStatus.shouldStop) break;
-        
-        // Convert YYYY-MM-DD to DD-MM-YYYY for Revenue API
-        const [y, m, d] = dateStr.split('-');
-        const vttechDateStr = `${d}-${m}-${y}`;
-
-        this.addLog(`📅 Ngày: ${dateStr}`);
-
-        for (const branch of branches) {
-          if (this.syncStatus.shouldStop) break;
-          currentStep++;
-          this.syncStatus.current = currentStep;
-          this.syncStatus.total = totalSteps;
-          this.syncStatus.progress = Math.round((currentStep / totalSteps) * 100);
-          this.syncStatus.message = `[${dateStr}] Đang đẩy queue: ${branch.name}`;
-
-          try {
-            // Push Revenue Sync job for this day/branch
-            await this.syncQueue.add('sync-job', {
-              type: 'sync-revenue-day',
-              data: { date: dateStr, branchId: branch.id }
-            }, {
-              backoff: { type: 'exponential', delay: 1000 },
-              attempts: 3,
-            });
-
-            // Find customers with registration or activity on this day
-            const foundIds = await this.syncCustomers(dateStr, dateStr, 2, branch.id);
-            for (const cId of foundIds) {
-              if (cId && !syncedCustomerIds.has(cId)) {
-                await this.syncQueue.add('sync-job', {
-                  type: 'sync-customer-detail',
-                  data: { customerId: cId }
-                }, {
-                  priority: 10,
-                  attempts: 5,
-                  backoff: { type: 'exponential', delay: 2000 },
-                });
-                syncedCustomerIds.add(cId);
-              }
-            }
-          } catch (e) {
-            this.addLog(`  ❌ [${branch.name}] Lỗi khi đẩy Job vào Queue: ${e.message}`);
-          }
-        }
-      }
-
-      this.syncStatus.progress = 100;
-      this.syncStatus.message = 'Hoàn thành!';
       this.syncStatus.endTime = Date.now();
-      const duration = (this.syncStatus.endTime - startTime) / 1000;
-
-      this.addLog(`✅ Hoàn thành đồng bộ Doanh thu. Đã cập nhật chi tiết cho ${syncedCustomerIds.size} khách hàng.`);
-
-      // Lưu log vào DB
-      await this.prisma.crawlLog.create({
-        data: {
-          crawl_date: this.parseDate(dateFrom) as Date,
-          crawl_type: 'revenue_sync',
-          status: 'success',
-          records_count: syncedCustomerIds.size,
-          total_branches: branches.length,
-          total_customers: syncedCustomerIds.size,
-          duration_seconds: duration,
-        },
-      });
-
+      this.addLog(`✅ Hoàn thành đồng bộ Doanh thu.`);
     } catch (error) {
       this.syncStatus.error = error.message;
       this.addLog(`❌ Lỗi đồng bộ doanh thu: ${error.message}`);
-      
-      await this.prisma.crawlLog.create({
-        data: {
-          crawl_date: this.parseDate(dateFrom) as Date,
-          crawl_type: 'revenue_sync',
-          status: 'error',
-          error_message: error.message,
-        },
-      });
     } finally {
       this.syncStatus.isSyncing = false;
     }
+  }
+
+  private async executeRevenueSync(dateFrom: string, dateTo: string, branches: any[]) {
+    const start = this.parseDate(dateFrom);
+    const end = this.parseDate(dateTo);
+    if (!start || !end) throw new Error('Ngày không hợp lệ');
+
+    const days: string[] = [];
+    let currentDay = new Date(start);
+    while (currentDay <= end) {
+      days.push(currentDay.toISOString().split('T')[0]);
+      currentDay.setDate(currentDay.getDate() + 1);
+    }
+
+    const totalSteps = days.length * branches.length;
+    let currentStep = 0;
+    const syncedCustomerIds = new Set<number>();
+
+    for (const dateStr of days) {
+      if (this.syncStatus.shouldStop) break;
+      this.addLog(`📅 Ngày Doanh thu: ${dateStr}`);
+
+      for (const branch of branches) {
+        if (this.syncStatus.shouldStop) break;
+        currentStep++;
+        
+        try {
+          // Push Revenue Sync job for this day/branch
+          await this.syncQueue.add('sync-job', {
+            type: 'sync-revenue-day',
+            data: { date: dateStr, branchId: branch.id }
+          }, {
+            backoff: { type: 'exponential', delay: 1000 },
+            attempts: 3,
+          });
+
+          // Find customers with registration or activity on this day
+          const foundIds = await this.syncCustomers(dateStr, dateStr, 2, branch.id);
+          for (const cId of foundIds) {
+            if (cId && !syncedCustomerIds.has(cId)) {
+              await this.syncQueue.add('sync-job', {
+                type: 'sync-customer-detail',
+                data: { customerId: cId }
+              }, {
+                priority: 10,
+                attempts: 5,
+                backoff: { type: 'exponential', delay: 2000 },
+              });
+              syncedCustomerIds.add(cId);
+            }
+          }
+        } catch (e) {
+          this.addLog(`  ❌ [${branch.name}] Lỗi khi đẩy Job doanh thu: ${e.message}`);
+        }
+      }
+    }
+    
+    // Lưu log vào DB
+    const duration = (Date.now() - (this.syncStatus.startTime || Date.now())) / 1000;
+    await this.prisma.crawlLog.create({
+      data: {
+        crawl_date: start,
+        crawl_type: 'revenue_sync',
+        status: 'success',
+        records_count: syncedCustomerIds.size,
+        total_branches: branches.length,
+        total_customers: syncedCustomerIds.size,
+        duration_seconds: duration,
+      },
+    });
   }
 
   async syncByRange(dateFrom: string, dateTo: string, forceMaster: boolean = false, syncPbx: boolean = false, syncDetails: boolean = true) {
@@ -409,10 +390,10 @@ export class SyncService {
       this.syncStatus.message = 'Đang đồng bộ giao dịch doanh thu...';
       this.addLog('💰 Bắt đầu đồng bộ giao dịch Doanh thu chi tiết...');
       try {
-        await this.syncRevenue(dateFrom, dateTo);
+        await this.executeRevenueSync(dateFrom, dateTo, branches);
         this.addLog('✅ Hoàn tất đồng bộ giao dịch Doanh thu.');
       } catch (revError) {
-        this.addLog(`⚠️ Cảnh báo: Lỗi khi đồng bộ doanh thu: ${revError.message}`);
+        this.addLog(`⚠️ Lỗi khi đồng bộ doanh thu: ${revError.message}`);
       }
 
       this.syncStatus.progress = 100;
@@ -479,9 +460,9 @@ export class SyncService {
         dateFrom: `${dateFrom} 00:00:00`,
         dateTo: `${dateTo} 23:59:59`,
         branchID: branchId.toString(),
-        type: type, // 1: RegDate, 2: Transaction/Activity Date, 3: History
-        BeginID: start,
-        BeginCustID: '0',
+        type: type,
+        BeginID: 0,
+        BeginCustID: 0,
         Limit: length,
       });
 

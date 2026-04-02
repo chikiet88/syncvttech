@@ -1,47 +1,99 @@
-# VTTech API Integration - Master Specification
+# VTTECH Portal API Master Specification (Hybrid Auth 2025)
 
-Tài liệu này tổng hợp đầy đủ các API từ hệ thống VTTech Portal, phục vụ quá trình đồng bộ dữ liệu về hệ thống local.
+Tài liệu này đặc tả quy trình xác thực Hybrid và cơ chế gọi Handler dữ liệu của Portal VTTech, được tối ưu cho hệ thống KataCore 2025.
 
-## 📋 BẢNG DANH SÁCH API CHUẨN
+## 1. Tổng Quan Quy Trình Xác Thực (Hybrid Auth)
 
-| No | Hạng Mục | API Vttech | Payload (Yêu cầu) | Response (Dữ liệu trả về) | Database dự kiến | Trạng thái |
-|:---|:---|:---|:---|:---|:---|:---|
-| **1** | **Xác thực** | `/api/Author/Login` | `username`, `password` | Session Token, UserID | - | ✅ |
-| **2** | **Xác thực** | `/Login/Login` (GET) | - | XSRF Token, IP Token | - | ✅ |
-| **3** | **Xác thực** | `/Login/Login` (POST) | `UserName`, `Password`, `IPToken` | Session Cookie (.AspNetCore) | - | ✅ |
-| **4** | **Danh mục** | `/api/Home/SessionData` | `{}` | Chi nhánh, Dịch vụ, Nhân viên, Địa giới | `Branch`, `Service`, `Employee`, `User`, `Location` | ✅ |
-| **5** | **Danh mục** | `/Customer/ListCustomer/?handler=Initialize` | `__RequestVerificationToken` | Nhóm khách hàng, Nguồn khách hàng | `Membership`, `CustomerSource` | ✅ |
-| **6** | **Khách hàng** | `/Customer/ListCustomer/?handler=LoadData` | `dateFrom`, `dateTo`, `branchID`, `page`, `limit` | Danh sách khách hàng phát sinh | `DailyCustomer`, `Discovery` | ✅ |
-| **7** | **Thông tin cá nhân** | `/Customer/GeneralInfo/?handler=LoadData` | `CustomerID` | Thông tin cá nhân (Ngày sinh, Giới tính, Địa chỉ) | `Customer` | ✅ |
-| **8** | **Tài chính tổng quát** | `/Customer/MainCustomer/?handler=LoadPaymentInfo` | `CustomerID` | Tổng chi tiêu, Đã thanh toán, Còn nợ | `CustomerPayment` | ✅ |
-| **9** | **Dịch vụ đã mua** | `/Customer/Service/TabList/TabList_Service/?handler=LoadataTab` | `CustomerID`, `limit` | Gói dịch vụ đã mua, trạng thái sử dụng | `CustomerServiceTab` | ✅ |
-| **10** | **Thẻ tiền mặt/liệu trình** | `/Customer/Service/TabList/TabList_Card/?handler=LoadataCard` | `CustomerID`, `limit` | Thẻ tiền mặt, thẻ liệu trình, log sử dụng | `CustomerCard` | ✅ |
-| **11** | **Lịch sử thanh toán** | `/Customer/PaymentList/?handler=LoadataPayment` | `CustomerID`, `limit` | Lịch sử các hóa đơn, chứng từ thanh toán | `PaymentInvoice` | ✅ |
-| **12** | **Lịch sử điều trị** | `/Customer/TreatmentList/?handler=LoadataTreatment` | `CustomerID`, `limit` | Nhật ký thực hiện dịch vụ, thủ thuật | `Treatment` | ✅ |
-| **13** | **Lịch sử CSKH (Care)** | `/Customer/HistoryList_Care/?handler=LoadataHistory` | `CustomerID`, `limit` | Nhật ký gọi điện, tư vấn, chăm sóc | `CustomerCareHistory` | ✅ |
-| **14** | **Hình ảnh Cloud** | `/CustomerImage/?handler=LoadImageByFolder` | `CustomerID` | Danh sách link ảnh cloud (Trước/Sau) | `CustomerImage` | ✅ |
-| **15** | **Đơn thuốc/mỹ phẩm** | `/Customer/Service/TabList/TabList_Medicine/?handler=LoadataPrescription` | `CustomerID`, `limit` | Gói thuốc, mỹ phẩm đã kê đơn | `CustomerPrescription` | ✅ |
-| **16** | **Lịch sử trạng thái** | `/Customer/StatusList/?handler=LoadataStatus` | `CustomerID`, `limit` | Lịch sử thay đổi trạng thái khách hàng | `CustomerStatusLog` | ✅ |
-| **17** | **Doanh thu** | `/Report/Revenue/Branch/AllBranchGrid/?handler=LoadataDetailByBranch` | `branchID`, `dateFrom`, `dateTo` | Chi tiết giao dịch: Số tiền, Dịch vụ, Nhân viên | `RevenueTransaction` | ✅ |
-| **18** | **Điều trị** | `/Customer/Treatment/TreatmentList/TreatmentList_Service/?handler=LoadComboMain` | `CustomerID` | Danh sách ServiceTab, ServiceCatTab | `ServiceCategory` | ✅ |
-| **19** | **Điều trị** | `/Customer/Treatment/TreatmentList/TreatmentList_Service/?handler=LoadDetail` | `CustomerID`, `TabID` | Chi tiết buổi điều trị, bác sĩ thực hiện | `TreatmentDetail` | ✅ |
+Quy trình xác thực được thiết kế để vượt qua các rào cản bảo mật (JS Redirect, IP Tracking, XSRF) của Portal bằng cách mô phỏng chính xác hành vi của trình duyệt Chrome trên Linux.
+
+### Bảng Danh Sách API Liên Quan
+
+| Thứ tự | Endpoint | Phương thức | Mục đích | Kết quả mong đợi |
+| :--- | :--- | :--- | :--- | :--- |
+| 1 | `/Login/Login` | `GET` | Khởi tạo Session ban đầu | Cookies + XSRF Token |
+| 2 | `/api/Author/GetIP` | `POST` | Lấy IP Token đã mã hóa | `ip_encry` (Token Base64) |
+| 3 | `/api/Author/Login` | `POST` | Đăng nhập AJAX (JWT) | `WebToken` (JWT) + Session Cookie |
+| 4 | `/Index/` | `GET` | Kích hoạt Session đầy đủ | Trạng thái `200 OK` (Dashboard) |
+| 5 | `[Page]?handler=[Name]` | `POST` | Gọi Handler dữ liệu | JSON nén (Gzip/Deflate) |
 
 ---
 
-## ⚙️ CÁC QUY TẮC KỸ THUẬT QUAN TRỌNG
+## 2. Chi Tiết Các Bước Triển Khai
 
-### 1. Giải mã dữ liệu (Decompression)
-Hầu hết API trả về dữ liệu nén. Quy trình giải mã bắt buộc:
-**Base64 String** ➔ **GZip/Deflate Decode** ➔ **UTF-8 JSON**.
+### Bước 1: Khởi tạo Session (Pha 1)
+- **URL**: `https://tmtaza.vttechsolution.com/Login/Login?ver=[Timestamp]`
+- **Headers**: 
+  - `User-Agent`: Mozilla/5.0 (X11; Linux x86_64) ...
+- **Mục tiêu**: Nhận các cookie hệ thống (`.AspNetCore.Antiforgery`, `.AspNetCore.Culture`) và trích xuất `__RequestVerificationToken` từ HTML bằng Regex/Cheerio.
 
-### 2. Bảo mật (Security)
-- **Token**: Cần duy trì đồng thời `WebToken` (JWT) và `.AspNetCore.Session` (Cookie).
-- **XSRF**: Phải parse `__RequestVerificationToken` từ HTML của trang tương ứng trước khi gọi POST handler.
+### Bước 2: Trích xuất IP Token (Pha Trung Gian)
+- **URL**: `https://tmtaza.vttechsolution.com/api/Author/GetIP`
+- **Headers**:
+  - `Content-Type`: `application/json`
+  - `Cookie`: (Dùng cookie từ Bước 1)
+- **Payload**: `{}`
+- **Kết quả JSON**:
+  ```json
+  {
+    "ip": "111.222.333.444",
+    "ip_encry": "JLYxMl2Tcnfvfg10lGR3eFj9RqdxiUv8yqkI1bVUAsg="
+  }
+  ```
+> [!IMPORTANT]
+> Giá trị `ip_encry` là bắt buộc cho bước đăng nhập tiếp theo. Nếu thiếu trường này, Portal sẽ trả về `{"RESULT":"error"}`.
 
-### 3. Tối ưu hóa (Optimization)
-- **Rate Limit**: Duy trì khoảng nghỉ (delay) từ **100ms - 500ms** giữa các request chi tiết khách hàng.
-- **Deduplication**: Kiểm tra `MD5 Hash` nội dung trước khi `Upsert` vào database để tránh ghi đè dữ liệu trùng lặp.
+### Bước 3: Xác thực AJAX (Pha Chính)
+- **URL**: `https://tmtaza.vttechsolution.com/api/Author/Login`
+- **Headers**:
+  - `Content-Type`: `application/json; charset=UTF-8`
+  - `X-Requested-With`: `XMLHttpRequest`
+  - `Origin`: `https://tmtaza.vttechsolution.com`
+- **Payload (9 trường bắt buộc)**:
+  ```json
+  {
+    "UserName": "...",
+    "Password": "...",
+    "PasswordEnCrypt": "",
+    "IP": "[ip_encry từ Bước 2]",
+    "TokenFCM": "",
+    "From": "",
+    "SSO": "",
+    "Lan": "vi",
+    "TokenSSO": ""
+  }
+  ```
+- **Kết quả**:
+  - Nhận `WebToken` (JWT) trong JSON Body.
+  - Nhận `.AspNetCore.Session` trong `Set-Cookie` Header.
 
-### 4. Database Storage
-- Dữ liệu được lưu trữ ưu tiên vào SQLite (`vttech.db`) hoặc PostgreSQL tùy theo cấu hình cell.
-- Sử dụng cơ chế `Upsert` dựa trên ID gốc của VTTech.
+### Bước 4: Kích hoạt & Kiểm tra
+- **URL**: `https://tmtaza.vttechsolution.com/Index/`
+- **Mục tiêu**: Thực hiện một GET request cuối cùng với đầy đủ Cookie để "đánh dấu" session đã hợp lệ trên toàn hệ thống Handler.
+
+---
+
+## 3. Cơ Chế Gọi Handler & Giải Mã Dữ Liệu
+
+Tất cả các Handler dữ liệu (như báo cáo, danh sách khách hàng) trả về dữ liệu nén để tối ưu băng thông.
+
+### Header Bắt Buộc cho Handler
+- `xsrf-token`: Token lấy từ trang chứa handler.
+- `x-requested-with`: `XMLHttpRequest`.
+- `Content-Type`: `application/x-www-form-urlencoded`.
+
+### Giải mã JSON (Gzip/Deflate)
+Dữ liệu trả về thường là chuỗi Base64 bọc trong dấu ngoặc kép. Quy trình giải mã:
+1. Xóa dấu ngoặc kép đầu/cuối.
+2. Decode Base64 sang Buffer.
+3. Thử giải nén theo thứ tự: `gunzip` (Gzip) -> `inflate` (Deflate) -> `inflateRaw`.
+4. Parse JSON kết quả.
+
+---
+
+## 4. Lưu Ý Quan Trọng
+- **Rate Limit**: Portal có giới hạn tần suất truy cập. Nên duy trì delay tối thiểu `1000ms` giữa các yêu cầu đồng bộ.
+- **Session Timeout**: Session Cookie có thời hạn. Nếu nhận mã `401` hoặc `Redirect`, hệ thống phải tự động thực hiện lại Quy trình 4 bước từ đầu.
+- **Cấu hình**: Thông tin `VTTECH_USERNAME` và `VTTECH_PASSWORD` phải được bảo mật trong file `.env`.
+
+---
+*Tài liệu được cập nhật tự động bởi Antigravity AI - KataCore 2025.*
