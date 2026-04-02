@@ -45,3 +45,38 @@ Hầu hết API trả về dữ liệu nén. Quy trình giải mã bắt buộc:
 ### 4. Database Storage
 - Dữ liệu được lưu trữ ưu tiên vào SQLite (`vttech.db`) hoặc PostgreSQL tùy theo cấu hình cell.
 - Sử dụng cơ chế `Upsert` dựa trên ID gốc của VTTech.
+
+---
+
+## 🧪 KẾT QUẢ TEST THỰC TẾ (DEMO - 02/04/2026)
+
+### 1. Đồng bộ Danh sách Khách hàng (Hồ sơ)
+- **Kịch bản**: Lấy danh sách khách hàng mới tạo hồ sơ tại chi nhánh **Taza Skin Clinic Thủ Đức**.
+- **Handler**: `/Customer/ListCustomer/?handler=LoadData`
+- **Method**: `POST`
+- **Payload thực tế**:
+  ```json
+  {
+    "dateFrom": "2026-04-02 00:00:00",
+    "dateTo": "2026-04-02 00:00:00",
+    "branchID": "1",
+    "type": "5",
+    "BeginID": 0,
+    "BeginCustID": 0,
+    "Limit": 500
+  }
+  ```
+- **Headers bắt buộc**:
+  - `secretkey`: `vvjeUfMxJcm2aB0fl2ySxsiqGj5X5X3SY3Dl6Qj2te0SouYCtVRKC7qcp/MiP16aD5iQLEfgAsDk/ERxed+eUbi8eaY7/mraxUcfGqobMu4=`
+  - `xsrf-token`: (Lấy động từ trang `/Customer/ListCustomer/`)
+  - `Referer`: `https://tmtaza.vttechsolution.com/customer/listcustomer/`
+- **Kết quả đối soát**:
+  - Tìm thấy **6 hồ sơ** (Khớp hoàn toàn với dashboard).
+  - Danh sách mã khách hàng nhận về: `Q_T00193203`, `Q_T00193205`, `Q_T00193206`, `Q_T00193209`, `C_T00193251`, `PVD00193254`.
+  - Nguồn khách hàng: **Khách Giới Thiệu**.
+
+### 2. Các chỉ số Dashboard tương ứng (Nhánh Thủ Đức)
+- **Hồ sơ**: 6
+- **CheckedIn**: 18
+- **Doanh số**: 2.900.000
+- **Doanh thu**: 1.300.000
