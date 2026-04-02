@@ -26,6 +26,7 @@ export declare class SyncService {
     private addLog;
     private ensureArray;
     private parseDate;
+    private formatDate;
     handleDailySync(): Promise<void>;
     syncRevenue(dateFrom: string, dateTo: string): Promise<void>;
     syncByRange(dateFrom: string, dateTo: string, forceMaster?: boolean, syncPbx?: boolean, syncDetails?: boolean): Promise<void>;
@@ -65,6 +66,7 @@ export declare class SyncService {
         treatments: number;
         services: number;
     }>;
+    private sleep;
     private mapRevenueItem;
     processQueuedRevenueDay(date: string, branchId: number): Promise<void>;
 }

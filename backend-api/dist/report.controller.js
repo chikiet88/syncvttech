@@ -36,8 +36,17 @@ let ReportController = class ReportController {
         }
         if (dateFrom && dateTo) {
             const parseDate = (dStr) => {
-                const [d, m, y] = dStr.split('-');
-                return new Date(`${y}-${m}-${d}`);
+                if (!dStr)
+                    return new Date();
+                const separator = dStr.includes('/') ? '/' : '-';
+                const parts = dStr.split(separator);
+                if (parts.length === 3) {
+                    if (parts[0].length === 4)
+                        return new Date(dStr);
+                    const [d, m, y] = parts;
+                    return new Date(`${y}-${m}-${d}`);
+                }
+                return new Date(dStr);
             };
             const start = parseDate(dateFrom);
             const end = parseDate(dateTo);
@@ -68,7 +77,7 @@ let ReportController = class ReportController {
         if (total === 0 && !search && pageNum === 1) {
             await this.vttechApi.login();
             await this.vttechApi.getXsrfToken();
-            const res = await this.vttechApi.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'LoadataDetailByBranch', { branchID: branchID || "0", dateFrom, dateTo });
+            const res = await this.vttechApi.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'LoadataDetailByBranch', { branchID: branchID || "0", dateFrom: dateFrom, dateTo: dateTo });
             const table = res?.Table || [];
             if (table.length > 0) {
                 transactions = table.map((item, idx) => ({
@@ -200,8 +209,15 @@ let ReportController = class ReportController {
         const parseDate = (dStr) => {
             if (!dStr)
                 return new Date();
-            const [d, m, y] = dStr.split('-');
-            return new Date(`${y}-${m}-${d}`);
+            const separator = dStr.includes('/') ? '/' : '-';
+            const parts = dStr.split(separator);
+            if (parts.length === 3) {
+                if (parts[0].length === 4)
+                    return new Date(dStr);
+                const [d, m, y] = parts;
+                return new Date(`${y}-${m}-${d}`);
+            }
+            return new Date(dStr);
         };
         const start = parseDate(from || '');
         const end = parseDate(to || '');
@@ -209,7 +225,7 @@ let ReportController = class ReportController {
         const where = { date: { gte: start, lte: end } };
         if (branchId && branchId !== '0')
             where.branch_id = parseInt(branchId);
-        const [data, total] = await Promise.all([
+        let [data, total] = await Promise.all([
             this.prisma.dailyCustomer.findMany({
                 where,
                 skip,
@@ -218,6 +234,33 @@ let ReportController = class ReportController {
             }),
             this.prisma.dailyCustomer.count({ where }),
         ]);
+        if (total === 0 && pageNum === 1 && branchId && branchId !== '0') {
+            const dateObj = start;
+            const yyyy = dateObj.getFullYear();
+            const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const dd = String(dateObj.getDate()).padStart(2, '0');
+            const formattedDate = `${yyyy}-${mm}-${dd} 00:00:00`;
+            try {
+                await this.vttechApi.login();
+                const res = await this.vttechApi.callHandler('/Customer/ListCustomer/', 'LoadData', { branchID: branchId, dateFrom: formattedDate, dateTo: formattedDate, type: 5 });
+                const table = res?.Table || [];
+                if (table.length > 0) {
+                    data = table.map((item, idx) => ({
+                        id: `live-${idx}`,
+                        customer_id: parseInt(item.CustID),
+                        customer_name: item.CustName,
+                        customer_code: item.CustCode,
+                        phone: item.Phone,
+                        date: start,
+                        branch_id: parseInt(branchId),
+                    }));
+                    total = data.length;
+                }
+            }
+            catch (e) {
+                console.error('Live Fetch Registrations Error:', e.message);
+            }
+        }
         const customerIds = [...new Set(data.map((t) => t.customer_id).filter(Boolean))];
         const customers = await this.prisma.customer.findMany({
             where: { id: { in: customerIds } },

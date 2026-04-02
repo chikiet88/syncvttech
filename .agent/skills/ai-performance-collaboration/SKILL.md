@@ -54,3 +54,17 @@ Khi nhận thấy hệ thống có dấu hiệu quá tải (Swap tăng cao, CPU 
 - **Kiểm chứng thực tế trước khi báo cáo**: Tuyệt đối không báo cáo "Hoàn thành 100%" hoặc "Đã kiểm chứng (Verified)" khi chỉ mới viết tài liệu hướng dẫn (Guide/Proposal) mà chưa thực sự sinh ra file code (`.ts`, `.tsx`, `.py`, v.v.).
 - **Xác thực Route (Route Verification)**: Khi thiết kế hay báo cáo về một hệ thống Frontend/Backend, AI BẮT BUỘC phải dùng công cụ để kiểm tra (ví dụ: `list_dir`) xem file định tuyến (như `page.tsx`, `controller.ts`) đã thực sự tồn tại ở đúng thư mục vật lý hay chưa trước khi kết luận hệ thống hoạt động.
 - **Không giả định biên giới công việc**: Nếu người dùng yêu cầu "Hoàn thành toàn bộ dự án" hoặc "Hoàn thành 100%", AI phải chủ động lập trình cả phần Frontend UI (Giao diện) nếu đã làm xong Backend, thay vì chỉ viết tài liệu rồi dừng lại (trừ khi người dùng cấm).
+57: 
+58: ## 8. Kiểm soát Giới hạn Token (Token Generation Management)
+59: 
+60: Để tránh lỗi nghiêm trọng **"The model's generation exceeded the maximum output token limit"** (thường xảy ra khi phản hồi vượt quá 16,384 tokens), AI phải tuân thủ các quy tắc sau:
+61: 
+62: - **Quy tắc 1: Không ghi đè file lớn (No Full Rewrites)**. Tuyệt đối không dùng `write_to_file` để cập nhật các file có dung lượng lớn (>300 dòng). Luôn sử dụng `replace_file_content` hoặc `multi_replace_file_content` để chỉ thay đổi các đoạn code cần thiết.
+63: - **Quy tắc 2: Tạm dừng và chia nhỏ (Response Chunking)**. Nếu một yêu cầu đòi hỏi thay đổi logic ở hơn 5 file hoặc viết tài liệu dài (>2000 chữ), AI phải chủ động chia thành 2-3 giai đoạn (turns). Ví dụ: "Tôi sẽ sửa logic Backend trước, sau đó bạn hãy yêu cầu tôi làm tiếp phần Frontend".
+64: - **Quy tắc 3: Ưu tiên dùng Artifacts cho tài liệu dài**. Thay vì in hàng ngàn dòng log hoặc tài liệu Review vào cửa sổ chat, hãy ghi chúng vào một file `.md` trong thư mục `docs/` hoặc `artifacts/` và chỉ tóm tắt các điểm chính cho người dùng.
+65: - **Quy tắc 4: Xử lý tệp Schema khổng lồ**. Khi làm việc với `schema.prisma` (thường >7000 dòng), AI không được phép view toàn bộ file. Chỉ view các block model liên quan và thực hiện thay đổi cực kỳ tập trung.
+66: - **Quy tắc 5: Tự phục hồi sau lỗi (Self-Correction)**. Nếu không may gặp lỗi "Exceeded limit", ở lượt phản hồi tiếp theo, AI phải:
+67:     1. Xin lỗi người dùng.
+68:     2. Tóm tắt những gì ĐÃ làm được (nếu có công cụ nào đã chạy thành công).
+69:     3. Chia nội dung còn lại thành các phần nhỏ hơn để thực hiện tiếp.
+70: 

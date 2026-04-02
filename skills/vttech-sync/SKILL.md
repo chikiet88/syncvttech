@@ -7,8 +7,9 @@ description: Instructions and credentials for synchronizing data from the VTTech
 
 This skill provides instructions for authenticating and synchronizing data from the VTTech CRM portal at `https://tmtaza.vttechsolution.com`.
 
-## 🔐 Credentials
+## 🔐 Credentials & Access
 
+- **Access URL:** `https://tmtaza.vttechsolution.com/Login/Login?ver=1775098382869`
 - **Username:** `ittest123`
 - **Password:** `ittest123`
 

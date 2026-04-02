@@ -98,11 +98,27 @@ export class SyncService {
           const sec = parseInt(parts[5] || '0');
           d = new Date(year, month, day, hour, min, sec);
           if (!isNaN(d.getTime())) return d;
+        } else if (day > 1000 && !isNaN(month) && !isNaN(year)) {
+          // Format is YYYY-MM-DD
+          d = new Date(day, month, year);
+          if (!isNaN(d.getTime())) return d;
         }
       }
     }
 
     return null;
+  }
+
+  private formatDate(s: string): string {
+    if (!s) return '';
+    if (s.includes('-')) {
+      const parts = s.split('-');
+      if (parts[0].length === 4) {
+        // YYYY-MM-DD to DD-MM-YYYY
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+    }
+    return s;
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -325,11 +341,13 @@ export class SyncService {
           
           // 1. Tìm kiếm khách hàng theo chi nhánh (LoadData types 1, 2, 3)
           const branchCustomerIds: number[] = [];
-          
           this.addLog(`  👥 [${branch.name}] Tìm khách hàng mới/giao dịch/lịch sử...`);
-          branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 1, branch.id));
+          branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 5, branch.id)); // 5: RegDate (Hồ sơ)
+          await this.sleep(1000);
           branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 2, branch.id));
+          await this.sleep(1000);
           branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 3, branch.id));
+          await this.sleep(2000);
 
           // 3. Lấy lịch hẹn của chi nhánh
           const appointmentIds = await this.syncAppointments(dateStr, dateStr, branch.id);
@@ -385,6 +403,16 @@ export class SyncService {
         this.addLog('📞 Đang lấy lịch sử cuộc gọi từ Portal VTTech...');
         const portalCdrResult = await this.pbxSync.syncVttechCallHistory(dateFrom, dateTo);
         this.addLog(`✅ Đã đồng bộ ${portalCdrResult.success} cuộc gọi từ Portal (${portalCdrResult.failed} lỗi)`);
+      }
+
+      // 5. Đồng bộ Doanh thu chi tiết (để hiển thị bảng Dashboard)
+      this.syncStatus.message = 'Đang đồng bộ giao dịch doanh thu...';
+      this.addLog('💰 Bắt đầu đồng bộ giao dịch Doanh thu chi tiết...');
+      try {
+        await this.syncRevenue(dateFrom, dateTo);
+        this.addLog('✅ Hoàn tất đồng bộ giao dịch Doanh thu.');
+      } catch (revError) {
+        this.addLog(`⚠️ Cảnh báo: Lỗi khi đồng bộ doanh thu: ${revError.message}`);
       }
 
       this.syncStatus.progress = 100;
@@ -448,11 +476,12 @@ export class SyncService {
     while (hasMore) {
       if (this.syncStatus.shouldStop) break;
       const res = await this.vttechApi.callHandler('/Customer/ListCustomer/', 'LoadData', {
-        DateFrom: `${dateFrom} 00:00:00`,
-        DateTo: `${dateTo} 23:59:59`,
-        BranchID: branchId.toString(),
-        Type: type, // 1: RegDate, 2: Transaction/Activity Date, 3: History
+        dateFrom: `${dateFrom} 00:00:00`,
+        dateTo: `${dateTo} 23:59:59`,
+        branchID: branchId.toString(),
+        type: type, // 1: RegDate, 2: Transaction/Activity Date, 3: History
         BeginID: start,
+        BeginCustID: '0',
         Limit: length,
       });
 
@@ -552,7 +581,7 @@ export class SyncService {
   private async syncAppointments(dateFrom: string, dateTo: string, branchId: number = 0): Promise<number[]> {
     const customerIds: number[] = [];
     const res = await this.vttechApi.callHandler('/Desk/Appointment/AppointmentInDay_Desk_Branch/', 'LoadataAppointmentList', {
-      DateFrom: `${dateFrom} 00:00:00`,
+      DateFrom: `${this.formatDate(dateFrom)} 00:00:00`,
       BranchID: branchId.toString(),
       AppID: '0',
       StatusID: '0',
@@ -1560,6 +1589,10 @@ export class SyncService {
       this.logger.error(`Error in processQueuedCustomerDetail: ${error.message}`);
       throw error;
     }
+  }
+
+  private async sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   private mapRevenueItem(item: any, branchId: number) {

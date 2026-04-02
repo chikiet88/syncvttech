@@ -139,9 +139,25 @@ let SyncService = SyncService_1 = class SyncService {
                     if (!isNaN(d.getTime()))
                         return d;
                 }
+                else if (day > 1000 && !isNaN(month) && !isNaN(year)) {
+                    d = new Date(day, month, year);
+                    if (!isNaN(d.getTime()))
+                        return d;
+                }
             }
         }
         return null;
+    }
+    formatDate(s) {
+        if (!s)
+            return '';
+        if (s.includes('-')) {
+            const parts = s.split('-');
+            if (parts[0].length === 4) {
+                return `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+        }
+        return s;
     }
     async handleDailySync() {
         const yesterday = new Date();
@@ -323,9 +339,12 @@ let SyncService = SyncService_1 = class SyncService {
                     this.syncStatus.message = `[${dateStr}] Đang xử lý: ${branch.name} (${i + 1}/${branches.length})`;
                     const branchCustomerIds = [];
                     this.addLog(`  👥 [${branch.name}] Tìm khách hàng mới/giao dịch/lịch sử...`);
-                    branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 1, branch.id));
+                    branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 5, branch.id));
+                    await this.sleep(1000);
                     branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 2, branch.id));
+                    await this.sleep(1000);
                     branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 3, branch.id));
+                    await this.sleep(2000);
                     const appointmentIds = await this.syncAppointments(dateStr, dateStr, branch.id);
                     branchCustomerIds.push(...appointmentIds);
                     if (syncDetails) {
@@ -367,6 +386,15 @@ let SyncService = SyncService_1 = class SyncService {
                 this.addLog('📞 Đang lấy lịch sử cuộc gọi từ Portal VTTech...');
                 const portalCdrResult = await this.pbxSync.syncVttechCallHistory(dateFrom, dateTo);
                 this.addLog(`✅ Đã đồng bộ ${portalCdrResult.success} cuộc gọi từ Portal (${portalCdrResult.failed} lỗi)`);
+            }
+            this.syncStatus.message = 'Đang đồng bộ giao dịch doanh thu...';
+            this.addLog('💰 Bắt đầu đồng bộ giao dịch Doanh thu chi tiết...');
+            try {
+                await this.syncRevenue(dateFrom, dateTo);
+                this.addLog('✅ Hoàn tất đồng bộ giao dịch Doanh thu.');
+            }
+            catch (revError) {
+                this.addLog(`⚠️ Cảnh báo: Lỗi khi đồng bộ doanh thu: ${revError.message}`);
             }
             this.syncStatus.progress = 100;
             this.syncStatus.message = 'Hoàn thành!';
@@ -424,11 +452,12 @@ let SyncService = SyncService_1 = class SyncService {
             if (this.syncStatus.shouldStop)
                 break;
             const res = await this.vttechApi.callHandler('/Customer/ListCustomer/', 'LoadData', {
-                DateFrom: `${dateFrom} 00:00:00`,
-                DateTo: `${dateTo} 23:59:59`,
-                BranchID: branchId.toString(),
-                Type: type,
+                dateFrom: `${dateFrom} 00:00:00`,
+                dateTo: `${dateTo} 23:59:59`,
+                branchID: branchId.toString(),
+                type: type,
                 BeginID: start,
+                BeginCustID: '0',
                 Limit: length,
             });
             const dataItems = this.ensureArray(res);
@@ -522,7 +551,7 @@ let SyncService = SyncService_1 = class SyncService {
     async syncAppointments(dateFrom, dateTo, branchId = 0) {
         const customerIds = [];
         const res = await this.vttechApi.callHandler('/Desk/Appointment/AppointmentInDay_Desk_Branch/', 'LoadataAppointmentList', {
-            DateFrom: `${dateFrom} 00:00:00`,
+            DateFrom: `${this.formatDate(dateFrom)} 00:00:00`,
             BranchID: branchId.toString(),
             AppID: '0',
             StatusID: '0',
@@ -1460,6 +1489,9 @@ let SyncService = SyncService_1 = class SyncService {
             this.logger.error(`Error in processQueuedCustomerDetail: ${error.message}`);
             throw error;
         }
+    }
+    async sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
     mapRevenueItem(item, branchId) {
         return {

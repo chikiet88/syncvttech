@@ -14,7 +14,7 @@ export declare class VttechApiService {
     private log;
     private updateCookies;
     login(force?: boolean): Promise<boolean>;
-    getXsrfToken(page?: string): Promise<string | null>;
+    getXsrfToken(page?: string, force?: boolean): Promise<string | null | undefined>;
     decompress(data: any): any;
     callHandler(page: string, handler: string, data: any): Promise<any>;
     callApi(url: string, data: any): Promise<any>;

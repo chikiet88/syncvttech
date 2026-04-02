@@ -39,8 +39,16 @@ export class ReportController {
     if (dateFrom && dateTo) {
       // Input is DD-MM-YYYY, convert to Date
       const parseDate = (dStr: string) => {
-        const [d, m, y] = dStr.split('-');
-        return new Date(`${y}-${m}-${d}`);
+        if (!dStr) return new Date();
+        const separator = dStr.includes('/') ? '/' : '-';
+        const parts = dStr.split(separator);
+        if (parts.length === 3) {
+            // Assume DD-MM-YYYY or YYYY-MM-DD
+            if (parts[0].length === 4) return new Date(dStr);
+            const [d, m, y] = parts;
+            return new Date(`${y}-${m}-${d}`);
+        }
+        return new Date(dStr);
       };
       
       const start = parseDate(dateFrom);
@@ -81,7 +89,7 @@ export class ReportController {
         const res = await this.vttechApi.callHandler(
             '/Report/Revenue/Branch/AllBranchGrid/',
             'LoadataDetailByBranch',
-            { branchID: branchID || "0", dateFrom, dateTo }
+            { branchID: branchID || "0", dateFrom: dateFrom, dateTo: dateTo }
         );
         
         const table = res?.Table || [];
@@ -255,8 +263,14 @@ export class ReportController {
 
     const parseDate = (dStr: string) => {
       if (!dStr) return new Date();
-      const [d, m, y] = dStr.split('-');
-      return new Date(`${y}-${m}-${d}`);
+      const separator = dStr.includes('/') ? '/' : '-';
+      const parts = dStr.split(separator);
+      if (parts.length === 3) {
+          if (parts[0].length === 4) return new Date(dStr);
+          const [d, m, y] = parts;
+          return new Date(`${y}-${m}-${d}`);
+      }
+      return new Date(dStr);
     };
 
     const start = parseDate(from || '');
@@ -266,7 +280,8 @@ export class ReportController {
     const where: any = { date: { gte: start, lte: end } };
     if (branchId && branchId !== '0') where.branch_id = parseInt(branchId);
 
-    const [data, total] = await Promise.all([
+    // Query DB
+    let [data, total] = await Promise.all([
       (this.prisma as any).dailyCustomer.findMany({
         where,
         skip,
@@ -275,6 +290,42 @@ export class ReportController {
       }),
       (this.prisma as any).dailyCustomer.count({ where }),
     ]);
+
+    /**
+     * FALLBACK: Nếu DB trống cho ngày hôm nay/ngày được chọn, thử Live Fetch từ Portal
+     */
+    if (total === 0 && pageNum === 1 && branchId && branchId !== '0') {
+        const dateObj = start;
+        const yyyy = dateObj.getFullYear();
+        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const dd = String(dateObj.getDate()).padStart(2, '0');
+        const formattedDate = `${yyyy}-${mm}-${dd} 00:00:00`;
+        
+        try {
+            await this.vttechApi.login();
+            const res = await this.vttechApi.callHandler(
+                '/Customer/ListCustomer/',
+                'LoadData',
+                { branchID: branchId, dateFrom: formattedDate, dateTo: formattedDate, type: 5 }
+            );
+
+            const table = res?.Table || [];
+            if (table.length > 0) {
+                data = table.map((item: any, idx: number) => ({
+                    id: `live-${idx}`,
+                    customer_id: parseInt(item.CustID),
+                    customer_name: item.CustName,
+                    customer_code: item.CustCode,
+                    phone: item.Phone,
+                    date: start,
+                    branch_id: parseInt(branchId),
+                }));
+                total = data.length;
+            }
+        } catch (e) {
+            console.error('Live Fetch Registrations Error:', e.message);
+        }
+    }
 
     // Map names from Customer table
     const customerIds = [...new Set(data.map((t: any) => t.customer_id).filter(Boolean))];

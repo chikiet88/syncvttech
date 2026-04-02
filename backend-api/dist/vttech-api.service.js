@@ -84,13 +84,21 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                 headers['Authorization'] = `Bearer ${this.token}`;
             }
             if (this.secretKey) {
-                headers['SecretKey'] = this.secretKey;
+                headers['secretkey'] = this.secretKey;
             }
             if (this.xsrfToken) {
-                headers['XSRF-TOKEN'] = this.xsrfToken;
-                headers['RequestVerificationToken'] = this.xsrfToken;
+                headers['xsrf-token'] = this.xsrfToken;
             }
-            headers['X-Requested-With'] = 'XMLHttpRequest';
+            headers['user-agent'] = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+            headers['accept'] = 'application/json, text/javascript, */*; q=0.01';
+            headers['accept-language'] = 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7';
+            headers['sec-ch-ua'] = '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"';
+            headers['sec-ch-ua-mobile'] = '?0';
+            headers['sec-ch-ua-platform'] = '"Linux"';
+            headers['sec-fetch-dest'] = 'empty';
+            headers['sec-fetch-mode'] = 'cors';
+            headers['sec-fetch-site'] = 'same-origin';
+            headers['x-requested-with'] = 'XMLHttpRequest';
             config.headers = headers;
             return config;
         });
@@ -140,14 +148,43 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                     this.secretKey = response.data.SecretKey || '0XsDK8L1WcsP+0Wo15z2KFtFKPSGZAr7iLu12AhuFV7mxcX/CBtVSOvvIaOXS3ARGP8CRxLbVFYk1BUlNd5MpAqH7nE6gys21rS1xheq0Jo=';
                     this.updateCookies(response.headers['set-cookie']);
                     this.cookies = this.cookies.filter(c => !c.startsWith('WebToken='));
-                    this.cookies.push(`WebToken=${this.token}`);
-                    this.log('✅ Đăng nhập thành công (Form mode)');
                     try {
-                        const homeRes = await this.axiosInstance.get('/');
-                        this.updateCookies(homeRes.headers['set-cookie']);
-                        const redirectRes = await this.axiosInstance.get('/appointment/appointmentinday/');
-                        this.updateCookies(redirectRes.headers['set-cookie']);
-                        this.log('🏠 Đã thiết lập Session portal (Redirect followed)');
+                        const username = this.configService.get('VTTECH_USERNAME') || '';
+                        const password = this.configService.get('VTTECH_PASSWORD') || '';
+                        if (!username || !password) {
+                            this.log('❌ Thiếu VTTECH_USERNAME hoặc VTTECH_PASSWORD trong .env');
+                            return false;
+                        }
+                        const formData = new URLSearchParams();
+                        formData.append('UserName', username);
+                        formData.append('Password', password);
+                        formData.append('IPToken', ipToken);
+                        const loginRes = await this.axiosInstance.post('/Login/Login', formData, {
+                            maxRedirects: 0,
+                            validateStatus: (status) => status >= 200 && status < 400,
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                                'Referer': this.baseUrl + '/Login/Login',
+                            },
+                        });
+                        this.updateCookies(loginRes.headers['set-cookie']);
+                        if (loginRes.status >= 300 && loginRes.status < 400) {
+                            const redirectUrl = loginRes.headers['location'];
+                            if (redirectUrl) {
+                                const followRes = await this.axiosInstance.get(redirectUrl);
+                                this.updateCookies(followRes.headers['set-cookie']);
+                                this.log(`🏠 Đã thiết lập Session portal (Redirect followed: ${redirectUrl})`);
+                            }
+                        }
+                        try {
+                            const indexRes = await this.axiosInstance.get('/Index/');
+                            this.updateCookies(indexRes.headers['set-cookie']);
+                        }
+                        catch (e) { }
+                        this.cookies = this.cookies.filter(c => !c.startsWith('WebToken='));
+                        this.cookies.push(`WebToken=${this.token}`);
+                        this.log('✅ Đăng nhập thành công (Form mode - Manual Redirect)');
+                        return true;
                     }
                     catch (e) {
                         this.log(`⚠️ Lỗi khi establish session portal: ${e.message}`);
@@ -167,7 +204,10 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         })();
         return this.loginPromise;
     }
-    async getXsrfToken(page = '/Customer/ListCustomer/') {
+    async getXsrfToken(page = '/Customer/ListCustomer/', force = false) {
+        if (!force && this.pageTokens.has(page)) {
+            return this.pageTokens.get(page);
+        }
         try {
             this.log(`📡 Đang lấy XSRF Token cho trang ${page}...`);
             const response = await this.axiosInstance.get(page);
@@ -181,13 +221,20 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                 return token;
             }
             else {
-                this.log(`⚠️ Không tìm thấy XSRF Token trong trang ${page}`);
+                if (response.data?.includes('/Login/Login')) {
+                    this.log(`⚠️ Session hết hạn khi truy cập ${page}, cần đăng nhập lại.`);
+                    this.token = null;
+                    this.pageTokens.clear();
+                }
+                else {
+                    this.log(`⚠️ Không tìm thấy XSRF Token trong trang ${page}`);
+                }
             }
         }
         catch (error) {
             this.log(`❌ Lỗi lấy XSRF Token cho ${page}: ${error.message}`);
         }
-        return null;
+        return this.pageTokens.get(page) || null;
     }
     decompress(data) {
         if (!data)
@@ -225,22 +272,22 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         try {
             await new Promise(resolve => setTimeout(resolve, 5000));
             await this.login();
-            const pageKey = page.split('?')[0];
-            let token = this.pageTokens.get(pageKey);
+            const token = await this.getXsrfToken(page);
             if (!token) {
-                token = (await this.getXsrfToken(pageKey)) || undefined;
+                this.log(`❌ Không thể thực hiện ${handler} vì thiếu XSRF Token cho trang ${page}`);
+                return undefined;
             }
             const url = `${page}?handler=${handler}`;
             const formData = new URLSearchParams();
-            if (token)
-                formData.append('__RequestVerificationToken', token);
             Object.keys(data).forEach(key => {
                 formData.append(key, data[key]);
             });
             const response = await this.axiosInstance.post(url, formData, {
                 headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
+                    'x-requested-with': 'XMLHttpRequest',
                     'Content-Type': 'application/x-www-form-urlencoded',
+                    'Referer': this.baseUrl + page,
+                    'xsrf-token': token,
                 },
             });
             if (typeof response.data === 'string' && response.data.trim().startsWith('<!DOCTYPE')) {
@@ -298,7 +345,7 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
             return `${d}-${m}-${y}`;
         };
         return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'LoadataDetailByBranch', {
-            branchID: branchId,
+            branchID: branchId.toString(),
             dateFrom: formatDate(dateFrom),
             dateTo: formatDate(dateTo),
         });
