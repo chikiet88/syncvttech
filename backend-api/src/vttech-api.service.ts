@@ -14,6 +14,7 @@ export class VttechApiService {
   private xsrfToken: string | null = null;
   private baseUrl: string;
   private loginPromise: Promise<boolean> | null = null;
+  private logCallback: ((msg: string) => void) | null = null;
 
   constructor(private configService: ConfigService) {
     this.baseUrl = this.configService.get<string>('VTTECH_BASE_URL', 'https://tmtaza.vttechsolution.com');
@@ -23,6 +24,7 @@ export class VttechApiService {
       baseURL: this.baseUrl,
       maxRedirects: 0,
       validateStatus: () => true, // Accept ALL status codes so redirects don't throw
+      timeout: 20000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
         'sec-ch-ua': '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
@@ -44,15 +46,6 @@ export class VttechApiService {
       if (this.secretKey) headers['secretkey'] = this.secretKey;
       if (this.xsrfToken) headers['xsrf-token'] = this.xsrfToken;
       headers['X-Requested-With'] = 'XMLHttpRequest';
-      
-      // DEBUG: Log full request details for handler POST calls
-      if (config.method === 'post' && config.url?.includes('handler=')) {
-        const cookieNames = ck.map(c => c.split('=')[0]);
-        this.logger.log(`🔍 [DEBUG POST] URL: ${config.url}`);
-        this.logger.log(`🔍 [DEBUG POST] Cookie keys: ${cookieNames.join(', ')}`);
-        this.logger.log(`🔍 [DEBUG POST] secretkey: ${headers['secretkey'] ? 'YES' : 'HOÀN HẢO_HIDDEN'}`);
-      }
-
       config.headers = headers;
       return config;
     });
@@ -68,6 +61,7 @@ export class VttechApiService {
     this.logger.log(msg);
     if (this.logCallback) this.logCallback(msg);
   }
+  setLogCallback(cb: (msg: string) => void) { this.logCallback = cb; }
 
   private updateCookies(newCookies: string[] | undefined) {
     if (!newCookies) return;
@@ -127,7 +121,9 @@ export class VttechApiService {
       try {
         const username = this.configService.get<string>('VTTECH_USERNAME');
         const password = this.configService.get<string>('VTTECH_PASSWORD');
-        if (force) { this.token = null; this.cookies = []; this.xsrfToken = null; }
+        if (force) { this.token = null; this.cookies = []; this.xsrfToken = null; this.secretKey = null; }
+
+        this.log(`🚀 [START LOGIN] User: ${username}`);
 
         // Step 1: GET login page — sets .AspNetCore.Antiforgery cookie + XSRF token
         const loginPageRes = await this.followRedirects('get', '/Login/Login?ver=' + Date.now(), {
@@ -142,15 +138,18 @@ export class VttechApiService {
           }
         }
 
-        // Add standard browser cookies matching the trace
+        // Add standard browser cookies matching real browser trace
         this.ensureCookie('.AspNetCore.Culture', 'c%3Den-US%7Cuic%3Dvi');
         this.ensureCookie('VTTECH_Menu_SideBarIsHide', 'false');
 
         // Step 2: Get encrypted IP
-        const ipRes = await this.axiosInstance.post('/api/Author/GetIP', {}, {
-          headers: { 'Content-Type': 'application/json' }
-        });
-        const ip_encry = ipRes.data?.ip_encry || "";
+        let ip_encry = "";
+        try {
+          const ipRes = await this.axiosInstance.post('/api/Author/GetIP', {}, {
+            headers: { 'Content-Type': 'application/json' }
+          });
+          ip_encry = ipRes.data?.ip_encry || "";
+        } catch (e) { /* ignore */ }
 
         // Step 3: AJAX Login
         const loginPayload = {
@@ -162,18 +161,16 @@ export class VttechApiService {
         });
 
         const data = loginRes.data;
-        this.log(`🔍 [LOGIN RESPONSE] Keys: ${JSON.stringify(Object.keys(data || {}))}`);
-        this.log(`🔍 [LOGIN RESPONSE] SettingUser: ${JSON.stringify(data?.SettingUser)?.slice(0, 200)}`);
-        this.log(`🔍 [LOGIN RESPONSE] PasswordEnCrypt: ${data?.PasswordEnCrypt?.slice(0, 50)}`);
-        this.log(`🔍 [LOGIN RESPONSE] UserExtraConfig: ${JSON.stringify(data?.UserExtraConfig)?.slice(0, 200)}`);
         if (data && data.Session) {
           this.token = data.Session;
-          // Sử dụng SecretKey từ Login HOẶC dùng Fallback Key đã chẩn đoán thành công
-          this.secretKey = data.SecretKey || data.secretkey || data.Secretkey || 'vvjeUfMxJcm2aB0fl2ySxsiqGj5X5X3SY3Dl6Qj2te0SouYCtVRKC7qcp/MiP16aD5iQLEfgAsDk/ERxed+eUbi8eaY7/mraxUcfGqobMu4=';
-          this.log(`✅ Login OK. JWT: ${this.token!.slice(0, 20)}... | SecretKey: ${this.secretKey ? 'SET OK' : 'NO'}`);
+          this.secretKey = data.SecretKey || data.secretkey || data.Secretkey 
+            || this.configService.get<string>('VTTECH_SECRET_KEY', 
+               'ZdB9AsmlnaqopXnryYe8Uyj9YXaG0lZ09fNEljAifOESjErNDKj8TGtf0tGyKg2QpFsfOj5zQOUe+hiU1aN5mptaw7+sGwccT8pT0yFLgKE=');
+          this.log(`✅ Login OK. JWT: ${this.token!.slice(0, 20)}... | SecretKey: ${this.secretKey ? 'SET' : 'NO'}`);
 
-          // Step 4: Activate session — visit dashboard (follow redirects, capture cookies)
-          await this.followRedirects('get', '/Index/', { headers: { 'Accept': 'text/html' } });
+          // Step 4: Activate session — visit ĐÚNG trang dashboard (appointment, không phải /Index/ đã bị 404)
+          const dashRes = await this.followRedirects('get', '/appointment/appointmentinday/', { headers: { 'Accept': 'text/html' } });
+          this.log(`🏠 Dashboard: HTTP ${dashRes.status} (${typeof dashRes.data === 'string' ? dashRes.data.length : 0} bytes)`);
 
           // Step 5: Visit report page to get fresh XSRF token for report handlers
           const reportPageRes = await this.followRedirects('get', '/report/reportgeneral/', {
@@ -196,9 +193,9 @@ export class VttechApiService {
 
           return true;
         }
-        this.log(`❌ Login failed: No Session in response`);
+        this.log(`❌ Login failed: ${JSON.stringify(data)}`);
         return false;
-      } catch (error) {
+      } catch (error: any) {
         this.log(`❌ Lỗi LOGIN: ${error.message}`);
         return false;
       } finally { this.loginPromise = null; }
@@ -242,22 +239,17 @@ export class VttechApiService {
 
   /**
    * Build a clean form body: ONLY data params, NO __RequestVerificationToken, NO handler.
-   * The browser trace (content-length: 48) proves body = "dateFrom=01-04-2026&dateTo=30-04-2026&branchID=7"
    * XSRF validation is done via the xsrf-token HEADER only (ASP.NET Core AJAX mode).
    */
   private buildFormBody(data: any, page?: string): URLSearchParams {
     const form = new URLSearchParams();
     const processed = { ...data };
     
-    // Portal VTTech có 2 định dạng ngày tùy Handler:
-    // 1. Report (Revenue/AllBranchGrid): DD-MM-YYYY
-    // 2. Customer List (ListCustomer): YYYY-MM-DD HH:mm:ss
     const isCustomerPage = page?.includes('/Customer/ListCustomer/');
 
     for (const k of ['dateFrom', 'dateTo', 'DateFrom', 'DateTo']) {
       if (processed[k]) {
         if (isCustomerPage) {
-          // Giữ nguyên YYYY-MM-DD và đảm bảo có HH:mm:ss như capture thực tế
           if (typeof processed[k] === 'string' && !processed[k].includes(':')) {
             processed[k] = `${processed[k].split(' ')[0]} 00:00:00`;
           }
@@ -291,16 +283,18 @@ export class VttechApiService {
     const url = `${page}?handler=${handler}`;
     const formBody = this.buildFormBody(data, page);
 
-    this.log(`📡 [API CALL] ${handler} | ${page} | body=${formBody.toString().slice(0, 80)}`);
-
     const response = await this.axiosInstance.post(url, formBody, {
       headers: this.handlerHeaders(page),
     });
 
+    // Log status cho debug
+    if (response.status !== 200) {
+      this.log(`⚠️ [${handler}] HTTP ${response.status} | ${response.headers['location'] || ''}`);
+    }
+
     // 302 = session rejected → re-login and retry once
     if (response.status >= 300 && response.status < 400) {
-      this.log(`⚠️ [REDIRECT ${response.status}] ${handler} → ${response.headers['location']}`);
-      this.log(`🔄 Re-login và thử lại...`);
+      this.log(`🔄 Re-login và thử lại ${handler}...`);
       await this.login(true);
       const retryBody = this.buildFormBody(data, page);
       const retry = await this.axiosInstance.post(url, retryBody, {
@@ -322,6 +316,12 @@ export class VttechApiService {
       return [];
     }
 
+    // 400 = antiforgery validation failed → log but return empty
+    if (response.status === 400) {
+      this.log(`❌ [${handler}] HTTP 400 - XSRF validation failed`);
+      return [];
+    }
+
     const decompressed = this.decompress(response.data);
     const count = Array.isArray(decompressed) ? decompressed.length : (decompressed?.Table?.length || 0);
     this.log(`📥 [API RESPONSE] ${handler}: ${count} recs.`);
@@ -330,11 +330,15 @@ export class VttechApiService {
 
   async callApi(url: string, data: any) {
     await this.login();
-    this.log(`📡 [API CALL] API: ${url}`);
     const resp = await this.axiosInstance.post(url, data);
     if (resp.status >= 400) throw new Error(`API error: ${resp.status}`);
-    this.log(`📥 [API RESPONSE] ${url}: OK`);
     return resp.data;
+  }
+
+  // Compatibility methods for AppController & SyncService
+  async checkLoginStatus(u?: string, p?: string) {
+    const ok = await this.login(true);
+    return { success: ok, message: ok ? 'OK' : 'Failed', user: u || this.configService.get('VTTECH_USERNAME') };
   }
 
   async fetchExtensions() { return this.callHandler('/marketing/ticketgeneral/', 'LoadIni', {}); }
@@ -344,10 +348,6 @@ export class VttechApiService {
       DateFrom: dateFrom, DateTo: dateTo, BranchID: 0, Type: 0
     });
   }
-
-  private logCallback: ((msg: string) => void) | null = null;
-  setLogCallback(cb: (msg: string) => void) { this.logCallback = cb; }
-
   async getRevenueByBranch(dateFrom: string, dateTo: string, branchId: number) {
     return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'Loadata', {
       branchID: branchId.toString(), dateFrom, dateTo

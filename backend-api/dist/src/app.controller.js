@@ -18,16 +18,22 @@ const app_service_1 = require("./app.service");
 const sync_service_1 = require("./sync.service");
 const pbx_sync_service_1 = require("./pbx-sync.service");
 const prisma_service_1 = require("./prisma.service");
+const vttech_api_service_1 = require("./vttech-api.service");
 let AppController = class AppController {
     appService;
     syncService;
     pbxSync;
     prisma;
-    constructor(appService, syncService, pbxSync, prisma) {
+    vttechApi;
+    constructor(appService, syncService, pbxSync, prisma, vttechApi) {
         this.appService = appService;
         this.syncService = syncService;
         this.pbxSync = pbxSync;
         this.prisma = prisma;
+        this.vttechApi = vttechApi;
+    }
+    async checkLogin(user, pass) {
+        return this.vttechApi.checkLoginStatus(user, pass);
     }
     getHello() {
         return this.appService.getHello();
@@ -100,6 +106,14 @@ let AppController = class AppController {
     }
 };
 exports.AppController = AppController;
+__decorate([
+    (0, common_1.Get)('check-login'),
+    __param(0, (0, common_1.Query)('user')),
+    __param(1, (0, common_1.Query)('pass')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "checkLogin", null);
 __decorate([
     (0, common_1.Get)(),
     __metadata("design:type", Function),
@@ -179,6 +193,7 @@ exports.AppController = AppController = __decorate([
     __metadata("design:paramtypes", [app_service_1.AppService,
         sync_service_1.SyncService,
         pbx_sync_service_1.PbxSyncService,
-        prisma_service_1.PrismaService])
+        prisma_service_1.PrismaService,
+        vttech_api_service_1.VttechApiService])
 ], AppController);
 //# sourceMappingURL=app.controller.js.map

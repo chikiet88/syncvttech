@@ -22,6 +22,11 @@ function BranchReportContent() {
   const [dateFrom, setDateFrom] = useState(new Date().toISOString().split('T')[0])
   const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0])
 
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   const handleSearch = async () => {
     setLoading(true)
     try {
@@ -30,7 +35,11 @@ function BranchReportContent() {
         return `${d}-${m}-${y}`
       }
 
-      const url = new URL(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"}/reports/branches`)
+      // Tự động nhận diện Hostname nếu truy cập từ xa
+      const apiHost = process.env.NEXT_PUBLIC_API_URL || 
+                      (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:5001` : "http://localhost:5001");
+      
+      const url = new URL(`${apiHost}/reports/branches`)
       url.searchParams.set("dateFrom", formatDate(dateFrom))
       url.searchParams.set("dateTo", formatDate(dateTo))
 
@@ -130,7 +139,9 @@ function BranchReportContent() {
       <Card className="border border-slate-200/50 shadow-sm rounded-xl overflow-hidden bg-white">
         <CardHeader className="px-4 py-3 border-b border-slate-50 flex flex-row items-center justify-between">
           <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-500">Chi tiết dữ liệu theo chi nhánh</CardTitle>
-          <div className="text-[10px] font-bold text-slate-400 italic">Cập nhật lúc: {new Date().toLocaleTimeString('vi-VN')}</div>
+          <div className="text-[10px] font-bold text-slate-400 italic">
+            Cập nhật lúc: {mounted ? new Date().toLocaleTimeString('vi-VN') : "--:--:--"}
+          </div>
         </CardHeader>
         <CardContent className="p-4 pt-4">
           {loading ? (

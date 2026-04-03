@@ -8,7 +8,8 @@
     "backend": "cd backend-api && bun run start:dev",
     "frontend": "cd vttech-dashboard && bun dev",
     "backend:host": "cd backend-api && DATABASE_URL=postgresql://postgres:postgres@localhost:12003/db_tazagroup_vttech_sync bun run start:dev",
-    "frontend:host": "cd vttech-dashboard && DATABASE_URL=postgresql://postgres:postgres@localhost:12003/db_tazagroup_vttech_sync bun dev"
+    "frontend:host": "cd vttech-dashboard && DATABASE_URL=postgresql://postgres:postgres@localhost:12003/db_tazagroup_vttech_sync bun dev",
+    "sync": "rsync -avz --exclude 'node_modules' --exclude '.git' --exclude '.next' --exclude 'dist' --exclude '.agent' ./ 14binhloi-100.111.97.70:apivttech"
   },
   "devDependencies": {
     "prisma": "~6.2.1"

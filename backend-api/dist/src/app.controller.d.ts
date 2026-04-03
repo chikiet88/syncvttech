@@ -2,12 +2,19 @@ import { AppService } from './app.service';
 import { SyncService } from './sync.service';
 import { PbxSyncService } from './pbx-sync.service';
 import { PrismaService } from './prisma.service';
+import { VttechApiService } from './vttech-api.service';
 export declare class AppController {
     private readonly appService;
     private readonly syncService;
     private readonly pbxSync;
     private readonly prisma;
-    constructor(appService: AppService, syncService: SyncService, pbxSync: PbxSyncService, prisma: PrismaService);
+    private readonly vttechApi;
+    constructor(appService: AppService, syncService: SyncService, pbxSync: PbxSyncService, prisma: PrismaService, vttechApi: VttechApiService);
+    checkLogin(user?: string, pass?: string): Promise<{
+        success: boolean;
+        message: string;
+        user: string | undefined;
+    }>;
     getHello(): string;
     triggerSync(from?: string, to?: string, date?: string, forceMaster?: string, syncPbx?: string, syncDetails?: string): Promise<{
         message: string;

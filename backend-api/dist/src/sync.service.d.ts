@@ -1,8 +1,9 @@
+import { OnModuleInit } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { VttechApiService } from './vttech-api.service';
 import { PrismaService } from './prisma.service';
 import { PbxSyncService } from './pbx-sync.service';
-export declare class SyncService {
+export declare class SyncService implements OnModuleInit {
     private vttechApi;
     private prisma;
     private pbxSync;
@@ -10,6 +11,7 @@ export declare class SyncService {
     private readonly logger;
     private syncStatus;
     constructor(vttechApi: VttechApiService, prisma: PrismaService, pbxSync: PbxSyncService, syncQueue: Queue);
+    onModuleInit(): Promise<void>;
     getSyncStatus(): {
         isSyncing: boolean;
         progress: number;
@@ -29,6 +31,7 @@ export declare class SyncService {
     private formatDate;
     handleDailySync(): Promise<void>;
     syncRevenue(dateFrom: string, dateTo: string): Promise<void>;
+    private executeRevenueSync;
     syncByRange(dateFrom: string, dateTo: string, forceMaster?: boolean, syncPbx?: boolean, syncDetails?: boolean): Promise<void>;
     syncByDate(dateStr: string): Promise<void>;
     private syncCustomers;

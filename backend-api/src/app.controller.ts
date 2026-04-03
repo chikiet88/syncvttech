@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { SyncService } from './sync.service';
 import { PbxSyncService } from './pbx-sync.service';
 import { PrismaService } from './prisma.service';
+import { VttechApiService } from './vttech-api.service';
 
 @Controller()
 export class AppController {
@@ -12,7 +13,13 @@ export class AppController {
     private readonly syncService: SyncService,
     private readonly pbxSync: PbxSyncService,
     private readonly prisma: PrismaService,
+    private readonly vttechApi: VttechApiService,
   ) {}
+
+  @Get('check-login')
+  async checkLogin(@Query('user') user?: string, @Query('pass') pass?: string) {
+    return this.vttechApi.checkLoginStatus(user, pass);
+  }
 
   @Get()
   getHello(): string {

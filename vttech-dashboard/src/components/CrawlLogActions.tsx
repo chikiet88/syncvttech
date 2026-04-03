@@ -44,6 +44,10 @@ export function CrawlLogActions() {
     const [syncDetails, setSyncDetails] = useState(true)
     const [isStopping, setIsStopping] = useState(false)
     const [isCopied, setIsCopied] = useState(false)
+    const [loginDialogOpen, setLoginDialogOpen] = useState(false)
+    const [testUser, setTestUser] = useState("ittest123")
+    const [testPass, setTestPass] = useState("ittest123")
+    const [isTesting, setIsTesting] = useState(false)
 
     const router = useRouter()
     const logContainerRef = useRef<HTMLDivElement>(null)
@@ -164,6 +168,29 @@ export function CrawlLogActions() {
         }
     }
 
+    const handleCheckLogin = async () => {
+        setIsTesting(true)
+        try {
+            const url = new URL(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"}/check-login`)
+            if (testUser) url.searchParams.set("user", testUser)
+            if (testPass) url.searchParams.set("pass", testPass)
+            
+            const res = await fetch(url.toString())
+            const result = await res.json()
+            
+            if (result.success) {
+                alert(`✅ ${result.message}\nUser: ${result.user || 'Default'}`)
+                setLoginDialogOpen(false)
+            } else {
+                alert(`❌ ${result.message}`)
+            }
+        } catch (error) {
+            alert("Lỗi kết nối Backend")
+        } finally {
+            setIsTesting(false)
+        }
+    }
+
     return (
         <>
             <div className="flex items-center gap-3">
@@ -174,6 +201,14 @@ export function CrawlLogActions() {
                 >
                     <RefreshCw className="w-4 h-4" />
                     Làm mới
+                </Button>
+                <Button
+                    variant="outline"
+                    className="rounded-xl gap-2 glass border-none hover:bg-indigo-50 hover:text-indigo-600"
+                    onClick={() => setLoginDialogOpen(true)}
+                >
+                    <ShieldCheck className="w-4 h-4 text-indigo-500" />
+                    Check Login
                 </Button>
                 <Button
                     className="rounded-xl gap-2 font-bold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20"
@@ -192,6 +227,54 @@ export function CrawlLogActions() {
                     {status?.isSyncing ? "Đang Đồng bộ..." : "Đồng bộ Ngay"}
                 </Button>
             </div>
+
+            {/* Login Test Dialog */}
+            <Dialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen}>
+                <DialogContent className="sm:max-w-[400px] rounded-3xl p-8 border-none shadow-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <ShieldCheck className="w-6 h-6 text-indigo-500" />
+                            Kiểm tra Đăng nhập
+                        </DialogTitle>
+                        <DialogDescription>
+                            Nhập tài khoản VTTech để thử nghiệm kết nối. Nếu để trống sẽ dùng thông tin mặc định.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="testUser">Username</Label>
+                            <Input 
+                                id="testUser" 
+                                placeholder="Tài khoản..." 
+                                value={testUser}
+                                onChange={(e) => setTestUser(e.target.value)}
+                                className="rounded-xl border-slate-100 h-11"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="testPass">Password</Label>
+                            <Input 
+                                id="testPass" 
+                                type="password" 
+                                placeholder="Mật khẩu..." 
+                                value={testPass}
+                                onChange={(e) => setTestPass(e.target.value)}
+                                className="rounded-xl border-slate-100 h-11"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button 
+                            className="w-full rounded-xl h-11 font-bold bg-indigo-600 hover:bg-indigo-700 text-white"
+                            onClick={handleCheckLogin}
+                            disabled={isTesting}
+                        >
+                            {isTesting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                            {isTesting ? "Đang kiểm tra..." : "Bắt đầu Test"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
                 <DialogContent className="sm:max-w-[750px] h-[90vh] sm:h-auto max-h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl rounded-t-[2rem] sm:rounded-[2rem]">

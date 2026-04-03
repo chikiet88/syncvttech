@@ -3,6 +3,7 @@ import { PrismaService } from './prisma.service';
 export declare class ReportController {
     private vttechApi;
     private prisma;
+    private readonly logger;
     constructor(vttechApi: VttechApiService, prisma: PrismaService);
     getRevenue(branchID: string, dateFrom: string, dateTo: string, search?: string, page?: string, limit?: string, sortBy?: string, sortOrder?: 'asc' | 'desc', serviceOnly?: string): Promise<{
         Table: any;
@@ -23,7 +24,7 @@ export declare class ReportController {
         totalSales: any;
         totalRevenue: any;
     }[]>;
-    getCustomersDetails(branchId: string, from: string, to: string, page?: string, limit?: string): Promise<{
+    getCustomersDetails(branchId: string, from: string, to: string, type?: string, page?: string, limit?: string): Promise<{
         data: any;
         pagination: {
             total: any;

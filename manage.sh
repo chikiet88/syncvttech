@@ -62,8 +62,7 @@ EOF
 
     (cd "$PRISMA_DIR" && bun ../temp_backup.js)
     rm temp_backup.js
-    echo -e "${GREEN}✅ Backup completed at: $CURRENT_BACKUP_DIR${NC}"
-    read -p "Press Enter to return..."
+    echo -e "${GREEN}✅ Backup completed at: $ABS_BACKUP_DIR/backup-$TIMESTAMP${NC}"
 }
 
 restore_json() {
@@ -140,13 +139,12 @@ EOF
     (cd "$PRISMA_DIR" && bun ../temp_restore.js)
     rm temp_restore.js
     echo -e "${GREEN}✅ Restore completed!${NC}"
-    read -p "Press Enter to return..."
 }
 
 clear_ports() {
     echo -e "\n${RED}💀 Killing processes on ports 5000, 5001, 21100, 21101...${NC}"
     for port in 5000 5001 21100 21101; do
-        PID=$(lsof -t -i:$port)
+        PID=$(lsof -t -iTCP:$port -sTCP:LISTEN)
         if [ -n "$PID" ]; then
             echo -e "${YELLOW}  Stopping process on port $port (PID: $PID)...${NC}"
             kill -9 $PID 2>/dev/null
@@ -162,41 +160,80 @@ kill_ports() {
     read -p "Press Enter to return..."
 }
 
-while true; do
-    clear
-    echo "============================================="
-    echo -e "   ${BLUE}🛠️  VTTech Sync Consolidated Menu${NC}"
-    echo "============================================="
-    echo "1. Prisma Studio (Port 21103)"
-    echo "2. Prisma Backup JSON"
-    echo "3. Prisma Restore JSON"
-    echo "4. Prisma Reset Data"
-    echo "5. Prisma DB Push & Generate"
-    echo "6. Git Auto Commit (Today)"
-    echo "7. [Host] VTTech Dashboard (Port 5000)"
-    echo "8. [Host] Backend API (Port 5001)"
-    echo "9. 🚀 Chạy Full Stack (Port 5000 & 5001)"
-    echo "10. 🐳 DOCKER: Start All (Port 21100 & 21101)"
-    echo "11. 🐳 DOCKER: Stop All"
-    echo "12. 🐳 DOCKER: View Logs"
-    echo "13. 💀 Kill Ports (5000, 5001, 21100, 21101)"
-    echo "0. Exit"
-    echo "============================================="
-    echo -ne "Chọn option: "
-    if ! read OPT; then
-        echo -e "\nĐã thoát! 👋"
-        exit 0
+sync_remote() {
+    echo -e "\n${BLUE}📤 Syncing files to 14binhloi-100.111.97.70...${NC}"
+    # Using rsync to copy the entire project directory to the remote server
+    # Excluding bulky directories: node_modules, .git, .next, dist, .agent
+    rsync -avz --progress \
+        --exclude 'node_modules' \
+        --exclude '.git' \
+        --exclude '.next' \
+        --exclude '.agent' \
+        --exclude 'dist' \
+        ./ 14binhloi-100.111.97.70:apivttech
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Sync completed successfully!${NC}"
+    else
+        echo -e "${RED}❌ Sync failed. Check your SSH connection or rsync logs.${NC}"
     fi
+}
 
-    case $OPT in
+# Check if argument is passed, if not show menu
+if [ -n "$1" ]; then
+    OPT=$1
+    echo -e "${BLUE}🚀 Running option: $OPT${NC}"
+else
+    while true; do
+        clear
+        echo "============================================="
+        echo -e "   ${BLUE}🛠️  VTTech Sync Consolidated Menu${NC}"
+        echo "============================================="
+        echo "1. Prisma Studio (Port 21103)"
+        echo "2. Prisma Backup JSON"
+        echo "3. Prisma Restore JSON"
+        echo "4. Prisma Reset Data"
+        echo "5. Prisma DB Push & Generate"
+        echo "6. Git Auto Commit (Today)"
+        echo "7. [Host] VTTech Dashboard (Port 5000)"
+        echo "8. [Host] Backend API (Port 5001)"
+        echo "9. 🚀 Full Stack + Sync (Auto Restart)"
+        echo "10. 🐳 DOCKER: Start All (Port 21100 & 21101)"
+        echo "11. 🐳 DOCKER: Stop All"
+        echo "12. 🐳 DOCKER: View Logs"
+        echo "13. 💀 Kill Ports (5000, 5001, 21100, 21101)"
+        echo "14. 📤 SYNC: Copy Project to Remote Server"
+        echo "0. Exit"
+        echo "============================================="
+        echo -ne "Chọn option: "
+        if ! read OPT; then
+            echo -e "\nĐã thoát! 👋"
+            exit 0
+        fi
+        
+        # Break inner loop then execute option, or stay in loop for menu
+        if [[ "$OPT" == "0" ]]; then
+            echo "Bye! 👋"
+            exit 0
+        fi
+        
+        # Special handling for menu options that keep running
+        # We handle the case selection below
+        break
+    done
+fi
+
+case $OPT in
         1)
             run_prisma studio
             ;;
         2)
             backup_json
+            read -p "Press Enter to return..."
             ;;
         3)
             restore_json
+            read -p "Press Enter to return..."
             ;;
         4)
             echo -e "${RED}\n⚠️  WARNING: This will delete data in the database!${NC}"
@@ -237,12 +274,23 @@ while true; do
             ;;
         9)
             clear_ports
-            echo -e "\n${BLUE}🚀 Starting Full Stack on Host...${NC}"
-            DB_FALLBACK=""
+            echo -e "\n${BLUE}🚀 Starting Full Stack with Sync...${NC}"
+            
+            # Sync once before starting
+            sync_remote
+            
+            DB_FALLBACK_VAL=""
             if ! getent hosts tazagroupnet-db &> /dev/null; then
-                DB_FALLBACK="DATABASE_URL=postgresql://postgres:postgres@localhost:12003/db_tazagroup_vttech_sync"
+                DB_FALLBACK_VAL="postgresql://postgres:postgres@localhost:12003/db_tazagroup_vttech_sync"
             fi
-            bunx concurrently "cd vttech-dashboard && rm -rf .next && $DB_FALLBACK PORT=5000 bun dev" "cd backend-api && $DB_FALLBACK PORT=5001 bun run start:dev"
+            
+            # Use npx concurrently for stability, and export environment variables
+            # Also keep it in a loop if it crashes, but concurrently usually handles its children
+            npx concurrently \
+                --names "FRONTEND,BACKEND" \
+                --prefix-colors "blue,green" \
+                "cd vttech-dashboard && rm -rf .next && export DATABASE_URL=\"$DB_FALLBACK_VAL\" && export PORT=5000 && bun dev" \
+                "cd backend-api && export DATABASE_URL=\"$DB_FALLBACK_VAL\" && export PORT=5001 && export NODE_ENV=development && bun run start:dev"
             ;;
         10)
             echo -e "\n${BLUE}🐳 Starting Docker Containers (24/7)...${NC}"
@@ -261,13 +309,22 @@ while true; do
         13)
             kill_ports
             ;;
+        14)
+            sync_remote
+            read -p "Press Enter to return..."
+            ;;
         0)
             echo "Bye! 👋"
             exit 0
             ;;
-        *)
-            echo -e "${RED}❌ Invalid option.${NC}"
-            sleep 1
-            ;;
-    esac
-done
+    *)
+        echo -e "${RED}❌ Invalid option: $OPT${NC}"
+        [ -z "$1" ] && sleep 1
+        ;;
+esac
+
+# If we were in menu mode (no $1), we might want to restart the script to keep showing menu
+# but for options that are long-running (like 9), they won't return until stopped.
+if [ -z "$1" ] && [ "$OPT" != "9" ] && [ "$OPT" != "7" ] && [ "$OPT" != "8" ] && [ "$OPT" != "10" ] && [ "$OPT" != "12" ]; then
+    exec "$0"
+fi

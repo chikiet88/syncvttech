@@ -20,7 +20,7 @@ RUN bun prisma generate
 # Build Next.js app
 ENV NODE_ENV=production
 ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/db
-ENV NEXT_PUBLIC_API_URL=http://localhost:21101
+ENV NEXT_PUBLIC_API_URL=https://apivttech.tazagroup.net
 RUN bun run build
 
 # Stage 2: Run with Bun

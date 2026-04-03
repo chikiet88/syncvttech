@@ -1,5 +1,5 @@
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -9,7 +9,7 @@ import { PrismaService } from './prisma.service';
 import { PbxSyncService } from './pbx-sync.service';
 
 @Injectable()
-export class SyncService {
+export class SyncService implements OnModuleInit {
   private readonly logger = new Logger(SyncService.name);
 
   private syncStatus = {
@@ -31,6 +31,21 @@ export class SyncService {
     private pbxSync: PbxSyncService,
     @InjectQueue('sync-queue') private syncQueue: Queue,
   ) {}
+
+  async onModuleInit() {
+    this.logger.log('🚀 [STARTUP] Đang kiểm tra kết nối API VTTech...');
+    // Chạy ngầm để không chặn việc mở Port 5001
+    this.vttechApi.checkLoginStatus().then(result => {
+      if (result.success) {
+        this.logger.log(`✅ [LOGIN OK] Người dùng: ${result.user}`);
+        this.logger.log(`✅ [STATUS] ${result.message}`);
+      } else {
+        this.logger.error(`❌ [LOGIN FAILED] ${result.message}`);
+      }
+    }).catch(err => {
+      this.logger.error(`🔥 [STARTUP ERROR] ${err.message}`);
+    });
+  }
 
   getSyncStatus() {
     return this.syncStatus;
@@ -202,8 +217,8 @@ export class SyncService {
             attempts: 3,
           });
 
-          // Find customers with registration or activity on this day
-          const foundIds = await this.syncCustomers(dateStr, dateStr, 2, branch.id);
+          // Find customers with registration or activity on this day (Type 5 per docs)
+          const foundIds = await this.syncCustomers(dateStr, dateStr, 5, branch.id);
           for (const cId of foundIds) {
             if (cId && !syncedCustomerIds.has(cId)) {
               await this.syncQueue.add('sync-job', {
