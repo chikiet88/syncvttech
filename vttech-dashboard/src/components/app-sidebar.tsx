@@ -2,25 +2,13 @@
 
 import * as React from 'react'
 import {
-  LayoutDashboard,
-  MapPin,
-  Users,
-  Briefcase,
-  Settings,
-  Database,
-  Search,
   ChevronRight,
-  Stethoscope,
-  BadgeDollarSign,
-  HeartHandshake,
   TrendingUp,
-  History,
-  Activity,
-  UserCog,
-  ShieldCheck,
   Building2,
-  Package,
-  Megaphone
+  BadgeDollarSign,
+  UserCog,
+  Settings,
+  LogOut
 } from 'lucide-react'
 
 import {
@@ -33,152 +21,60 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
-  SidebarTrigger,
   SidebarFooter,
-  useSidebar,
 } from '@/components/ui/sidebar'
-import { Input } from '@/components/ui/input'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { useAuth } from '@/hooks/use-auth'
 
 const data = {
-  user: {
-    name: 'VTTech Admin',
-    email: 'admin@vttech.vn',
-    avatar: 'https://github.com/shadcn.png',
-  },
   navMain: [
     {
-      title: 'Phân tích & Giám sát',
-      url: '#',
-      icon: Activity,
-      isActive: true,
-      items: [
-        { title: 'Tổng quan', url: '/', icon: LayoutDashboard },
-        { title: 'Xu hướng Doanh thu', url: '/', icon: TrendingUp },
-        { title: 'Lịch sử Đồng bộ', url: '/monitoring/crawl-logs', icon: History },
-      ],
-    },
-    {
-      title: 'Báo cáo',
+      title: 'Hệ thống Báo cáo',
       url: '#',
       icon: TrendingUp,
       items: [
         { title: 'Tổng hợp Chi nhánh', url: '/reports', icon: Building2 },
-        { title: 'Doanh thu', url: '/reports/revenue', icon: BadgeDollarSign },
+        { title: 'Doanh thu Chi tiết', url: '/reports/revenue', icon: BadgeDollarSign },
       ],
-    },
-    {
-      title: 'Dữ liệu Cốt lõi',
-      url: '#',
-      icon: Building2,
-      items: [
-        { title: 'Chi nhánh', url: '/branches', icon: MapPin },
-        { title: 'Dịch vụ', url: '/services', icon: Package },
-        { title: 'Tiếp thị', url: '#', icon: Megaphone },
-      ],
-    },
-    {
-      title: 'CRM & Nhân sự',
-      url: '#',
-      icon: Users,
-      items: [
-        { title: 'Khách hàng', url: '/customers', icon: Users },
-        { title: 'Nhân viên', url: '/employees', icon: Briefcase },
-        { title: 'Quản lý Người dùng', url: '#', icon: UserCog },
-      ],
-    },
-    {
-      title: 'Vận hành',
-      url: '#',
-      icon: Stethoscope,
-      items: [
-        { title: 'Lịch hẹn', url: '/appointments', icon: History },
-        { title: 'Liệu trình', url: '/treatments', icon: HeartHandshake },
-        { title: 'Thẻ Dịch vụ', url: '/service-tabs', icon: Settings },
-      ],
-    },
-    {
-      title: 'Chăm sóc Khách hàng',
-      url: '#',
-      icon: BadgeDollarSign,
-      items: [
-        { title: 'Thanh toán', url: '/payments', icon: BadgeDollarSign },
-        { title: 'Trả góp', url: '/installments', icon: ShieldCheck },
-        { title: 'Khiếu nại', url: '#', icon: Settings },
-        { title: 'Lịch sử', url: '#', icon: History },
-      ],
-    },
-    {
-      title: 'Tổng đài (PBX)',
-      url: '#',
-      icon: Briefcase,
-      items: [
-        { title: 'Lịch sử Cuộc gọi', url: '/call-center/records', icon: History },
-        { title: 'Nhân viên Tổng đài', url: '/call-center/employees', icon: Users },
-        { title: 'Cấu hình Extension', url: '/call-center/extensions', icon: Settings },
-      ],
-    },
+    }
   ],
 }
 
 export function AppSidebar() {
-  const [search, setSearch] = React.useState('')
-  const { state } = useSidebar()
-
-  const filteredNav = data.navMain.map(group => ({
-    ...group,
-    items: group.items.filter(item => 
-      item.title.toLowerCase().includes(search.toLowerCase())
-    )
-  })).filter(group => group.items.length > 0)
+  const { user, logout } = useAuth()
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="p-4 border-b border-black/5">
+    <Sidebar collapsible="icon" className="border-none shadow-2xl">
+      <SidebarHeader className="p-4 border-b border-black/5 bg-white">
         <div className="flex items-center gap-3 px-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-xl shadow-lg shadow-blue-500/20">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold text-xl shadow-lg shadow-indigo-500/20">
             V
           </div>
           <div className="flex flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">
-            <span className="font-bold text-lg">VTTech <span className="gradient-text">Studio</span></span>
-            <span className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Enterprise</span>
-          </div>
-        </div>
-        <div className="mt-4 px-2 group-data-[collapsible=icon]:hidden">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Tìm kiếm tính năng..."
-              className="pl-9 bg-slate-100 border-none h-9 focus-visible:ring-1 focus-visible:ring-blue-500 rounded-xl"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <span className="font-extrabold text-lg tracking-tight">VTTech <span className="text-indigo-600">Studio</span></span>
+            <span className="text-[9px] text-muted-foreground uppercase tracking-[0.2em] font-black">Enterprise</span>
           </div>
         </div>
       </SidebarHeader>
-      <SidebarContent className="py-2">
-        {filteredNav.map((group) => (
+      <SidebarContent className="py-4 bg-white/50 backdrop-blur-sm">
+        {data.navMain.map((group) => (
           <SidebarGroup key={group.title}>
-            <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden px-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-2">
+            <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden px-4 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 ml-1">
               {group.title}
             </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu className="gap-1">
                 {group.items.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton 
                       asChild 
                       tooltip={item.title}
-                      className="hover:bg-slate-100 data-[active=true]:bg-blue-600/10 data-[active=true]:text-blue-600 rounded-xl transition-all duration-300 mx-2 w-[calc(100%-1rem)]"
+                      className="hover:bg-indigo-50/50 data-[active=true]:bg-indigo-600 data-[active=true]:text-white rounded-xl transition-all duration-300 mx-3 w-[calc(100%-1.5rem)] h-11"
                     >
                       <a href={item.url} className="flex items-center gap-3">
-                        <item.icon className="h-4 w-4 shrink-0 transition-transform group-hover:scale-110" />
-                        <span className="font-medium">{item.title}</span>
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span className="font-bold text-[13px] tracking-tight">{item.title}</span>
                       </a>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -188,25 +84,35 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="p-4 border-t border-black/5">
+      <SidebarFooter className="p-4 border-t border-black/5 bg-white">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton className="h-12 hover:bg-slate-100 rounded-xl transition-all duration-300">
-              <Avatar className="h-8 w-8 rounded-lg border border-black/10">
-                <AvatarImage src={data.user.avatar} />
-                <AvatarFallback className="rounded-lg">VA</AvatarFallback>
+            <SidebarMenuButton className="h-14 hover:bg-slate-50 rounded-2xl transition-all duration-300 border border-transparent hover:border-slate-100">
+              <Avatar className="h-9 w-9 rounded-xl border border-black/5 shadow-sm">
+                <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user}`} />
+                <AvatarFallback className="rounded-xl bg-indigo-600 text-white font-bold">{user?.substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
-              <div className="flex flex-col gap-0.5 text-left leading-none group-data-[collapsible=icon]:hidden">
-                <span className="font-semibold text-sm">{data.user.name}</span>
-                <span className="text-xs text-muted-foreground truncate w-32">{data.user.email}</span>
+              <div className="flex flex-col gap-0.5 text-left leading-none group-data-[collapsible=icon]:hidden ml-1">
+                <span className="font-black text-[13px] text-slate-900 tracking-tight">{user}</span>
+                <span className="text-[10px] text-slate-400 font-bold truncate w-32">Quản trị viên</span>
               </div>
-              <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+              <ChevronRight className="ml-auto h-4 w-4 text-slate-300 group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="right" className="w-56 rounded-2xl p-2 bg-popover/95 backdrop-blur-xl border border-black/5 shadow-2xl">
-            <DropdownMenuItem className="rounded-xl p-3 focus:bg-slate-100">Hồ sơ</DropdownMenuItem>
-            <DropdownMenuItem className="rounded-xl p-3 focus:bg-slate-100">Cài đặt</DropdownMenuItem>
-            <DropdownMenuItem className="rounded-xl p-3 focus:bg-destructive/10 text-destructive">Đăng xuất</DropdownMenuItem>
+          <DropdownMenuContent side="right" className="w-56 rounded-[1.5rem] p-2 bg-white/95 backdrop-blur-xl border border-slate-100 shadow-2xl animate-in slide-in-from-left-2">
+            <DropdownMenuItem className="rounded-xl p-3 focus:bg-slate-50 font-bold text-xs gap-3">
+              <UserCog className="w-4 h-4 text-slate-400" /> Hồ sơ cá nhân
+            </DropdownMenuItem>
+            <DropdownMenuItem className="rounded-xl p-3 focus:bg-slate-50 font-bold text-xs gap-3">
+              <Settings className="w-4 h-4 text-slate-400" /> Cài đặt hệ thống
+            </DropdownMenuItem>
+            <div className="h-px bg-slate-50 my-2 mx-2" />
+            <DropdownMenuItem 
+              className="rounded-xl p-3 focus:bg-red-50 text-red-600 font-bold text-xs gap-3 cursor-pointer"
+              onClick={() => logout()}
+            >
+              <LogOut className="w-4 h-4" /> Đăng xuất phiên làm việc
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarFooter>
