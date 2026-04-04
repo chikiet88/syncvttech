@@ -98,6 +98,37 @@ let AppController = class AppController {
     async getSyncStatus() {
         return this.syncService.getSyncStatus();
     }
+    async seedTasks(from, to) {
+        if (!from || !to)
+            throw new Error('Cần cung cấp from và to (YYYY-MM-DD)');
+        const result = await this.syncService.seedSyncTasks(from, to);
+        return {
+            message: `Đã khởi tạo xong ${result.created} task mới.`,
+            ...result
+        };
+    }
+    async startTasks(limit) {
+        const take = limit ? parseInt(limit) : 1000;
+        const result = await this.syncService.pushPendingTasksToQueue(take);
+        return {
+            message: `Đã đẩy ${result.pushed} task vào hàng đợi xử lý.`,
+            ...result
+        };
+    }
+    async getTasksSummary() {
+        const summary = await this.prisma.syncTask.groupBy({
+            by: ['status'],
+            _count: { _all: true },
+        });
+        const total = await this.prisma.syncTask.count();
+        const success = await this.prisma.syncTask.count({ where: { status: 'SUCCESS' } });
+        return {
+            total,
+            success,
+            progress: total > 0 ? (success / total) * 100 : 0,
+            details: summary
+        };
+    }
     async getBranches() {
         return this.prisma.branch.findMany({
             where: { is_active: 1 },
@@ -182,6 +213,27 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], AppController.prototype, "getSyncStatus", null);
+__decorate([
+    (0, common_1.Get)('sync/seed-tasks'),
+    __param(0, (0, common_1.Query)('from')),
+    __param(1, (0, common_1.Query)('to')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "seedTasks", null);
+__decorate([
+    (0, common_1.Get)('sync/start-tasks'),
+    __param(0, (0, common_1.Query)('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "startTasks", null);
+__decorate([
+    (0, common_1.Get)('sync/tasks-summary'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "getTasksSummary", null);
 __decorate([
     (0, common_1.Get)('branches'),
     __metadata("design:type", Function),

@@ -23,6 +23,9 @@ export class SyncProcessor extends WorkerHost {
         case 'sync-revenue-day':
           return await this.syncService.processQueuedRevenueDay(data.date, data.branchId);
 
+        case 'sync-task':
+          return await this.syncService.processQueuedSyncTask(data.taskId);
+
         default:
           this.logger.warn(`Unknown job type: ${type}`);
           return;

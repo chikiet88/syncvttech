@@ -8,7 +8,9 @@ import {
   BadgeDollarSign,
   UserCog,
   Settings,
-  LogOut
+  LogOut,
+  Activity,
+  Database
 } from 'lucide-react'
 
 import {
@@ -37,6 +39,14 @@ const data = {
         { title: 'Tổng hợp Chi nhánh', url: '/reports', icon: Building2 },
         { title: 'Doanh thu Chi tiết', url: '/reports/revenue', icon: BadgeDollarSign },
       ],
+    },
+    {
+      title: 'Giám sát hệ thống',
+      url: '#',
+      icon: Activity,
+      items: [
+        { title: 'Tiến trình đồng bộ', url: '/monitoring/sync', icon: Database },
+      ],
     }
   ],
 }
@@ -57,7 +67,7 @@ export function AppSidebar() {
           </div>
         </div>
       </SidebarHeader>
-      <SidebarContent className="py-4 bg-white/50 backdrop-blur-sm">
+      <SidebarContent className="py-4 bg-white">
         {data.navMain.map((group) => (
           <SidebarGroup key={group.title}>
             <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden px-4 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 ml-1">
@@ -99,7 +109,7 @@ export function AppSidebar() {
               <ChevronRight className="ml-auto h-4 w-4 text-slate-300 group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="right" className="w-56 rounded-[1.5rem] p-2 bg-white/95 backdrop-blur-xl border border-slate-100 shadow-2xl animate-in slide-in-from-left-2">
+          <DropdownMenuContent side="right" className="w-56 rounded-[1.5rem] p-2 bg-white border border-slate-100 shadow-2xl animate-in slide-in-from-left-2">
             <DropdownMenuItem className="rounded-xl p-3 focus:bg-slate-50 font-bold text-xs gap-3">
               <UserCog className="w-4 h-4 text-slate-400" /> Hồ sơ cá nhân
             </DropdownMenuItem>

@@ -124,6 +124,47 @@ export class AppController {
     return this.syncService.getSyncStatus();
   }
 
+  @Get('sync/seed-tasks')
+  async seedTasks(
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    if (!from || !to) throw new Error('Cần cung cấp from và to (YYYY-MM-DD)');
+    const result = await this.syncService.seedSyncTasks(from, to);
+    return {
+      message: `Đã khởi tạo xong ${result.created} task mới.`,
+      ...result
+    };
+  }
+
+  @Get('sync/start-tasks')
+  async startTasks(@Query('limit') limit?: string) {
+    const take = limit ? parseInt(limit) : 1000;
+    const result = await this.syncService.pushPendingTasksToQueue(take);
+    return {
+      message: `Đã đẩy ${result.pushed} task vào hàng đợi xử lý.`,
+      ...result
+    };
+  }
+
+  @Get('sync/tasks-summary')
+  async getTasksSummary() {
+    const summary = await this.prisma.syncTask.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    });
+    
+    const total = await this.prisma.syncTask.count();
+    const success = await this.prisma.syncTask.count({ where: { status: 'SUCCESS' } });
+    
+    return {
+      total,
+      success,
+      progress: total > 0 ? (success / total) * 100 : 0,
+      details: summary
+    };
+  }
+
   @Get('branches')
   async getBranches() {
     return this.prisma.branch.findMany({

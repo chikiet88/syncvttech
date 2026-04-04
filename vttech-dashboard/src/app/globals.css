@@ -53,11 +53,9 @@ body {
 }
 
 .glass {
-  background: var(--color-card);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--color-card-border);
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  background: white;
+  border: 1px solid var(--sidebar-border);
+  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.03);
 }
 
 .gradient-text {

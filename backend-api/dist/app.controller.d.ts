@@ -78,6 +78,25 @@ export declare class AppController {
         error: string | null;
         shouldStop: boolean;
     }>;
+    seedTasks(from: string, to: string): Promise<{
+        created: number;
+        skipped: number;
+        message: string;
+    }>;
+    startTasks(limit?: string): Promise<{
+        pushed: number;
+        message: string;
+    }>;
+    getTasksSummary(): Promise<{
+        total: number;
+        success: number;
+        progress: number;
+        details: (import(".prisma/client").Prisma.PickEnumerable<import(".prisma/client").Prisma.SyncTaskGroupByOutputType, "status"[]> & {
+            _count: {
+                _all: number;
+            };
+        })[];
+    }>;
     getBranches(): Promise<{
         created_at: Date;
         updated_at: Date;

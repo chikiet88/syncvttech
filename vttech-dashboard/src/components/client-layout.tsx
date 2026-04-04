@@ -5,11 +5,13 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { Separator } from "@/components/ui/separator"
 import { AuthProvider, useAuth } from "@/hooks/use-auth"
 import { usePathname } from "next/navigation"
+import { Toaster } from "sonner"
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
       <LayoutContent>{children}</LayoutContent>
+      <Toaster position="top-right" expand={true} richColors />
     </AuthProvider>
   )
 }

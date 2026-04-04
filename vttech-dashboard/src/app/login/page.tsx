@@ -49,7 +49,7 @@ export default function LoginPage() {
            </div>
         </div>
 
-        <Card className="border-none shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] rounded-[2.5rem] overflow-hidden bg-white/80 backdrop-blur-xl border border-white/40">
+        <Card className="border border-slate-100 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] rounded-[2.5rem] overflow-hidden bg-white">
           <CardHeader className="space-y-2 p-8 pb-4 pt-10 text-center">
             <CardTitle className="text-2xl font-black text-slate-800 tracking-tight">Chào mừng trở lại</CardTitle>
             <CardDescription className="text-sm font-bold text-slate-400 uppercase tracking-widest">Đăng nhập để bắt đầu phiên làm việc</CardDescription>

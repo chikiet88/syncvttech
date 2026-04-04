@@ -1667,8 +1667,10 @@ let SyncService = SyncService_1 = class SyncService {
         return isNaN(num) ? 0 : num;
     }
     mapRevenueItem(item, branchId) {
-        const amount = this.parseNumber(item.Amount || item.AmountPaid || item.Price || 0);
-        const paid = this.parseNumber(item.Paid || item.PaidAmount || item.Amount || 0);
+        const rawAmount = item.Amount || item.AmountPaid || item.PaidAmount || item.Price || item.Price_Root || item.PaymentDeposit || item.TotalPaid || 0;
+        const rawPaid = item.Paid || item.PaidAmount || item.TotalPaid || item.AmountPaid || item.PaymentDeposit || item.Amount || 0;
+        const amount = this.parseNumber(rawAmount);
+        const paid = this.parseNumber(rawPaid);
         return {
             branch_id: branchId,
             branch_name: String(item.BranchName || item.Branch || ""),
@@ -1687,7 +1689,7 @@ let SyncService = SyncService_1 = class SyncService {
             source_id: parseInt(String(item.Source || item.SourceID)) || 0,
             type: parseInt(String(item.Type || item.TypeID)) || 0,
             payment_method: parseInt(String(item.PaymentMethod || item.MethodID)) || 0,
-            date: this.parseDate(item.Date || item.Created || item.Date_Payment || item.DateCreated) || new Date(),
+            date: this.parseDate(item.Date || item.Created || item.Date_Payment || item.DateCreated || item.ChooseDate) || new Date(),
         };
     }
     async processQueuedRevenueDay(date, branchId) {
@@ -1709,8 +1711,6 @@ let SyncService = SyncService_1 = class SyncService {
                     continue;
                 }
                 const mapped = this.mapRevenueItem(item, branchId);
-                this.logger.log(`  💾 Upserting RevenueTransaction ID: ${tId} for Customer: ${mapped.customer_id}`);
-                this.logger.log(`  📦 Mapped data: ${JSON.stringify(mapped)}`);
                 await this.prisma.revenueTransaction.upsert({
                     where: { id: tId },
                     update: {
@@ -1729,9 +1729,147 @@ let SyncService = SyncService_1 = class SyncService {
         catch (error) {
             const errorMsg = error.message || (typeof error === 'string' ? error : JSON.stringify(error));
             this.logger.error(`Error in processQueuedRevenueDay: ${errorMsg}`);
-            if (error.stack) {
-                this.logger.error(error.stack);
+            throw error;
+        }
+    }
+    async seedSyncTasks(startDateStr, endDateStr) {
+        const start = this.parseDate(startDateStr);
+        const end = this.parseDate(endDateStr);
+        if (!start || !end)
+            throw new Error('Ngày không hợp lệ');
+        const branches = await this.prisma.branch.findMany({ where: { is_active: 1 } });
+        this.addLog(`🌱 Đang khởi tạo SyncTasks cho ${branches.length} chi nhánh từ ${startDateStr} đến ${endDateStr}...`);
+        let currentDay = new Date(start);
+        let createdCount = 0;
+        let skippedCount = 0;
+        const types = ['HEADER'];
+        while (currentDay <= end) {
+            const date = new Date(currentDay);
+            for (const branch of branches) {
+                for (const type of types) {
+                    try {
+                        await this.prisma.syncTask.upsert({
+                            where: {
+                                date_branch_id_type: {
+                                    date: date,
+                                    branch_id: branch.id,
+                                    type: type,
+                                },
+                            },
+                            update: {},
+                            create: {
+                                date: date,
+                                branch_id: branch.id,
+                                branch_name: branch.name,
+                                type: type,
+                                status: 'PENDING',
+                            },
+                        });
+                        createdCount++;
+                    }
+                    catch (e) {
+                        skippedCount++;
+                    }
+                }
             }
+            currentDay.setDate(currentDay.getDate() + 1);
+        }
+        this.addLog(`✅ Đã khởi tạo xong: ${createdCount} task mới, ${skippedCount} bản ghi đã tồn tại.`);
+        return { created: createdCount, skipped: skippedCount };
+    }
+    async pushPendingTasksToQueue(limit = 1000) {
+        const tasks = await this.prisma.syncTask.findMany({
+            where: {
+                OR: [
+                    { status: 'PENDING' },
+                    { status: 'FAILED', retry_count: { lt: 5 } }
+                ]
+            },
+            take: limit,
+            orderBy: [
+                { date: 'asc' },
+                { branch_id: 'asc' }
+            ]
+        });
+        this.addLog(`🚀 Đang đẩy ${tasks.length} task vào BullMQ...`);
+        for (const task of tasks) {
+            await this.syncQueue.add('sync-job', {
+                type: 'sync-task',
+                data: { taskId: task.id }
+            }, {
+                jobId: `sync-task-${task.id}`,
+                removeOnComplete: true,
+                removeOnFail: false,
+                attempts: 5,
+                backoff: { type: 'exponential', delay: 5000 },
+            });
+            await this.prisma.syncTask.update({
+                where: { id: task.id },
+                data: { status: 'PROCESSING', last_run_at: new Date() }
+            });
+        }
+        return { pushed: tasks.length };
+    }
+    async processQueuedSyncTask(taskId) {
+        const task = await this.prisma.syncTask.findUnique({ where: { id: taskId } });
+        if (!task)
+            return;
+        this.logger.log(`[TASK ${taskId}] Processing ${task.type} for branch ${task.branch_id} on ${task.date.toISOString().split('T')[0]}`);
+        try {
+            await this.vttechApi.login();
+            await this.vttechApi.getXsrfToken();
+            const dateStr = task.date.toISOString().split('T')[0];
+            let totalRecords = 0;
+            if (task.type === 'HEADER') {
+                const typesToSync = [5, 2, 3];
+                for (const type of typesToSync) {
+                    const ids = await this.syncCustomers(dateStr, dateStr, type, task.branch_id);
+                    totalRecords += ids.length;
+                    await this.sleep(500);
+                }
+                const appointmentIds = await this.syncAppointments(dateStr, dateStr, task.branch_id);
+                totalRecords += appointmentIds.length;
+            }
+            await this.prisma.syncTask.update({
+                where: { id: taskId },
+                data: {
+                    status: 'SUCCESS',
+                    records_count: totalRecords,
+                    error_message: null,
+                    updated_at: new Date(),
+                }
+            });
+            await this.prisma.crawlLog.create({
+                data: {
+                    crawl_date: task.date,
+                    crawl_type: `SYNC_TASK_${task.type}_B${task.branch_id}`,
+                    status: 'success',
+                    records_count: totalRecords,
+                    duration_seconds: task.last_run_at ? (Date.now() - task.last_run_at.getTime()) / 1000 : 0,
+                }
+            });
+            return { success: true, records: totalRecords };
+        }
+        catch (error) {
+            this.logger.error(`[TASK ${taskId}] Failed: ${error.message}`);
+            await this.prisma.syncTask.update({
+                where: { id: taskId },
+                data: {
+                    status: 'FAILED',
+                    error_message: error.message,
+                    retry_count: { increment: 1 },
+                    updated_at: new Date(),
+                }
+            });
+            await this.prisma.crawlLog.create({
+                data: {
+                    crawl_date: task.date,
+                    crawl_type: `SYNC_TASK_${task.type}_B${task.branch_id}`,
+                    status: 'failed',
+                    error_message: error.message,
+                    duration_seconds: task.last_run_at ? (Date.now() - task.last_run_at.getTime()) / 1000 : 0,
+                }
+            });
             throw error;
         }
     }

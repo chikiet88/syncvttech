@@ -154,10 +154,18 @@ EOF
 clear_ports() {
     echo -e "\n${RED}💀 Killing processes on ports 5000, 5001, 21100, 21101...${NC}"
     for port in 5000 5001 21100 21101; do
-        PID=$(lsof -t -iTCP:$port -sTCP:LISTEN)
+        # Try multiple ways to find the PID
+        PID=$(lsof -t -i :$port 2>/dev/null)
+        if [ -z "$PID" ]; then
+            PID=$(fuser $port/tcp 2>/dev/null | awk '{print $NF}')
+        fi
+
         if [ -n "$PID" ]; then
             echo -e "${YELLOW}  Stopping process on port $port (PID: $PID)...${NC}"
+            # Kill the process and all its children if possible
             kill -9 $PID 2>/dev/null
+            # Wait a moment for port to be cleared
+            sleep 0.5
         else
             echo -e "  Port $port is already free."
         fi

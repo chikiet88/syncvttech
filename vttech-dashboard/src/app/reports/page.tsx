@@ -66,7 +66,7 @@ function BranchReportContent() {
 
   return (
     <div className="p-3 space-y-3 animate-in fade-in duration-500">
-      <Card className="border-none shadow-sm rounded-xl overflow-hidden bg-white/80 backdrop-blur-md border border-slate-200/50">
+      <Card className="border border-slate-100 shadow-sm rounded-xl overflow-hidden bg-white">
         <CardContent className="p-3 space-y-3">
           <div className="flex flex-wrap items-center gap-4 justify-between">
             {/* Header Area */}
@@ -95,7 +95,7 @@ function BranchReportContent() {
                     type="date"
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
-                    className="pl-8 rounded-xl border-slate-100 bg-slate-50/80 h-8 text-[11px] w-[140px] focus:ring-2 focus:ring-indigo-500/20 transition-all font-bold text-slate-700"
+                    className="pl-8 rounded-xl border-slate-100 bg-slate-50 h-8 text-[11px] w-[140px] focus:ring-2 focus:ring-indigo-500/20 transition-all font-bold text-slate-700"
                   />
                 </div>
               </div>
@@ -108,7 +108,7 @@ function BranchReportContent() {
                     type="date"
                     value={dateTo}
                     onChange={(e) => setDateTo(e.target.value)}
-                    className="pl-8 rounded-xl border-slate-100 bg-slate-50/80 h-8 text-[11px] w-[140px] focus:ring-2 focus:ring-indigo-500/20 transition-all font-bold text-slate-700"
+                    className="pl-8 rounded-xl border-slate-100 bg-slate-50 h-8 text-[11px] w-[140px] focus:ring-2 focus:ring-indigo-500/20 transition-all font-bold text-slate-700"
                   />
                 </div>
               </div>
@@ -126,8 +126,8 @@ function BranchReportContent() {
             {/* Global Actions */}
             <div className="flex items-center gap-3">
               <CrawlLogActions />
-              <div className="w-px h-6 bg-slate-200/50 mx-1 hidden xl:block" />
-              <Button variant="outline" size="sm" className="gap-2 h-8 px-4 glass border-slate-100 rounded-xl text-[9px] uppercase font-black hover:bg-white hover:border-indigo-500 hover:text-indigo-600 transition-all shadow-sm">
+              <div className="w-px h-6 bg-slate-100 mx-1 hidden xl:block" />
+              <Button variant="outline" size="sm" className="gap-2 h-8 px-4 border-slate-200 rounded-xl text-[9px] uppercase font-black hover:bg-slate-50 hover:border-indigo-500 hover:text-indigo-600 transition-all shadow-sm">
                 <Download className="w-3 h-3" />
                 Xuất Excel
               </Button>

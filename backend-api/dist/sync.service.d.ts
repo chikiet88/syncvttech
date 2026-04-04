@@ -75,4 +75,15 @@ export declare class SyncService implements OnModuleInit {
     private parseNumber;
     private mapRevenueItem;
     processQueuedRevenueDay(date: string, branchId: number): Promise<void>;
+    seedSyncTasks(startDateStr: string, endDateStr: string): Promise<{
+        created: number;
+        skipped: number;
+    }>;
+    pushPendingTasksToQueue(limit?: number): Promise<{
+        pushed: number;
+    }>;
+    processQueuedSyncTask(taskId: number): Promise<{
+        success: boolean;
+        records: number;
+    } | undefined>;
 }

@@ -754,3 +754,21 @@ model CustomerSms {
   @@unique([customer_id, sms_id])
   @@map("customer_sms_history")
 }
+
+model SyncTask {
+  id            Int      @id @default(autoincrement())
+  date          DateTime @db.Date
+  branch_id     Int
+  branch_name   String?
+  type          String   @default("HEADER") // HEADER, DETAIL
+  status        String   @default("PENDING") // PENDING, PROCESSING, SUCCESS, FAILED
+  records_count Int      @default(0)
+  error_message String?
+  retry_count   Int      @default(0)
+  last_run_at   DateTime?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
+
+  @@unique([date, branch_id, type])
+  @@map("sync_tasks")
+}
