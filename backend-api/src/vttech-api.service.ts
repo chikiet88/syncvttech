@@ -34,21 +34,30 @@ export class VttechApiService {
       }
     });
 
-    // Request interceptor: inject cookies + tokens
-    this.axiosInstance.interceptors.request.use(config => {
-      const headers: any = config.headers || {};
-      const ck = [...this.cookies];
-      if (this.token && !ck.some(c => c.startsWith('WebToken='))) ck.push(`WebToken=${this.token}`);
-      if (ck.length > 0) headers['Cookie'] = ck.join('; ');
-      if (this.token && (config.url?.startsWith('/api/') || config.url?.startsWith('api/'))) {
-        headers['Authorization'] = `Bearer ${this.token}`;
-      }
-      if (this.secretKey) headers['secretkey'] = this.secretKey;
-      if (this.xsrfToken) headers['xsrf-token'] = this.xsrfToken;
-      headers['X-Requested-With'] = 'XMLHttpRequest';
-      config.headers = headers;
-      return config;
-    });
+      // Request interceptor: inject cookies + tokens
+      this.axiosInstance.interceptors.request.use(config => {
+        const headers: any = config.headers || {};
+        const ck = [...this.cookies];
+        if (this.token && !ck.some(c => c.startsWith('WebToken='))) ck.push(`WebToken=${this.token}`);
+        if (ck.length > 0) headers['Cookie'] = ck.join('; ');
+        
+        if (this.token) {
+          headers['Authorization'] = `Bearer ${this.token}`;
+        }
+        
+        if (this.secretKey) {
+          headers['secretkey'] = this.secretKey;
+        }
+        
+        if (this.xsrfToken) {
+          headers['xsrf-token'] = this.xsrfToken;
+          headers['RequestVerificationToken'] = this.xsrfToken;
+        }
+        
+        headers['X-Requested-With'] = 'XMLHttpRequest';
+        config.headers = headers;
+        return config;
+      });
 
     // Response interceptor: capture cookies from EVERY response
     this.axiosInstance.interceptors.response.use(response => {
@@ -68,8 +77,12 @@ export class VttechApiService {
     for (const raw of newCookies) {
       const firstPart = raw.split(';')[0];
       const name = firstPart.split('=')[0];
+      const value = firstPart.split('=')[1];
       this.cookies = this.cookies.filter(c => !c.startsWith(name + '='));
       this.cookies.push(firstPart);
+      if (name.includes('Session') || name.includes('Antiforgery') || name.includes('Token') || name.includes('Bearer')) {
+        this.log(`🍪 Cookie set: ${name}`);
+      }
     }
   }
 
@@ -104,6 +117,8 @@ export class VttechApiService {
       // Redirect — capture cookies (already done by interceptor) and follow
       const location = resp.headers['location'];
       if (!location) return resp;
+      
+      this.log(`↪️ Redirect (${resp.status}): ${currentUrl} -> ${location}`);
 
       currentUrl = location.startsWith('http') ? location : location;
       currentMethod = 'get'; // Redirects become GET
@@ -129,32 +144,35 @@ export class VttechApiService {
         const loginPageRes = await this.followRedirects('get', '/Login/Login?ver=' + Date.now(), {
           headers: { 'Accept': 'text/html' }
         });
+        
         if (typeof loginPageRes.data === 'string') {
           const $ = cheerio.load(loginPageRes.data);
-          const formToken = $('input[name="__RequestVerificationToken"]').val() as string;
-          if (formToken) {
-            this.xsrfToken = formToken;
-            this.log(`🔑 XSRF Token từ trang Login: ${formToken.slice(0, 20)}...`);
+          
+          // Trích xuất sys_SecretKey từ script tag
+          const scriptContent = $('script').map((_, el) => $(el).html()).get().join('\n');
+          const skMatch = scriptContent.match(/sys_SecretKey\s*=\s*['"]([^'"]+)['"]/i) || 
+                          scriptContent.match(/SecretKey\s*[:=]\s*['"]([^'"]+)['"]/i);
+          
+          if (skMatch && skMatch[1]) {
+            this.secretKey = skMatch[1];
+            this.log(`🔑 Tìm thấy sys_SecretKey từ Login Page: ${this.secretKey.slice(0, 20)}...`);
           }
+
+          const formToken = $('input[name="__RequestVerificationToken"]').val() as string;
+          if (formToken) this.xsrfToken = formToken;
         }
 
         // Add standard browser cookies matching real browser trace
         this.ensureCookie('.AspNetCore.Culture', 'c%3Den-US%7Cuic%3Dvi');
         this.ensureCookie('VTTECH_Menu_SideBarIsHide', 'false');
 
-        // Step 2: Get encrypted IP
-        let ip_encry = "";
-        try {
-          const ipRes = await this.axiosInstance.post('/api/Author/GetIP', {}, {
-            headers: { 'Content-Type': 'application/json' }
-          });
-          ip_encry = ipRes.data?.ip_encry || "";
-        } catch (e) { /* ignore */ }
+        // Miêu tả Step 2: AJAX Login (Đã bỏ qua Form Login truyền thống vì Server dùng AJAX)
+        await new Promise(r => setTimeout(r, 500));
 
-        // Step 3: AJAX Login
+        // Step 3: AJAX Login (Keep it as it provides the SecretKey and Token for API endpoints)
         const loginPayload = {
           UserName: username, Password: password, PasswordEnCrypt: "",
-          IP: ip_encry, TokenFCM: "", From: "", SSO: "", Lan: "vi", TokenSSO: ""
+          IP: "", TokenFCM: "", From: "", SSO: "", Lan: "vi", TokenSSO: ""
         };
         const loginRes = await this.axiosInstance.post('/api/Author/Login', loginPayload, {
           headers: { 'Content-Type': 'application/json; charset=UTF-8', 'Referer': this.baseUrl + '/Login/Login/' }
@@ -163,14 +181,29 @@ export class VttechApiService {
         const data = loginRes.data;
         if (data && data.Session) {
           this.token = data.Session;
-          this.secretKey = data.SecretKey || data.secretkey || data.Secretkey 
-            || this.configService.get<string>('VTTECH_SECRET_KEY', 
-               'ZdB9AsmlnaqopXnryYe8Uyj9YXaG0lZ09fNEljAifOESjErNDKj8TGtf0tGyKg2QpFsfOj5zQOUe+hiU1aN5mptaw7+sGwccT8pT0yFLgKE=');
-          this.log(`✅ Login OK. JWT: ${this.token!.slice(0, 20)}... | SecretKey: ${this.secretKey ? 'SET' : 'NO'}`);
+          this.secretKey = data.SecretKey || data.secretkey || data.Secretkey || this.secretKey || '';
+          this.log(`✅ Login OK. JWT: ${this.token!.slice(0, 20)}... | SecretKey: ${this.secretKey ? 'SET (' + this.secretKey.slice(0, 8) + '...)' : 'MISSING'}`);
+          
+          // Ensure WebToken cookie is set for Page Handlers
+          if (this.token) {
+            this.ensureCookie('WebToken', this.token);
+          }
 
-          // Step 4: Activate session — visit ĐÚNG trang dashboard (appointment, không phải /Index/ đã bị 404)
+          // Step 4: Activate session — visit dashboard
           const dashRes = await this.followRedirects('get', '/appointment/appointmentinday/', { headers: { 'Accept': 'text/html' } });
-          this.log(`🏠 Dashboard: HTTP ${dashRes.status} (${typeof dashRes.data === 'string' ? dashRes.data.length : 0} bytes)`);
+          const dashHtml = typeof dashRes.data === 'string' ? dashRes.data : '';
+          this.log(`🏠 Dashboard: HTTP ${dashRes.status} (${dashHtml.length} bytes)`);
+
+          // Extract SecretKey from scripts if missing
+          if (!this.secretKey && dashHtml) {
+            const skMatch = dashHtml.match(/SecretKey\s*[:=]\s*['"]([^'"]+)['"]/i) || 
+                          dashHtml.match(/localStorage\.setItem\(['"]SecretKey['"]\s*,\s*['"]([^'"]+)['"]\)/i) ||
+                          dashHtml.match(/['"]SecretKey['"]\s*:\s*['"]([^'"]+)['"]/i);
+            if (skMatch && skMatch[1]) {
+              this.secretKey = skMatch[1];
+              this.log(`🔑 Tìm thấy SecretKey từ HTML: ${this.secretKey.slice(0, 20)}...`);
+            }
+          }
 
           // Step 5: Visit report page to get fresh XSRF token for report handlers
           const reportPageRes = await this.followRedirects('get', '/report/reportgeneral/', {
@@ -270,22 +303,23 @@ export class VttechApiService {
 
   private handlerHeaders(page?: string) {
     return {
-      'xsrf-token': this.xsrfToken,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Referer': page ? this.baseUrl + page.toLowerCase() : this.baseUrl + '/report/reportgeneral/?page=17',
       'Accept': '*/*',
+      'X-Requested-With': 'XMLHttpRequest',
+      'secretkey': this.secretKey || '',
+      'xsrf-token': this.xsrfToken || '',
+      'RequestVerificationToken': this.xsrfToken || '',
+      'Authorization': this.token ? `Bearer ${this.token}` : '',
+      'Referer': page ? this.baseUrl + page : this.baseUrl + '/',
       'Origin': this.baseUrl,
-      'sec-fetch-dest': 'empty',
-      'sec-fetch-mode': 'cors',
-      'sec-fetch-site': 'same-origin',
-      'Pragma': 'no-cache',
-      'Cache-Control': 'no-cache',
-      'Accept-Encoding': 'gzip, deflate, br, zstd',
     };
   }
 
   async callHandler(page: string, handler: string, data: any) {
     await this.login();
+    
+    // Luôn lấy token tươi cho trang đích trước khi POST handler
+    await this.getXsrfToken(page, true);
+
     const url = `${page}?handler=${handler}`;
     const formBody = this.buildFormBody(data, page);
 
@@ -300,6 +334,8 @@ export class VttechApiService {
 
     // 302 = session rejected → re-login and retry once
     if (response.status >= 300 && response.status < 400) {
+      const loc = response.headers['location'] || '';
+      this.log(`⚠️ [${handler}] HTTP ${response.status} Redirect to: ${loc}`);
       this.log(`🔄 Re-login và thử lại ${handler}...`);
       await this.login(true);
       const retryBody = this.buildFormBody(data, page);

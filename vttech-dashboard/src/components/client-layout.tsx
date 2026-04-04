@@ -40,17 +40,28 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset className="bg-background">
-        <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-black/5 px-6 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+      <SidebarInset className="bg-background overflow-hidden flex flex-col h-screen">
+        <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-zinc-100 px-4 bg-white/80 backdrop-blur-md sticky top-0 z-40 transition-all">
           <div className="flex items-center gap-2">
-            <SidebarTrigger className="-ml-1 hover:bg-black/5 rounded-lg" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <div className="text-sm font-medium text-muted-foreground">
-              Tổng quan / <span className="text-foreground">Phân tích</span>
+            <SidebarTrigger className="-ml-1 h-8 w-8 hover:bg-zinc-100 rounded-lg text-zinc-500" />
+            <Separator orientation="vertical" className="h-4 bg-zinc-200" />
+            <div className="flex items-center gap-1.5 overflow-hidden">
+               <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-tighter shrink-0">Hệ thống</span>
+               <span className="text-zinc-300">/</span>
+               <span className="text-[11px] font-black text-zinc-900 uppercase tracking-tight truncate">
+                 {pathname.split('/').filter(Boolean).pop() || 'Tổng quan'}
+               </span>
             </div>
           </div>
+          
+          <div className="flex items-center gap-2">
+             <div className="hidden md:flex items-center px-2 py-0.5 bg-emerald-50 rounded-full border border-emerald-100">
+                <div className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse mr-1.5" />
+                <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">Realtime Active</span>
+             </div>
+          </div>
         </header>
-        <main className="flex-1">
+        <main className="flex-1 overflow-auto bg-zinc-50/50">
           {children}
         </main>
       </SidebarInset>

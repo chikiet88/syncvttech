@@ -103,48 +103,49 @@ export default async function CustomersPage(props: {
   }))
 
   return (
-    <div className="p-6 space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3">
-            <Users className="w-6 h-6 text-purple-500" />
-            Hồ sơ Khách hàng
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Quản lý quan hệ khách hàng và theo dõi lịch sử tài chính.
-          </p>
+    <div className="flex flex-col gap-4 p-4 lg:p-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
+      {/* Page Header */}
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-1.5 text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
+            <Users className="w-3 h-3 text-zinc-900" />
+            Quản trị hệ thống
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-zinc-900">Danh sách khách hàng <span className="text-zinc-400 font-medium whitespace-nowrap">Hồ sơ chi tiết</span></h1>
         </div>
-        <div className="flex items-center gap-3">
-          <Button className="rounded-lg gap-2 font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-500/20">
-            <UserPlus className="w-4 h-4" />
-            Thêm Khách hàng
+        
+        <div className="flex items-center gap-2">
+          <Button size="sm" className="h-8 bg-zinc-900 hover:bg-black text-zinc-50 rounded-lg px-4 font-bold shadow-sm transition-all border-none text-xs">
+            <UserPlus className="w-3.5 h-3.5 mr-1.5" /> Thêm khách hàng
           </Button>
         </div>
-      </div>
+      </header>
 
       <CustomerFilters />
 
-      <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
-        <CardHeader className="p-6 pb-3">
-          <CardTitle className="text-lg">Danh sách Khách hàng</CardTitle>
-          <CardDescription className="text-xs text-muted-foreground/80">
-            {Object.keys(where).length > 0
-              ? `Đang hiển thị kết quả lọc (${totalCount} bản ghi)`
-              : `Tổng cộng ${totalCount} khách hàng.`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-6 pt-3">
-          <DataTable
-            columns={columns}
-            data={formattedCustomers}
-            searchKey="name"
-            pageCount={Math.ceil(totalCount / limit)}
-            currentPage={page}
-            pageSize={limit}
-            totalCount={totalCount}
-          />
-        </CardContent>
-      </Card>
+      <div className="space-y-2">
+         <div className="flex items-center justify-between px-1">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400">
+              Cơ sở dữ liệu khách hàng ({totalCount.toLocaleString()})
+            </h3>
+         </div>
+         
+         <Card className="border-none shadow-none bg-transparent">
+           <CardContent className="p-0">
+             <div className="rounded-xl border border-zinc-100 bg-white shadow-sm overflow-hidden p-1">
+               <DataTable
+                 columns={columns}
+                 data={formattedCustomers}
+                 searchKey="name"
+                 pageCount={Math.ceil(totalCount / limit)}
+                 currentPage={page}
+                 pageSize={limit}
+                 totalCount={totalCount}
+               />
+             </div>
+           </CardContent>
+         </Card>
+      </div>
     </div>
   )
 }

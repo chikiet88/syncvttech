@@ -1,20 +1,24 @@
-"use client"
+'use client'
 
-import { Suspense, useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import React, { Suspense, useState, useEffect } from "react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { DataTable } from "@/components/ui/data-table"
+import { AdvancedTable } from "@/components/ui/advanced-table/AdvancedTable"
 import { columns, BranchSummary } from "./columns"
 import { 
   Calendar as CalendarIcon, 
   Loader2, 
   TrendingUp,
   LayoutGrid,
-  Download
+  Download,
+  Search,
+  Filter
 } from "lucide-react"
 import { CrawlLogActions } from "@/components/CrawlLogActions"
+import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 
 function BranchReportContent() {
   const [loading, setLoading] = useState(false)
@@ -30,31 +34,33 @@ function BranchReportContent() {
   const handleSearch = async () => {
     setLoading(true)
     try {
-      const formatDate = (dateStr: string) => {
+      const formatDateForApi = (dateStr: string) => {
         const [y, m, d] = dateStr.split('-')
         return `${d}-${m}-${y}`
       }
 
-      // Tự động nhận diện Hostname nếu truy cập từ xa
-      const apiHost = process.env.NEXT_PUBLIC_API_URL || 
-                      (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:5001` : "http://localhost:5001");
+      const apiHost = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
       
       const url = new URL(`${apiHost}/reports/branches`)
-      url.searchParams.set("dateFrom", formatDate(dateFrom))
-      url.searchParams.set("dateTo", formatDate(dateTo))
+      url.searchParams.set("dateFrom", formatDateForApi(dateFrom))
+      url.searchParams.set("dateTo", formatDateForApi(dateTo))
 
       const res = await fetch(url.toString())
       if (res.ok) {
         const result = await res.json()
         const enhancedResult = result.map((item: any) => ({
           ...item,
-          queryDateFrom: formatDate(dateFrom),
-          queryDateTo: formatDate(dateTo)
+          queryDateFrom: formatDateForApi(dateFrom),
+          queryDateTo: formatDateForApi(dateTo)
         }))
         setData(enhancedResult)
+        toast.success("Đã cập nhật dữ liệu báo cáo")
+      } else {
+        toast.error("Lỗi khi tải dữ liệu từ máy chủ")
       }
     } catch (error) {
       console.error("Search failed", error)
+      toast.error("Không thể kết nối với API")
     } finally {
       setLoading(false)
     }
@@ -65,99 +71,107 @@ function BranchReportContent() {
   }, [])
 
   return (
-    <div className="p-3 space-y-3 animate-in fade-in duration-500">
-      <Card className="border border-slate-100 shadow-sm rounded-xl overflow-hidden bg-white">
-        <CardContent className="p-3 space-y-3">
-          <div className="flex flex-wrap items-center gap-4 justify-between">
-            {/* Header Area */}
-            <div className="flex items-center gap-3">
-              <div className="p-1.5 bg-indigo-600 rounded-lg text-white shadow-md shadow-indigo-100">
-                <LayoutGrid className="w-4 h-4 font-bold" />
-              </div>
-              <div className="whitespace-nowrap">
-                <h2 className="text-[13px] font-black tracking-tighter text-slate-900 uppercase">
-                  Báo cáo Tổng hợp
-                </h2>
-                <div className="flex items-center gap-1.5 leading-none mt-0.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">Sẵn sàng</span>
-                </div>
-              </div>
-            </div>
+    <div className="flex flex-col gap-4 p-4 lg:p-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
+      {/* Page Header */}
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-1.5 text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
+            <TrendingUp className="w-3 h-3 text-zinc-900" />
+            Báo cáo quản trị
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-zinc-900">Tổng hợp chi nhánh <span className="text-zinc-400 font-medium whitespace-nowrap">Hệ thống VTTech</span></h1>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <div className="flex items-center bg-zinc-100/50 p-1 rounded-lg border border-zinc-100">
+             <div className="flex items-center gap-1.5 px-3">
+                <CalendarIcon className="w-3.5 h-3.5 text-zinc-400" />
+                <span className="text-xs font-bold text-zinc-600 tabular-nums">{dateFrom}</span>
+                <span className="text-zinc-300 mx-1">→</span>
+                <span className="text-xs font-bold text-zinc-600 tabular-nums">{dateTo}</span>
+             </div>
+          </div>
+          <Button variant="outline" size="sm" className="h-8 rounded-lg border-zinc-200 text-xs font-bold hover:bg-zinc-50">
+            <Download className="w-3.5 h-3.5 mr-1.5" /> Xuất dữ liệu
+          </Button>
+        </div>
+      </header>
 
-            {/* Filter Area (Integrated with Header) */}
-            <div className="flex flex-1 items-center gap-3 justify-center">
-              <div className="flex items-center gap-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Từ</Label>
-                <div className="relative group">
-                  <CalendarIcon className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400 group-hover:text-indigo-500" />
+      {/* Filter Section - Zinc Style */}
+      <Card className="border border-zinc-100 bg-white shadow-sm rounded-xl overflow-hidden">
+        <CardContent className="p-4">
+          <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+            <div className="grid grid-cols-2 gap-4 flex-1">
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase text-zinc-400 ml-1">Từ ngày</Label>
+                <div className="relative">
                   <Input
                     type="date"
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
-                    className="pl-8 rounded-xl border-slate-100 bg-slate-50 h-8 text-[11px] w-[140px] focus:ring-2 focus:ring-indigo-500/20 transition-all font-bold text-slate-700"
+                    className="rounded-lg border-zinc-200 h-9 text-xs font-bold bg-zinc-50/30 focus-visible:ring-zinc-900"
                   />
                 </div>
               </div>
-
-              <div className="flex items-center gap-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Đến</Label>
-                <div className="relative group">
-                  <CalendarIcon className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400 group-hover:text-indigo-500" />
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase text-zinc-400 ml-1">Đến ngày</Label>
+                <div className="relative">
                   <Input
                     type="date"
                     value={dateTo}
                     onChange={(e) => setDateTo(e.target.value)}
-                    className="pl-8 rounded-xl border-slate-100 bg-slate-50 h-8 text-[11px] w-[140px] focus:ring-2 focus:ring-indigo-500/20 transition-all font-bold text-slate-700"
+                    className="rounded-lg border-zinc-200 h-9 text-xs font-bold bg-zinc-50/30 focus-visible:ring-zinc-900"
                   />
                 </div>
               </div>
-
+            </div>
+            
+            <div className="flex items-center gap-2">
               <Button 
-                className="h-8 px-4 rounded-xl font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-100 gap-2 text-[10px] uppercase tracking-[0.1em] transition-all active:scale-95 whitespace-nowrap"
                 onClick={handleSearch}
                 disabled={loading}
+                className="bg-zinc-900 hover:bg-black text-white rounded-lg h-9 px-6 font-bold transition-all text-xs active:scale-95 flex-1 md:flex-none"
               >
-                {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <TrendingUp className="w-3 h-3" />}
-                Phân tích
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : <Filter className="w-3.5 h-3.5 mr-2" />}
+                Lọc dữ liệu
               </Button>
-            </div>
-
-            {/* Global Actions */}
-            <div className="flex items-center gap-3">
               <CrawlLogActions />
-              <div className="w-px h-6 bg-slate-100 mx-1 hidden xl:block" />
-              <Button variant="outline" size="sm" className="gap-2 h-8 px-4 border-slate-200 rounded-xl text-[9px] uppercase font-black hover:bg-slate-50 hover:border-indigo-500 hover:text-indigo-600 transition-all shadow-sm">
-                <Download className="w-3 h-3" />
-                Xuất Excel
-              </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="border border-slate-200/50 shadow-sm rounded-xl overflow-hidden bg-white">
-        <CardHeader className="px-4 py-3 border-b border-slate-50 flex flex-row items-center justify-between">
-          <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-500">Chi tiết dữ liệu theo chi nhánh</CardTitle>
-          <div className="text-[10px] font-bold text-slate-400 italic">
-            Cập nhật lúc: {mounted ? new Date().toLocaleTimeString('vi-VN') : "--:--:--"}
-          </div>
-        </CardHeader>
-        <CardContent className="p-4 pt-4">
-          {loading ? (
-             <div className="flex flex-col items-center justify-center py-20 gap-3">
-               <Loader2 className="w-10 h-10 animate-spin text-indigo-600/30 font-thin" />
-               <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] animate-pulse">Đang tổng kết dữ liệu...</p>
+      {/* Data Table Section */}
+      <div className="space-y-2 translate-y-0 opacity-100 transition-all duration-700">
+        <div className="flex items-center justify-between px-1">
+           <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+             <LayoutGrid className="w-3 h-3 text-zinc-400" />
+             Chi tiết hiệu suất chi nhánh
+           </h3>
+           <div className="text-[10px] font-medium text-zinc-500 tabular-nums">
+             Cập nhật: {mounted ? new Date().toLocaleTimeString('vi-VN') : "--:--"}
+           </div>
+        </div>
+
+        {loading ? (
+             <div className="flex flex-col items-center justify-center py-32 gap-4 border border-zinc-100 rounded-2xl bg-white/50 border-dashed animate-pulse">
+               <div className="relative">
+                  <Loader2 className="w-12 h-12 text-zinc-200 transition-all" />
+                  <TrendingUp className="w-5 h-5 text-zinc-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+               </div>
+               <p className="text-[11px] text-zinc-400 font-bold uppercase tracking-[0.4em]">Đang xử lý dữ liệu báo cáo...</p>
              </div>
           ) : (
-            <DataTable 
-              columns={columns} 
-              data={data} 
-              searchKey="name" 
-            />
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-700">
+              <AdvancedTable 
+                columns={columns} 
+                data={data} 
+                onRefresh={handleSearch}
+                height="calc(100vh - 350px)"
+              />
+            </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
     </div>
   )
 }
@@ -166,7 +180,7 @@ export default function BranchReportPage() {
   return (
     <Suspense fallback={
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-zinc-900" />
       </div>
     }>
       <BranchReportContent />
