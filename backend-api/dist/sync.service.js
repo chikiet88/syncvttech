@@ -334,20 +334,28 @@ let SyncService = SyncService_1 = class SyncService {
                         break;
                     currentStep++;
                     const branch = branches[i];
-                    this.syncStatus.total = totalSteps;
-                    this.syncStatus.current = currentStep;
-                    this.syncStatus.progress = Math.round((currentStep / totalSteps) * 100);
-                    this.syncStatus.message = `[${dateStr}] Đang xử lý: ${branch.name} (${i + 1}/${branches.length})`;
+                    this.syncStatus.message = `Đang đồng bộ ${dateStr} (${currentStep}/${totalSteps}): ${branch.name}`;
+                    this.syncStatus.progress = Math.round((currentStep / totalSteps) * 90);
                     const branchCustomerIds = [];
                     this.addLog(`  👥 [${branch.name}] Tìm khách hàng mới/giao dịch/lịch sử...`);
-                    branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 5, branch.id));
-                    await this.sleep(1000);
-                    branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 2, branch.id));
-                    await this.sleep(1000);
-                    branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 3, branch.id));
-                    await this.sleep(2000);
-                    const appointmentIds = await this.syncAppointments(dateStr, dateStr, branch.id);
-                    branchCustomerIds.push(...appointmentIds);
+                    try {
+                        branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 5, branch.id));
+                        await this.sleep(1000);
+                        branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 2, branch.id));
+                        await this.sleep(1000);
+                        branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 3, branch.id));
+                        await this.sleep(2000);
+                    }
+                    catch (e) {
+                        this.addLog(`  ❌ [${branch.name}] Lỗi khi lấy danh sách khách hàng: ${e.message}`);
+                    }
+                    try {
+                        const appointmentIds = await this.syncAppointments(dateStr, dateStr, branch.id);
+                        branchCustomerIds.push(...appointmentIds);
+                    }
+                    catch (e) {
+                        this.addLog(`  ❌ [${branch.name}] Lỗi khi lấy lịch hẹn: ${e.message}`);
+                    }
                     if (syncDetails) {
                         const uniqueBranchIds = [...new Set(branchCustomerIds)].filter(id => !syncedIdsInSession.has(id));
                         if (uniqueBranchIds.length > 0) {
@@ -360,11 +368,16 @@ let SyncService = SyncService_1 = class SyncService {
                                 if (detailedStep % 5 === 0) {
                                     this.syncStatus.message = `[${dateStr}] ${branch.name}: Sync chi tiết (${detailedStep}/${uniqueBranchIds.length})`;
                                 }
-                                const stats = await this.syncSingleCustomerDetail(customerId);
-                                sessionStats.payments += stats.payments;
-                                sessionStats.treatments += stats.treatments;
-                                sessionStats.services += stats.services;
-                                syncedIdsInSession.add(customerId);
+                                try {
+                                    const stats = await this.syncSingleCustomerDetail(customerId);
+                                    sessionStats.payments += stats.payments;
+                                    sessionStats.treatments += stats.treatments;
+                                    sessionStats.services += stats.services;
+                                    syncedIdsInSession.add(customerId);
+                                }
+                                catch (e) {
+                                    this.addLog(`  ❌ [ID: ${customerId}] Lỗi FULL sync: ${e.message}`);
+                                }
                                 await new Promise(resolve => setTimeout(resolve, 100));
                             }
                             this.syncStatus.message = oldMsg;
@@ -452,15 +465,23 @@ let SyncService = SyncService_1 = class SyncService {
         while (hasMore) {
             if (this.syncStatus.shouldStop)
                 break;
-            const res = await this.vttechApi.callHandler('/Customer/ListCustomer/', 'LoadData', {
-                dateFrom: `${this.formatDate(dateFrom)} 00:00:00`,
-                dateTo: `${this.formatDate(dateTo)} 23:59:59`,
-                branchID: branchId.toString(),
-                type: type,
-                BeginID: 0,
-                BeginCustID: 0,
-                Limit: length,
-            });
+            let res = null;
+            try {
+                res = await this.vttechApi.callHandler('/Customer/ListCustomer/', 'LoadData', {
+                    dateFrom: `${this.formatDate(dateFrom)} 00:00:00`,
+                    dateTo: `${this.formatDate(dateTo)} 23:59:59`,
+                    branchID: branchId.toString(),
+                    type: type,
+                    BeginID: 0,
+                    BeginCustID: 0,
+                    Limit: length,
+                });
+            }
+            catch (e) {
+                this.addLog(`   ❌ [SyncCustomers] Lỗi API (Type ${type}): ${e.message}`);
+                hasMore = false;
+                break;
+            }
             const dataItems = this.ensureArray(res);
             if (dataItems.length > 0) {
                 this.addLog(`  📥 Nhận được ${dataItems.length} khách hàng từ bản ghi thứ ${start} (Type: ${type})`);
@@ -558,14 +579,21 @@ let SyncService = SyncService_1 = class SyncService {
             const year = d.getFullYear();
             return `${month}/${day}/${year}`;
         };
-        const res = await this.vttechApi.callHandler('/Desk/Appointment/AppointmentInDay_Desk_Branch/', 'LoadataAppointmentList', {
-            DateFrom: `${formatDateMMDDYYYY(dateFrom)} 00:00:00`,
-            BranchID: branchId.toString(),
-            AppID: '0',
-            StatusID: '0',
-            DoctorID: '0',
-            TypeApp: '1',
-        });
+        let res = null;
+        try {
+            res = await this.vttechApi.callHandler('/Desk/Appointment/AppointmentInDay_Desk_Branch/', 'LoadataAppointmentList', {
+                DateFrom: `${formatDateMMDDYYYY(dateFrom)} 00:00:00`,
+                BranchID: branchId.toString(),
+                AppID: '0',
+                StatusID: '0',
+                DoctorID: '0',
+                TypeApp: '1',
+            });
+        }
+        catch (e) {
+            this.addLog(`   ❌ [SyncAppointments] Lỗi API: ${e.message}`);
+            return [];
+        }
         const dataItems = this.ensureArray(res);
         if (dataItems.length > 0) {
             for (const a of dataItems) {
@@ -1302,14 +1330,21 @@ let SyncService = SyncService_1 = class SyncService {
                         continue;
                     await this.prisma.customerCareHistory.upsert({
                         where: { customer_id_history_id: { customer_id: customerId, history_id: hId } },
-                        update: { action_type: h.TypeName || '', action_date: this.parseDate(h.Date || h.Created || h.CareDate), employee_name: h.EmployeeName || '', note: h.Content || '' },
+                        update: {
+                            action_type: h.TypeName || '',
+                            action_date: this.parseDate(h.Date || h.Created || h.CareDate),
+                            employee_name: h.EmployeeName || '',
+                            note: h.Content || '',
+                            branch_id: branchId || parseInt(h.BranchID) || undefined
+                        },
                         create: {
                             customer_id: customerId,
                             history_id: hId,
                             action_type: h.TypeName || '',
                             action_date: this.parseDate(h.Date || h.Created || h.CareDate),
                             employee_name: h.EmployeeName || '',
-                            note: h.Content || ''
+                            note: h.Content || '',
+                            branch_id: branchId || parseInt(h.BranchID) || undefined
                         }
                     });
                 }
@@ -1387,14 +1422,21 @@ let SyncService = SyncService_1 = class SyncService {
                         continue;
                     await this.prisma.customerTreatmentPlan.upsert({
                         where: { customer_id_plan_id: { customer_id: customerId, plan_id: pId } },
-                        update: { service_name: p.ServiceName || '', doctor_name: p.DoctorName || '', created_at: this.parseDate(p.Date), note: p.Note || '' },
+                        update: {
+                            service_name: p.ServiceName || '',
+                            doctor_name: p.DoctorName || '',
+                            created_at: this.parseDate(p.Date),
+                            note: p.Note || '',
+                            branch_id: branchId || parseInt(p.BranchID) || undefined
+                        },
                         create: {
                             customer_id: customerId,
                             plan_id: pId,
                             service_name: p.ServiceName || '',
                             doctor_name: p.DoctorName || '',
                             created_at: this.parseDate(p.Date),
-                            note: p.Note || ''
+                            note: p.Note || '',
+                            branch_id: branchId || parseInt(p.BranchID) || undefined
                         }
                     });
                 }

@@ -15,15 +15,25 @@ trap "echo -e '\n${GREEN}Đã thoát! 👋${NC}'; exit 0" SIGINT SIGTERM
 
 # Helper for Prisma commands
 run_prisma() {
+    if [ ! -f "$PRISMA_DIR/prisma/schema.prisma" ]; then
+        echo -e "${RED}❌ Error: file $PRISMA_DIR/prisma/schema.prisma not found. Check your sync!${NC}"
+        return 1
+    fi
+
+    if [ ! -d "$PRISMA_DIR/node_modules" ]; then
+        echo -e "${YELLOW}⚠️  node_modules is missing. Running bun install...${NC}"
+        (cd "$PRISMA_DIR" && bun install)
+    fi
+
     local DB_URL=""
     if ! getent hosts tazagroupnet-db &> /dev/null; then
         DB_URL="postgresql://postgres:postgres@localhost:12003/db_tazagroup_vttech_sync"
     fi
 
     if [ -n "$DB_URL" ]; then
-        (cd "$PRISMA_DIR" && export DATABASE_URL="$DB_URL" && bun prisma "$@")
+        (cd "$PRISMA_DIR" && export DATABASE_URL="$DB_URL" && bunx prisma@6 "$@")
     else
-        (cd "$PRISMA_DIR" && bun prisma "$@")
+        (cd "$PRISMA_DIR" && bunx prisma@6 "$@")
     fi
 }
 

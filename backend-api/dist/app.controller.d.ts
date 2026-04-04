@@ -35,36 +35,36 @@ export declare class AppController {
         message: string;
     }>;
     getCrawlLogs(limit?: string): Promise<{
+        status: string;
+        error_message: string | null;
+        created_at: Date;
         id: number;
         crawl_date: Date;
         crawl_type: string;
-        status: string;
         records_count: number;
         total_branches: number;
         total_customers: number;
         total_payments: number;
         total_treatments: number;
         total_services: number;
-        error_message: string | null;
         duration_seconds: number | null;
-        created_at: Date;
     }[]>;
     getPbxLogs(limit?: string): Promise<{
-        id: number;
+        sync_type: string;
         status: string;
-        error_message: string | null;
-        created_at: Date;
-        updated_at: Date;
         start_time: Date;
         end_time: Date | null;
-        sync_type: string;
         date_from: Date;
         date_to: Date;
         total_records: number;
         success_count: number;
         failed_count: number;
         retry_count: number;
+        error_message: string | null;
         failed_items: import("@prisma/client/runtime/library").JsonValue | null;
+        created_at: Date;
+        updated_at: Date;
+        id: number;
     }[]>;
     getSyncStatus(): Promise<{
         isSyncing: boolean;
@@ -79,16 +79,16 @@ export declare class AppController {
         shouldStop: boolean;
     }>;
     getBranches(): Promise<{
-        id: number;
         created_at: Date;
+        updated_at: Date;
+        id: number;
         name: string;
+        is_active: number;
         code: string | null;
-        address: string | null;
-        phone: string | null;
         email: string | null;
+        phone: string | null;
+        address: string | null;
         city_id: number | null;
         district_id: number | null;
-        is_active: number;
-        updated_at: Date;
     }[]>;
 }

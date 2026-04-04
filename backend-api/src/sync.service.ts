@@ -334,24 +334,30 @@ export class SyncService implements OnModuleInit {
           currentStep++;
           const branch = branches[i];
           
-          this.syncStatus.total = totalSteps;
-          this.syncStatus.current = currentStep;
-          this.syncStatus.progress = Math.round((currentStep / totalSteps) * 100);
-          this.syncStatus.message = `[${dateStr}] Đang xử lý: ${branch.name} (${i + 1}/${branches.length})`;
-          
+          this.syncStatus.message = `Đang đồng bộ ${dateStr} (${currentStep}/${totalSteps}): ${branch.name}`;
+          this.syncStatus.progress = Math.round((currentStep / totalSteps) * 90);
+
           // 1. Tìm kiếm khách hàng theo chi nhánh (LoadData types 1, 2, 3)
           const branchCustomerIds: number[] = [];
           this.addLog(`  👥 [${branch.name}] Tìm khách hàng mới/giao dịch/lịch sử...`);
-          branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 5, branch.id)); // 5: RegDate (Hồ sơ)
-          await this.sleep(1000);
-          branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 2, branch.id));
-          await this.sleep(1000);
-          branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 3, branch.id));
-          await this.sleep(2000);
+          try {
+            branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 5, branch.id)); // 5: RegDate (Hồ sơ)
+            await this.sleep(1000);
+            branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 2, branch.id));
+            await this.sleep(1000);
+            branchCustomerIds.push(...await this.syncCustomers(dateStr, dateStr, 3, branch.id));
+            await this.sleep(2000);
+          } catch (e) {
+            this.addLog(`  ❌ [${branch.name}] Lỗi khi lấy danh sách khách hàng: ${e.message}`);
+          }
 
           // 3. Lấy lịch hẹn của chi nhánh
-          const appointmentIds = await this.syncAppointments(dateStr, dateStr, branch.id);
-          branchCustomerIds.push(...appointmentIds);
+          try {
+            const appointmentIds = await this.syncAppointments(dateStr, dateStr, branch.id);
+            branchCustomerIds.push(...appointmentIds);
+          } catch (e) {
+            this.addLog(`  ❌ [${branch.name}] Lỗi khi lấy lịch hẹn: ${e.message}`);
+          }
 
           // 4. Đồng bộ chi tiết cho các khách hàng mới phát hiện trong chi nhánh này
           if (syncDetails) {
@@ -365,15 +371,18 @@ export class SyncService implements OnModuleInit {
                 if (detailedStep % 5 === 0) {
                   this.syncStatus.message = `[${dateStr}] ${branch.name}: Sync chi tiết (${detailedStep}/${uniqueBranchIds.length})`;
                 }
-                const stats = await this.syncSingleCustomerDetail(customerId);
-                sessionStats.payments += stats.payments;
-                sessionStats.treatments += stats.treatments;
-                sessionStats.services += stats.services;
-                syncedIdsInSession.add(customerId);
+                try {
+                  const stats = await this.syncSingleCustomerDetail(customerId);
+                  sessionStats.payments += stats.payments;
+                  sessionStats.treatments += stats.treatments;
+                  sessionStats.services += stats.services;
+                  syncedIdsInSession.add(customerId);
+                } catch (e) {
+                  this.addLog(`  ❌ [ID: ${customerId}] Lỗi FULL sync: ${e.message}`);
+                }
                 // Delay 100ms
                 await new Promise(resolve => setTimeout(resolve, 100));
               }
-              
               this.syncStatus.message = oldMsg;
             }
           }
@@ -475,15 +484,22 @@ export class SyncService implements OnModuleInit {
 
     while (hasMore) {
       if (this.syncStatus.shouldStop) break;
-      const res = await this.vttechApi.callHandler('/Customer/ListCustomer/', 'LoadData', {
-        dateFrom: `${this.formatDate(dateFrom)} 00:00:00`,
-        dateTo: `${this.formatDate(dateTo)} 23:59:59`,
-        branchID: branchId.toString(),
-        type: type,
-        BeginID: 0,
-        BeginCustID: 0,
-        Limit: length,
-      });
+      let res: any = null;
+      try {
+        res = await this.vttechApi.callHandler('/Customer/ListCustomer/', 'LoadData', {
+          dateFrom: `${this.formatDate(dateFrom)} 00:00:00`,
+          dateTo: `${this.formatDate(dateTo)} 23:59:59`,
+          branchID: branchId.toString(),
+          type: type,
+          BeginID: 0,
+          BeginCustID: 0,
+          Limit: length,
+        });
+      } catch (e) {
+        this.addLog(`   ❌ [SyncCustomers] Lỗi API (Type ${type}): ${e.message}`);
+        hasMore = false; 
+        break;
+      }
 
       const dataItems = this.ensureArray(res);
 
@@ -588,14 +604,20 @@ export class SyncService implements OnModuleInit {
       return `${month}/${day}/${year}`;
     };
 
-    const res = await this.vttechApi.callHandler('/Desk/Appointment/AppointmentInDay_Desk_Branch/', 'LoadataAppointmentList', {
-      DateFrom: `${formatDateMMDDYYYY(dateFrom)} 00:00:00`,
-      BranchID: branchId.toString(),
-      AppID: '0',
-      StatusID: '0',
-      DoctorID: '0',
-      TypeApp: '1',
-    });
+    let res: any = null;
+    try {
+      res = await this.vttechApi.callHandler('/Desk/Appointment/AppointmentInDay_Desk_Branch/', 'LoadataAppointmentList', {
+        DateFrom: `${formatDateMMDDYYYY(dateFrom)} 00:00:00`,
+        BranchID: branchId.toString(),
+        AppID: '0',
+        StatusID: '0',
+        DoctorID: '0',
+        TypeApp: '1',
+      });
+    } catch (e) {
+      this.addLog(`   ❌ [SyncAppointments] Lỗi API: ${e.message}`);
+      return [];
+    }
 
     const dataItems = this.ensureArray(res);
     // this.logger.log(`  📥 [Appointment] Branch ${branchId}: Got ${dataItems.length} records.`);
@@ -1382,14 +1404,21 @@ export class SyncService implements OnModuleInit {
 
           await this.prisma.customerCareHistory.upsert({
             where: { customer_id_history_id: { customer_id: customerId, history_id: hId } },
-            update: { action_type: h.TypeName || '', action_date: this.parseDate(h.Date || h.Created || h.CareDate), employee_name: h.EmployeeName || '', note: h.Content || '' },
+            update: { 
+              action_type: h.TypeName || '', 
+              action_date: this.parseDate(h.Date || h.Created || h.CareDate), 
+              employee_name: h.EmployeeName || '', 
+              note: h.Content || '',
+              branch_id: branchId || parseInt(h.BranchID) || undefined
+            },
             create: { 
               customer_id: customerId,
               history_id: hId, 
               action_type: h.TypeName || '', 
               action_date: this.parseDate(h.Date || h.Created || h.CareDate), 
               employee_name: h.EmployeeName || '', 
-              note: h.Content || '' 
+              note: h.Content || '',
+              branch_id: branchId || parseInt(h.BranchID) || undefined
             }
           });
         }
@@ -1470,14 +1499,21 @@ export class SyncService implements OnModuleInit {
 
           await this.prisma.customerTreatmentPlan.upsert({
             where: { customer_id_plan_id: { customer_id: customerId, plan_id: pId } },
-            update: { service_name: p.ServiceName || '', doctor_name: p.DoctorName || '', created_at: this.parseDate(p.Date), note: p.Note || '' },
+            update: { 
+              service_name: p.ServiceName || '', 
+              doctor_name: p.DoctorName || '', 
+              created_at: this.parseDate(p.Date), 
+              note: p.Note || '',
+              branch_id: branchId || parseInt(p.BranchID) || undefined
+            },
             create: { 
               customer_id: customerId,
               plan_id: pId, 
               service_name: p.ServiceName || '', 
               doctor_name: p.DoctorName || '', 
               created_at: this.parseDate(p.Date), 
-              note: p.Note || '' 
+              note: p.Note || '',
+              branch_id: branchId || parseInt(p.BranchID) || undefined
             }
           });
         }
