@@ -580,8 +580,16 @@ export class SyncService implements OnModuleInit {
 
   private async syncAppointments(dateFrom: string, dateTo: string, branchId: number = 0): Promise<number[]> {
     const customerIds: number[] = [];
+    const formatDateMMDDYYYY = (date: any) => {
+      const d = new Date(date);
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${month}/${day}/${year}`;
+    };
+
     const res = await this.vttechApi.callHandler('/Desk/Appointment/AppointmentInDay_Desk_Branch/', 'LoadataAppointmentList', {
-      DateFrom: `${this.formatDate(dateFrom)} 00:00:00`,
+      DateFrom: `${formatDateMMDDYYYY(dateFrom)} 00:00:00`,
       BranchID: branchId.toString(),
       AppID: '0',
       StatusID: '0',
@@ -590,41 +598,44 @@ export class SyncService implements OnModuleInit {
     });
 
     const dataItems = this.ensureArray(res);
+    // this.logger.log(`  📥 [Appointment] Branch ${branchId}: Got ${dataItems.length} records.`);
 
     if (dataItems.length > 0) {
       for (const a of dataItems) {
         try {
-          const id = parseInt(a.ID || a.ScheduleID || a.id);
-          const customerId = parseInt(a.CustomerID || a.customer_id);
+          const id = parseInt(a.ID || a.ScheduleID || a.id || a.AppID);
+          const customerId = parseInt(a.CustomerID || a.customer_id || a.CustID);
+          if (!id) continue;
+          
           await this.prisma.appointment.upsert({
             where: { id },
             update: {
               customer_id: customerId,
-              customer_name: a.CustomerName || a.CustName || a.Customer_Name || '',
+              customer_name: a.CustName || a.CustomerName || a.Customer_Name || '',
               phone: a.Phone || a.Mobile || a.CustPhone || '',
               branch_id: branchId || parseInt(a.BranchID || a.branch_id || a.BranchId) || undefined,
               branch_name: a.BranchName || a.Branch || '',
-              service_id: parseInt(a.ServiceID || a.Service) || 0,
-              service_name: String(a.ServiceName || a.Service || a.Service_Name || ''),
-              employee_id: parseInt(a.EmployeeID || a.DoctorID || a.Doctor) || 0,
-              employee_name: a.EmployeeName || a.DoctorName || a.Doctor || '',
-              status: parseInt(a.Status || a.StatusID) || 0,
-              appointment_date: this.parseDate(a.Date || a.AppointmentDate || a.Date_From || a.Date_Appointment || a.DateApp || a.Created) || new Date(),
+              service_id: parseInt(a.ServiceTreat_ID || a.ServiceID || a.Service) || 0,
+              service_name: String(a.ServiceName || a.TypeName || a.Service || ''),
+              employee_id: parseInt(a.DoctorID || a.EmployeeID || a.Doctor) || 0,
+              employee_name: a.DoctorName || a.EmployeeName || a.Doctor || '',
+              status: parseInt(a.TypeStatusID || a.Status || a.StatusID || a.State) || 0,
+              appointment_date: this.parseDate(a.DateFrom || a.Date || a.AppointmentDate || a.CreatedDate || a.Created) || new Date(),
               note: a.Note || a.Content || '',
             },
             create: {
               id,
               customer_id: customerId,
-              customer_name: a.CustomerName || a.CustName || a.Customer_Name || '',
+              customer_name: a.CustName || a.CustomerName || a.Customer_Name || '',
               phone: a.Phone || a.Mobile || a.CustPhone || '',
               branch_id: branchId || parseInt(a.BranchID || a.branch_id || a.BranchId) || undefined,
               branch_name: a.BranchName || a.Branch || '',
-              service_id: parseInt(a.ServiceID || a.Service) || 0,
-              service_name: String(a.ServiceName || a.Service || a.Service_Name || ''),
-              employee_id: parseInt(a.EmployeeID || a.DoctorID || a.Doctor) || 0,
-              employee_name: a.EmployeeName || a.DoctorName || a.Doctor || '',
-              status: parseInt(a.Status || a.StatusID) || 0,
-              appointment_date: this.parseDate(a.Date || a.AppointmentDate || a.Date_From || a.Date_Appointment || a.DateApp || a.Created) || new Date(),
+              service_id: parseInt(a.ServiceTreat_ID || a.ServiceID || a.Service) || 0,
+              service_name: String(a.ServiceName || a.TypeName || a.Service || ''),
+              employee_id: parseInt(a.DoctorID || a.EmployeeID || a.Doctor) || 0,
+              employee_name: a.DoctorName || a.EmployeeName || a.Doctor || '',
+              status: parseInt(a.TypeStatusID || a.Status || a.StatusID || a.State) || 0,
+              appointment_date: this.parseDate(a.DateFrom || a.Date || a.AppointmentDate || a.CreatedDate || a.Created) || new Date(),
               note: a.Note || a.Content || '',
             },
           });
