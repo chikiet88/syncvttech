@@ -1030,6 +1030,8 @@ export class SyncService implements OnModuleInit {
           update: {
             medicine_name: item.Name,
             quantity: parseInt(item.Quantity) || 1,
+            unit_name: item.UnitName || '',
+            dosage: item.Dosage || '',
             created_at: this.parseDate(item.Created),
           },
           create: {
@@ -1037,6 +1039,8 @@ export class SyncService implements OnModuleInit {
             prescription_id: mId,
             medicine_name: item.Name,
             quantity: parseInt(item.Quantity) || 1,
+            unit_name: item.UnitName || '',
+            dosage: item.Dosage || '',
             created_at: this.parseDate(item.Created),
           }
         });
@@ -1102,7 +1106,8 @@ export class SyncService implements OnModuleInit {
             amount: parseFloat(p.Amount || 0) || 0, 
             payment_date: this.parseDate(p.Date || p.Created), 
             payment_method: p.MethodName || '', 
-            note: p.Note || p.Content || '' 
+            note: p.Note || p.Content || '',
+            signature_data: p.SignatureData || null
           },
           create: { 
             customer: { connect: { id: customerId } },
@@ -1110,7 +1115,8 @@ export class SyncService implements OnModuleInit {
             amount: parseFloat(p.Amount || 0) || 0, 
             payment_date: this.parseDate(p.Date || p.Created), 
             payment_method: p.MethodName || '', 
-            note: p.Note || p.Content || '' 
+            note: p.Note || p.Content || '',
+            signature_data: p.SignatureData || null
           }
         });
         total++;
@@ -1133,7 +1139,8 @@ export class SyncService implements OnModuleInit {
             amount: parseFloat(p.Amount || 0) || 0,
             payment_date: this.parseDate(p.Date || p.Created),
             payment_method: p.MethodName || '',
-            note: p.Note || p.Content || ''
+            note: p.Note || p.Content || '',
+            signature_data: p.SignatureData || null
           },
           create: {
             customer_id: customerId,
@@ -1141,7 +1148,8 @@ export class SyncService implements OnModuleInit {
             amount: parseFloat(p.Amount || 0) || 0,
             payment_date: this.parseDate(p.Date || p.Created),
             payment_method: p.MethodName || '',
-            note: p.Note || p.Content || ''
+            note: p.Note || p.Content || '',
+            signature_data: p.SignatureData || null
           }
         });
         total++;
@@ -1245,7 +1253,9 @@ export class SyncService implements OnModuleInit {
               service_name: s.ServiceName || '', 
               quantity: qty, 
               price: price, 
+              discount: parseFloat(s.Discount) || 0,
               total: total, 
+              created_at: this.parseDate(s.Date),
               status: s.StatusName || '' 
             },
             create: { 
@@ -1254,7 +1264,9 @@ export class SyncService implements OnModuleInit {
               service_name: s.ServiceName || '', 
               quantity: qty, 
               price: price, 
+              discount: parseFloat(s.Discount) || 0,
               total: total, 
+              created_at: this.parseDate(s.Date),
               status: s.StatusName || '' 
             }
           });
@@ -1479,10 +1491,15 @@ export class SyncService implements OnModuleInit {
     await this.syncCustomerAnamnesis(customerId);
 
     // 15. Call History from VTTech
-    const phone = (await this.prisma.customer.findUnique({ where: { id: customerId } }))?.phone;
     if (phone) {
       await this.syncCustomerVttechCalls(customerId, phone);
     }
+
+    // 16. Marketing Tickets
+    await this.syncCustomerTickets(customerId);
+
+    // 17. SMS History
+    await this.syncCustomerSms(customerId);
     
     this.addLog(`✅ [ID: ${customerId}] Kết thúc Full Sync.`);
     return stats;
@@ -1559,6 +1576,71 @@ export class SyncService implements OnModuleInit {
       if (pbxCalls.length > 0) this.addLog(`   ✅ [ID: ${customerId}] Đã map ${pbxCalls.length} Cuộc gọi PBX vào hồ sơ Khách hàng`);
     } catch (e) {
       this.addLog(`   ❌ [ID: ${customerId}] Lỗi syncCustomerVttechCalls: ${e.message}`);
+    }
+  }
+
+  private async syncCustomerTickets(customerId: number) {
+    try {
+      // Phỏng đoán handler cho Ticket khách hàng
+      const res = await this.vttechApi.callHandler('/Marketing/TicketList/', 'Loadata', { CustomerID: customerId, Limit: 100, BeginID: 0 });
+      const items = this.ensureArray(res?.Data || res?.Table || res);
+      for (const item of items) {
+        const tId = parseInt(item.ID);
+        if (!tId) continue;
+        await (this.prisma as any).customerTicket.upsert({
+          where: { customer_id_ticket_id: { customer_id: customerId, ticket_id: tId } },
+          update: {
+            content: item.Content || item.Note,
+            status_name: item.StatusName,
+            employee_name: item.EmployeeName,
+            created_at: this.parseDate(item.Created),
+          },
+          create: {
+            customer_id: customerId,
+            ticket_id: tId,
+            content: item.Content || item.Note,
+            status_name: item.StatusName,
+            employee_name: item.EmployeeName,
+            created_at: this.parseDate(item.Created),
+          }
+        });
+      }
+      if (items.length > 0) this.addLog(`   ✅ [ID: ${customerId}] Đã đồng bộ ${items.length} Ticket Marketing`);
+    } catch (e) {
+      this.addLog(`   ❌ [ID: ${customerId}] Lỗi syncCustomerTickets: ${e.message}`);
+    }
+  }
+
+  private async syncCustomerSms(customerId: number) {
+    try {
+      // SMS thường nằm chung trong HistoryList_Care với Type cụ thể, hoặc API SMS riêng
+      const res = await this.vttechApi.callHandler('/Marketing/Sms/History/', 'Loadata', { CustomerID: customerId, Limit: 100, BeginID: 0 });
+      const items = this.ensureArray(res?.Data || res?.Table || res);
+      
+      for (const item of items) {
+        const sId = parseInt(item.ID);
+        if (!sId) continue;
+        await (this.prisma as any).customerSms.upsert({
+          where: { customer_id_sms_id: { customer_id: customerId, sms_id: sId } },
+          update: {
+            phone: item.Phone,
+            content: item.Content,
+            status_name: item.StatusName,
+            created_at: this.parseDate(item.Created),
+          },
+          create: {
+            customer_id: customerId,
+            sms_id: sId,
+            phone: item.Phone,
+            content: item.Content,
+            status_name: item.StatusName,
+            created_at: this.parseDate(item.Created),
+          }
+        });
+      }
+      if (items.length > 0) this.addLog(`   ✅ [ID: ${customerId}] Đã đồng bộ ${items.length} Tin nhắn SMS`);
+    } catch (e) {
+      this.addLog(`   ❌ [ID: ${customerId}] Lỗi syncCustomerSms: ${e.message}`);
     }
   }
 

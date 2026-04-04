@@ -264,6 +264,8 @@ model Customer {
   status_history  CustomerStatusHistory[]
   anamnesis       CustomerAnamnesis[]
   vttech_calls    CustomerCall[]
+  tickets         CustomerTicket[]
+  sms_history     CustomerSms[]
 
   @@map("customers")
 }
@@ -709,4 +711,36 @@ model PbxSyncLog {
   updated_at     DateTime  @default(now()) @updatedAt
 
   @@map("pbx_sync_logs")
+}
+
+model CustomerTicket {
+  id           Int       @id @default(autoincrement())
+  customer_id  Int
+  ticket_id    Int?      // ID from VTTech
+  content      String?
+  status_name  String?
+  employee_name String?
+  created_at   DateTime?
+  synced_at    DateTime  @default(now())
+
+  customer Customer @relation(fields: [customer_id], references: [id])
+
+  @@unique([customer_id, ticket_id])
+  @@map("customer_tickets")
+}
+
+model CustomerSms {
+  id           Int       @id @default(autoincrement())
+  customer_id  Int
+  sms_id       Int?      // ID from VTTech
+  phone        String?
+  content      String?
+  status_name  String?
+  created_at   DateTime?
+  synced_at    DateTime  @default(now())
+
+  customer Customer @relation(fields: [customer_id], references: [id])
+
+  @@unique([customer_id, sms_id])
+  @@map("customer_sms_history")
 }
