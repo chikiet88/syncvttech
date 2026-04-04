@@ -247,6 +247,12 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         }
     }
     decompress(data) {
+        if (data && typeof data === 'object' && data['0'] !== undefined) {
+            console.log('DEBUG decompress: Got numeric object (likely Binary) with keys:', Object.keys(data).length);
+        }
+        else if (typeof data === 'string') {
+            console.log('DEBUG decompress: Got string (likely Base64) length:', data.length);
+        }
         if (!data || typeof data !== 'string')
             return data;
         try {
@@ -360,7 +366,7 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         const resp = await this.axiosInstance.post(url, data);
         if (resp.status >= 400)
             throw new Error(`API error: ${resp.status}`);
-        return resp.data;
+        return this.decompress(resp.data);
     }
     async checkLoginStatus(u, p) {
         const ok = await this.login(true);
@@ -374,7 +380,7 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         });
     }
     async getRevenueByBranch(dateFrom, dateTo, branchId) {
-        return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'Loadata', {
+        return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'LoadataDetailByBranch', {
             branchID: branchId.toString(), dateFrom, dateTo
         });
     }

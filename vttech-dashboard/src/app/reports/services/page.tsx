@@ -76,7 +76,22 @@ function ServicesReportContent() {
       const res = await fetch(url.toString())
       if (res.ok) {
         const result = await res.json()
-        setData(result.Table || [])
+        const table = result.Table || []
+        
+        const formatted: ServiceColumn[] = table.map((item: any, index: number) => ({
+          id: String(item.id || index),
+          CustomerName: item.CustomerName || "N/A",
+          CustomerCode: item.CustomerCode || "",
+          Phone: item.Phone || "",
+          ServiceName: item.ServiceName || "N/A",
+          CategoryName: item.CategoryName || "",
+          Amount: parseFloat(String(item.amount || item.Amount || 0).replace(/,/g, '')) || 0,
+          Paid: parseFloat(String(item.paid || item.Paid || 0).replace(/,/g, '')) || 0,
+          IsNew: item.is_new === 1 || item.IsNew === 1,
+          Created: item.Created || item.created_at || new Date().toISOString(),
+          BranchName: item.BranchName || item.branch_name || "Chi nhánh gốc",
+        }))
+        setData(formatted)
         if (result.pagination) {
           setPagination(result.pagination)
         }

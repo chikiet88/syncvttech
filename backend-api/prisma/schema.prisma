@@ -381,6 +381,7 @@ model CustomerPayment {
   id             Int       @id @default(autoincrement())
   customer_id    Int
   payment_id     Int?
+  branch_id      Int?
   amount         Float     @default(0)
   payment_date   DateTime?
   payment_method String?
@@ -398,6 +399,7 @@ model CustomerInstallment {
   id             Int       @id @default(autoincrement())
   customer_id    Int
   installment_id Int?
+  branch_id      Int?
   total_amount   Float     @default(0)
   paid_amount    Float     @default(0)
   remain_amount  Float     @default(0)
@@ -415,6 +417,7 @@ model CustomerComplaint {
   id           Int       @id @default(autoincrement())
   customer_id  Int
   complaint_id Int?
+  branch_id    Int?
   content      String?
   status_name  String?
   created_at   DateTime?
@@ -430,6 +433,7 @@ model CustomerTreatmentPlan {
   id           Int       @id @default(autoincrement())
   customer_id  Int
   plan_id      Int?
+  branch_id    Int?
   service_name String?
   doctor_name  String?
   created_at   DateTime?
@@ -446,6 +450,7 @@ model CustomerServiceTab {
   id           Int       @id @default(autoincrement())
   customer_id  Int
   service_id   Int?
+  branch_id    Int?
   service_name String?
   quantity     Int       @default(1)
   price        Float     @default(0)
@@ -465,6 +470,7 @@ model CustomerCareHistory {
   id            Int       @id @default(autoincrement())
   customer_id   Int
   history_id    Int?
+  branch_id     Int?
   action_type   String?
   action_date   DateTime?
   employee_name String?
@@ -481,6 +487,7 @@ model CustomerChangeHistory {
   id            Int       @id @default(autoincrement())
   customer_id   Int
   history_id    Int?
+  branch_id     Int?
   content       String?
   employee_name String?
   action_date   DateTime?
@@ -536,6 +543,7 @@ model CustomerPrescription {
   id              Int       @id @default(autoincrement())
   customer_id     Int
   prescription_id Int?      // ID from VTTech
+  branch_id       Int?
   medicine_name   String?
   quantity        Int       @default(1)
   unit_name       String?
@@ -717,6 +725,7 @@ model CustomerTicket {
   id           Int       @id @default(autoincrement())
   customer_id  Int
   ticket_id    Int?      // ID from VTTech
+  branch_id    Int?
   content      String?
   status_name  String?
   employee_name String?
@@ -733,6 +742,7 @@ model CustomerSms {
   id           Int       @id @default(autoincrement())
   customer_id  Int
   sms_id       Int?      // ID from VTTech
+  branch_id    Int?
   phone        String?
   content      String?
   status_name  String?

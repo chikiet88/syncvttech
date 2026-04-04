@@ -219,6 +219,12 @@ export class VttechApiService {
   }
 
   decompress(data: any): any {
+    if (data && typeof data === 'object' && data['0'] !== undefined) {
+       console.log('DEBUG decompress: Got numeric object (likely Binary) with keys:', Object.keys(data).length);
+    } else if (typeof data === 'string') {
+       console.log('DEBUG decompress: Got string (likely Base64) length:', data.length);
+    }
+
     if (!data || typeof data !== 'string') return data;
     try {
       const clean = data.replace(/^"|"$/g, '');
@@ -332,7 +338,7 @@ export class VttechApiService {
     await this.login();
     const resp = await this.axiosInstance.post(url, data);
     if (resp.status >= 400) throw new Error(`API error: ${resp.status}`);
-    return resp.data;
+    return this.decompress(resp.data);
   }
 
   // Compatibility methods for AppController & SyncService
@@ -349,7 +355,7 @@ export class VttechApiService {
     });
   }
   async getRevenueByBranch(dateFrom: string, dateTo: string, branchId: number) {
-    return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'Loadata', {
+    return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'LoadataDetailByBranch', {
       branchID: branchId.toString(), dateFrom, dateTo
     });
   }

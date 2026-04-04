@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { TrendingUp, MapPin, Calendar as CalendarIcon, Loader2, Download, Search } from "lucide-react"
-import { useSearchParams } from "next/navigation"
+import { TrendingUp, MapPin, Calendar as CalendarIcon, Loader2, Download, Search, ArrowLeft } from "lucide-react"
+import { useSearchParams, useRouter } from "next/navigation"
 
 function RevenueReportContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const q = searchParams.get("q") ?? ""
   const page = searchParams.get("page") ?? "1"
   
@@ -94,11 +95,11 @@ function RevenueReportContent() {
           phone: item.Phone || "",
           service_name: item.ServiceName || "N/A",
           category_name: item.CategoryName || "",
-          amount: parseFloat(item.Amount || 0),
-          paid: parseFloat(item.Paid || 0),
-          is_new: item.IsNew === 1,
+          amount: parseFloat(String(item.amount || item.Amount || 0).replace(/,/g, '')) || 0,
+          paid: parseFloat(String(item.paid || item.Paid || 0).replace(/,/g, '')) || 0,
+          is_new: item.is_new === 1 || item.IsNew === 1,
           created_at: item.Created || item.created_at || new Date().toISOString(),
-          branch_name: item.BranchName || "Chi nhánh gốc",
+          branch_name: item.BranchName || item.branch_name || "Chi nhánh gốc",
         }))
         setData(formatted)
         if (result.pagination) {
@@ -120,14 +121,19 @@ function RevenueReportContent() {
   return (
     <div className="p-6 space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3">
-            <TrendingUp className="w-6 h-6 text-emerald-500" />
-            Báo cáo Doanh thu
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Báo cáo chi tiết doanh thu từ database đồng bộ (Hỗ trợ tìm kiếm & phân trang).
-          </p>
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={() => router.back()} className="rounded-xl glass border-slate-200">
+            <ArrowLeft className="w-4 h-4 text-slate-600" />
+          </Button>
+          <div className="space-y-1">
+            <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3">
+              <TrendingUp className="w-6 h-6 text-emerald-500" />
+              Báo cáo Doanh thu
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Báo cáo chi tiết doanh thu từ database đồng bộ (Hỗ trợ tìm kiếm & phân trang).
+            </p>
+          </div>
         </div>
         <Button variant="outline" className="rounded-xl gap-2 glass border-none">
           <Download className="w-4 h-4" />
