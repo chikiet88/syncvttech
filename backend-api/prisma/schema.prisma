@@ -8,26 +8,25 @@ datasource db {
 }
 
 model Branch {
-  id          Int      @id
-  code        String?
-  name        String
-  address     String?
-  phone       String?
-  email       String?
-  city_id     Int?
-  district_id Int?
-  is_active   Int      @default(1)
-  created_at  DateTime @default(now())
-  updated_at  DateTime @default(now()) @updatedAt
-
-  employees       Employee[]
-  users           User[]
-  revenues        DailyRevenue[]
-  daily_customers DailyCustomer[]
-  customers       Customer[]
-  appointments    Appointment[]
-  treatments      Treatment[]
+  id                   Int                  @id
+  code                 String?
+  name                 String
+  address              String?
+  phone                String?
+  email                String?
+  city_id              Int?
+  district_id          Int?
+  is_active            Int                  @default(1)
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @default(now()) @updatedAt
+  appointments         Appointment[]
+  customers            Customer[]
+  daily_customers      DailyCustomer[]
+  revenues             DailyRevenue[]
+  employees            Employee[]
   revenue_transactions RevenueTransaction[]
+  treatments           Treatment[]
+  users                User[]
 
   @@map("branches")
 }
@@ -79,8 +78,7 @@ model Employee {
   is_active  Int      @default(1)
   created_at DateTime @default(now())
   updated_at DateTime @default(now()) @updatedAt
-
-  branch Branch? @relation(fields: [branch_id], references: [id])
+  branch     Branch?  @relation(fields: [branch_id], references: [id])
 
   @@map("employees")
 }
@@ -105,45 +103,41 @@ model User {
   role       String?
   is_active  Int      @default(1)
   created_at DateTime @default(now())
-
-  branch Branch? @relation(fields: [branch_id], references: [id])
+  branch     Branch?  @relation(fields: [branch_id], references: [id])
 
   @@map("users")
 }
 
 model CustomerSource {
-  id         Int      @id
-  code       String?
-  name       String
-  parent_id  Int?
-  is_active  Int      @default(1)
-  created_at DateTime @default(now())
-
-  daily_customers DailyCustomer[]
+  id              Int             @id
+  code            String?
+  name            String
+  parent_id       Int?
+  is_active       Int             @default(1)
+  created_at      DateTime        @default(now())
   customers       Customer[]
+  daily_customers DailyCustomer[]
 
   @@map("customer_sources")
 }
 
 model Membership {
-  id               Int      @id
+  id               Int        @id
   code             String?
   name             String
-  discount_percent Float    @default(0)
-  min_spending     Float    @default(0)
-  is_active        Int      @default(1)
-  created_at       DateTime @default(now())
-
-  customers Customer[]
+  discount_percent Float      @default(0)
+  min_spending     Float      @default(0)
+  is_active        Int        @default(1)
+  created_at       DateTime   @default(now())
+  customers        Customer[]
 
   @@map("memberships")
 }
 
 model City {
-  id   Int     @id
-  name String
-  code String?
-
+  id        Int        @id
+  name      String
+  code      String?
   districts District[]
 
   @@map("cities")
@@ -153,119 +147,109 @@ model District {
   id      Int    @id
   name    String
   city_id Int?
-
-  city  City?  @relation(fields: [city_id], references: [id])
-  wards Ward[]
+  city    City?  @relation(fields: [city_id], references: [id])
+  wards   Ward[]
 
   @@map("districts")
 }
 
 model Ward {
-  id          Int    @id
+  id          Int       @id
   name        String
   district_id Int?
-
-  district District? @relation(fields: [district_id], references: [id])
+  district    District? @relation(fields: [district_id], references: [id])
 
   @@map("wards")
 }
 
 model DailyRevenue {
-  id          Int      @id @default(autoincrement())
-  date        DateTime
-  branch_id   Int
-  branch_name String?
-
-  paid         Float @default(0)
-  paid_new     Float @default(0)
-  raise_amount Float @default(0)
-
-  num_customers    Int @default(0)
-  num_appointments Int @default(0)
-  num_checked_in   Int @default(0)
-
-  created_at DateTime @default(now())
-
-  branch Branch @relation(fields: [branch_id], references: [id])
+  id               Int      @id @default(autoincrement())
+  date             DateTime
+  branch_id        Int
+  branch_name      String?
+  paid             Float    @default(0)
+  paid_new         Float    @default(0)
+  raise_amount     Float    @default(0)
+  num_customers    Int      @default(0)
+  num_appointments Int      @default(0)
+  num_checked_in   Int      @default(0)
+  created_at       DateTime @default(now())
+  branch           Branch   @relation(fields: [branch_id], references: [id])
 
   @@unique([date, branch_id])
   @@map("daily_revenue")
 }
 
 model RevenueTransaction {
-  id            Int      @id @default(autoincrement())
-  date          DateTime
-  created_at    DateTime
-  branch_id     Int
-  branch_name   String?
-  customer_id   Int?
-  customer_name String?
-  customer_code String?
-  phone         String?
-  service_id    Int?
-  service_name  String?
-  category_id   Int?
-  category_name String?
-  amount        Float    @default(0)
-  paid          Float    @default(0)
-  is_new        Int      @default(0)
-  type          Int?
+  id             Int      @id @default(autoincrement())
+  date           DateTime
+  created_at     DateTime
+  branch_id      Int
+  branch_name    String?
+  customer_id    Int?
+  customer_name  String?
+  customer_code  String?
+  phone          String?
+  service_id     Int?
+  service_name   String?
+  category_id    Int?
+  category_name  String?
+  amount         Float    @default(0)
+  paid           Float    @default(0)
+  is_new         Int      @default(0)
+  type           Int?
   payment_method Int?
-  doc_code      String?
-  source_id     Int?
-  
-  last_hash     String?
-  synced_at     DateTime @default(now())
-
-  branch        Branch   @relation(fields: [branch_id], references: [id])
+  doc_code       String?
+  source_id      Int?
+  last_hash      String?
+  synced_at      DateTime @default(now())
+  branch         Branch   @relation(fields: [branch_id], references: [id])
 
   @@map("revenue_transactions")
 }
 
 model Customer {
-  id            Int       @id
-  code          String?
-  name          String
-  phone         String?
-  email         String?
-  gender        Int?
-  birthday      DateTime?
-  address       String?
-  city_id       Int?
-  district_id   Int?
-  ward_id       Int?
-  branch_id     Int?
-  source_id     Int?
-  membership_id Int?
-  total_spent   Float     @default(0)
-  total_debt    Float     @default(0)
-  point         Int       @default(0)
-  is_active     Int       @default(1)
-  last_hash     String?
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @default(now()) @updatedAt
-
-  branch       Branch?         @relation(fields: [branch_id], references: [id])
-  source       CustomerSource? @relation(fields: [source_id], references: [id])
-  membership   Membership?     @relation(fields: [membership_id], references: [id])
-  appointments Appointment[]
-  treatments   Treatment[]
-
-  payments        CustomerPayment[]
-  installments    CustomerInstallment[]
-  complaints      CustomerComplaint[]
-  treatment_plans CustomerTreatmentPlan[]
-  service_tabs    CustomerServiceTab[]
-  care_history    CustomerCareHistory[]
-  change_history  CustomerChangeHistory[]
-  cards           CustomerCard[]
-  prescriptions   CustomerPrescription[]
-  image_folders   CustomerImageFolder[]
-  status_history  CustomerStatusHistory[]
+  id              Int                     @id
+  code            String?
+  name            String
+  phone           String?
+  email           String?
+  gender          Int?
+  birthday        DateTime?
+  address         String?
+  city_id         Int?
+  district_id     Int?
+  ward_id         Int?
+  branch_id       Int?
+  source_id       Int?
+  membership_id   Int?
+  total_spent     Float                   @default(0)
+  total_debt      Float                   @default(0)
+  point           Int                     @default(0)
+  is_active       Int                     @default(1)
+  last_hash       String?
+  created_at      DateTime                @default(now())
+  updated_at      DateTime                @default(now()) @updatedAt
+  appointments    Appointment[]
   anamnesis       CustomerAnamnesis[]
   vttech_calls    CustomerCall[]
-  tickets         CustomerTicket[]
+  cards           CustomerCard[]
+  care_history    CustomerCareHistory[]
+  change_history  CustomerChangeHistory[]
+  complaints      CustomerComplaint[]
+  image_folders   CustomerImageFolder[]
+  installments    CustomerInstallment[]
+  payments        CustomerPayment[]
+  prescriptions   CustomerPrescription[]
+  service_tabs    CustomerServiceTab[]
   sms_history     CustomerSms[]
+  status_history  CustomerStatusHistory[]
+  tickets         CustomerTicket[]
+  treatment_plans CustomerTreatmentPlan[]
+  branch          Branch?                 @relation(fields: [branch_id], references: [id])
+  membership      Membership?             @relation(fields: [membership_id], references: [id])
+  source          CustomerSource?         @relation(fields: [source_id], references: [id])
+  treatments      Treatment[]
 
   @@map("customers")
 }
@@ -273,7 +257,7 @@ model Customer {
 model CustomerStatusHistory {
   id                 Int       @id @default(autoincrement())
   customer_id        Int
-  history_id         Int?      // ID from Table1
+  history_id         Int?
   content            String?
   master_status_name String?
   detail_status_name String?
@@ -281,32 +265,27 @@ model CustomerStatusHistory {
   employee_name      String?
   created_at         DateTime?
   synced_at          DateTime  @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
+  customer           Customer  @relation(fields: [customer_id], references: [id])
 
   @@unique([customer_id, history_id])
   @@map("customer_status_history")
 }
 
 model DailyCustomer {
-  id          Int      @id @default(autoincrement())
-  date        DateTime
-  customer_id Int
-  branch_id   Int?
-
+  id            Int             @id @default(autoincrement())
+  date          DateTime
+  customer_id   Int
+  branch_id     Int?
   customer_name String?
   phone         String?
   email         String?
   gender        Int?
   birthday      DateTime?
-
   source_id     Int?
   membership_id Int?
-
-  created_at DateTime @default(now())
-
-  branch Branch?         @relation(fields: [branch_id], references: [id])
-  source CustomerSource? @relation(fields: [source_id], references: [id])
+  created_at    DateTime        @default(now())
+  branch        Branch?         @relation(fields: [branch_id], references: [id])
+  source        CustomerSource? @relation(fields: [source_id], references: [id])
 
   @@unique([date, customer_id])
   @@map("daily_customers")
@@ -328,9 +307,8 @@ model Appointment {
   note             String?
   created_at       DateTime  @default(now())
   updated_at       DateTime  @default(now()) @updatedAt
-
-  customer Customer? @relation(fields: [customer_id], references: [id])
-  branch   Branch?   @relation(fields: [branch_id], references: [id])
+  branch           Branch?   @relation(fields: [branch_id], references: [id])
+  customer         Customer? @relation(fields: [customer_id], references: [id])
 
   @@map("appointments")
 }
@@ -351,45 +329,51 @@ model Treatment {
   status         Int       @default(0)
   note           String?
   created_at     DateTime  @default(now())
-
-  customer Customer? @relation(fields: [customer_id], references: [id])
-  branch   Branch?   @relation(fields: [branch_id], references: [id])
+  branch         Branch?   @relation(fields: [branch_id], references: [id])
+  customer       Customer? @relation(fields: [customer_id], references: [id])
 
   @@map("treatments")
 }
 
 model CrawlLog {
-  id               Int      @id @default(autoincrement())
-  crawl_date       DateTime
-  crawl_type       String
-  status           String
-  records_count    Int      @default(0)
-  total_branches   Int      @default(0)
-  total_customers  Int      @default(0)
-  total_payments   Int      @default(0)
-  total_treatments Int      @default(0)
-  total_services   Int      @default(0)
-  error_message    String?
-  duration_seconds Float?
-  created_at       DateTime @default(now())
+  id            Int       @id @default(autoincrement())
+  task_id       String?   // UUID from worker/monitoring
+  branch_id     Int?
+  crawl_date    DateTime?
+  crawl_type    String?   // e.g. SYNC_TASK_HEADER_B1
+  status        String?   // success, error
+  message       String?   // Detail message
+  records_count Int?      @default(0)
+  created_at    DateTime  @default(now())
+
+  // Detailed metrics for historical auditing
+  customers_count    Int       @default(0)
+  services_count     Int       @default(0)
+  treatments_count   Int       @default(0)
+  appointments_count Int       @default(0)
+  sales_total        Float     @default(0)
+  revenue_total      Float     @default(0)
+  duration_seconds   Float?    @default(0)
+  total_branches     Int?      @default(0)
+  total_services     Int?      @default(0)
+  total_customers    Int?      @default(0)
+  error_message      String?
 
   @@map("crawl_logs")
 }
 
-// Extra tables for Unified Sync
 model CustomerPayment {
   id             Int       @id @default(autoincrement())
   customer_id    Int
   payment_id     Int?
-  branch_id      Int?
   amount         Float     @default(0)
   payment_date   DateTime?
   payment_method String?
   note           String?
   signature_data String?
   synced_at      DateTime  @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
+  branch_id      Int?
+  customer       Customer  @relation(fields: [customer_id], references: [id])
 
   @@unique([customer_id, payment_id])
   @@map("customer_payments")
@@ -399,15 +383,14 @@ model CustomerInstallment {
   id             Int       @id @default(autoincrement())
   customer_id    Int
   installment_id Int?
-  branch_id      Int?
   total_amount   Float     @default(0)
   paid_amount    Float     @default(0)
   remain_amount  Float     @default(0)
   created_at     DateTime?
   note           String?
   synced_at      DateTime  @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
+  branch_id      Int?
+  customer       Customer  @relation(fields: [customer_id], references: [id])
 
   @@unique([customer_id, installment_id])
   @@map("customer_installments")
@@ -417,13 +400,12 @@ model CustomerComplaint {
   id           Int       @id @default(autoincrement())
   customer_id  Int
   complaint_id Int?
-  branch_id    Int?
   content      String?
   status_name  String?
   created_at   DateTime?
   synced_at    DateTime  @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
+  branch_id    Int?
+  customer     Customer  @relation(fields: [customer_id], references: [id])
 
   @@unique([customer_id, complaint_id])
   @@map("customer_complaints")
@@ -433,14 +415,13 @@ model CustomerTreatmentPlan {
   id           Int       @id @default(autoincrement())
   customer_id  Int
   plan_id      Int?
-  branch_id    Int?
   service_name String?
   doctor_name  String?
   created_at   DateTime?
   note         String?
   synced_at    DateTime  @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
+  branch_id    Int?
+  customer     Customer  @relation(fields: [customer_id], references: [id])
 
   @@unique([customer_id, plan_id])
   @@map("customer_treatment_plans")
@@ -450,7 +431,6 @@ model CustomerServiceTab {
   id           Int       @id @default(autoincrement())
   customer_id  Int
   service_id   Int?
-  branch_id    Int?
   service_name String?
   quantity     Int       @default(1)
   price        Float     @default(0)
@@ -459,8 +439,8 @@ model CustomerServiceTab {
   created_at   DateTime?
   status       String?
   synced_at    DateTime  @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
+  branch_id    Int?
+  customer     Customer  @relation(fields: [customer_id], references: [id])
 
   @@unique([customer_id, service_id])
   @@map("customer_service_tabs")
@@ -470,14 +450,13 @@ model CustomerCareHistory {
   id            Int       @id @default(autoincrement())
   customer_id   Int
   history_id    Int?
-  branch_id     Int?
   action_type   String?
   action_date   DateTime?
   employee_name String?
   note          String?
   synced_at     DateTime  @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
+  branch_id     Int?
+  customer      Customer  @relation(fields: [customer_id], references: [id])
 
   @@unique([customer_id, history_id])
   @@map("customer_care_history")
@@ -487,54 +466,51 @@ model CustomerChangeHistory {
   id            Int       @id @default(autoincrement())
   customer_id   Int
   history_id    Int?
-  branch_id     Int?
   content       String?
   employee_name String?
   action_date   DateTime?
   synced_at     DateTime  @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
+  branch_id     Int?
+  customer      Customer  @relation(fields: [customer_id], references: [id])
 
   @@unique([customer_id, history_id])
   @@map("customer_change_history")
 }
 
 model CustomerCard {
-  id              Int       @id @default(autoincrement())
-  customer_id     Int
-  card_id         Int?      // ID from VTTech
-  code            String?
-  card_name       String?
-  price_root      Float     @default(0)
-  price_discounted Float    @default(0)
-  price_use       Float     @default(0)
-  amount_using    Float     @default(0)
-  total_paid      Float     @default(0)
-  quantity        Int       @default(1)
-  note            String?
-  expired_date    DateTime?
-  created_at      DateTime?
-  synced_at       DateTime  @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
-  logs     CustomerCardLog[]
+  id               Int               @id @default(autoincrement())
+  customer_id      Int
+  card_id          Int?
+  code             String?
+  card_name        String?
+  price_root       Float             @default(0)
+  price_discounted Float             @default(0)
+  price_use        Float             @default(0)
+  amount_using     Float             @default(0)
+  total_paid       Float             @default(0)
+  quantity         Int               @default(1)
+  note             String?
+  expired_date     DateTime?
+  created_at       DateTime?
+  synced_at        DateTime          @default(now())
+  logs             CustomerCardLog[]
+  customer         Customer          @relation(fields: [customer_id], references: [id])
 
   @@unique([customer_id, card_id])
   @@map("customer_cards")
 }
 
 model CustomerCardLog {
-  id           Int      @id @default(autoincrement())
-  card_id      Int      // Internal ID of CustomerCard
-  service_id   Int?
-  amount       Float    @default(0)
-  is_plus      Int      @default(0)
-  reason_name  String?
-  note         String?
-  created_at   DateTime?
-  synced_at    DateTime @default(now())
-
-  card CustomerCard @relation(fields: [card_id], references: [id])
+  id          Int          @id @default(autoincrement())
+  card_id     Int
+  service_id  Int?
+  amount      Float        @default(0)
+  is_plus     Int          @default(0)
+  reason_name String?
+  note        String?
+  created_at  DateTime?
+  synced_at   DateTime     @default(now())
+  card        CustomerCard @relation(fields: [card_id], references: [id])
 
   @@map("customer_card_logs")
 }
@@ -542,80 +518,74 @@ model CustomerCardLog {
 model CustomerPrescription {
   id              Int       @id @default(autoincrement())
   customer_id     Int
-  prescription_id Int?      // ID from VTTech
-  branch_id       Int?
+  prescription_id Int?
   medicine_name   String?
   quantity        Int       @default(1)
   unit_name       String?
   dosage          String?
   created_at      DateTime?
   synced_at       DateTime  @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
+  branch_id       Int?
+  customer        Customer  @relation(fields: [customer_id], references: [id])
 
   @@unique([customer_id, prescription_id])
   @@map("customer_prescriptions")
 }
 
 model CustomerImageFolder {
-  id           Int      @id @default(autoincrement())
-  customer_id  Int
-  folder_id    String?  // ID or Hash from VTTech
-  folder_name  String?
-  created_at   DateTime?
-  synced_at    DateTime @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
-  images   CustomerImage[]
+  id          Int             @id @default(autoincrement())
+  customer_id Int
+  folder_id   String?
+  folder_name String?
+  created_at  DateTime?
+  synced_at   DateTime        @default(now())
+  customer    Customer        @relation(fields: [customer_id], references: [id])
+  images      CustomerImage[]
 
   @@unique([customer_id, folder_id])
   @@map("customer_image_folders")
 }
 
 model CustomerImage {
-  id           Int      @id @default(autoincrement())
-  folder_id    Int
-  real_name    String?
+  id            Int                 @id @default(autoincrement())
+  folder_id     Int
+  real_name     String?
   feature_image String?
-  cloud_id     String?
-  created_at   DateTime?
-  synced_at    DateTime @default(now())
-
-  folder CustomerImageFolder @relation(fields: [folder_id], references: [id])
+  cloud_id      String?
+  created_at    DateTime?
+  synced_at     DateTime            @default(now())
+  folder        CustomerImageFolder @relation(fields: [folder_id], references: [id])
 
   @@map("customer_images")
 }
 
 model CustomerAnamnesis {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   customer_id Int
   content     String?
   note        String?
   created_at  DateTime?
-  synced_at   DateTime @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
+  synced_at   DateTime  @default(now())
+  customer    Customer  @relation(fields: [customer_id], references: [id])
 
   @@map("customer_anamnesis")
 }
 
 model CustomerCall {
-  id            Int      @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   customer_id   Int
-  call_id       String?  @unique
+  call_id       String?   @unique
   phone         String?
-  duration      Int      @default(0)
+  duration      Int       @default(0)
   link_audio    String?
   content       String?
   employee_name String?
   created_at    DateTime?
-  synced_at     DateTime @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
+  synced_at     DateTime  @default(now())
+  customer      Customer  @relation(fields: [customer_id], references: [id])
 
   @@map("customer_calls")
 }
-
 
 model MarketingTicketExtension {
   id        Int      @id
@@ -634,33 +604,24 @@ model MarketingTicketGroup {
   @@map("marketing_ticket_groups")
 }
 
-// --- Call Center Models ---
-
 model PbxCallRecord {
   id                        Int       @id @default(autoincrement())
   uuid                      String    @unique
-  direction                 String?   // inbound/outbound
-  caller_id_number          String?   // Extension nội bộ
-  outbound_caller_id_number String?   // SĐT đầu ra
-  destination_number        String?   // SĐT đích
-  
+  direction                 String?
+  caller_id_number          String?
+  outbound_caller_id_number String?
+  destination_number        String?
   start_epoch               Int?
   end_epoch                 Int?
   answer_epoch              Int?
-  
   duration                  Int       @default(0)
   billsec                   Int       @default(0)
-  
   sip_hangup_disposition    String?
-  call_status               String?   // CANCELED, ANSWERED, NO_ANSWER, BUSY
-  
+  call_status               String?
   record_path               String?
-  
-  // Legacy/Compatible fields
   start_time                DateTime?
   answer_time               DateTime?
   end_time                  DateTime?
-  
   raw_data                  Json?
   created_at                DateTime  @default(now())
   updated_at                DateTime  @default(now()) @updatedAt
@@ -669,21 +630,21 @@ model PbxCallRecord {
 }
 
 model PbxEmployee {
-  id          Int      @id @default(autoincrement())
-  vttech_id   Int      @unique
-  name        String
-  code        String?
-  email       String?
-  phone       String?
-  extension   String?
-  group_id    Int?
-  group_name  String?
-  department  String?
-  position    String?
-  is_active   Int      @default(1)
-  raw_data    Json?
-  created_at  DateTime @default(now())
-  updated_at  DateTime @default(now()) @updatedAt
+  id         Int      @id @default(autoincrement())
+  vttech_id  Int      @unique
+  name       String
+  code       String?
+  email      String?
+  phone      String?
+  extension  String?
+  group_id   Int?
+  group_name String?
+  department String?
+  position   String?
+  is_active  Int      @default(1)
+  raw_data   Json?
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
 
   @@map("pbx_employees")
 }
@@ -702,72 +663,79 @@ model PbxExtension {
 }
 
 model PbxSyncLog {
-  id             Int       @id @default(autoincrement())
-  sync_type      String
-  status         String    @default("running")
-  start_time     DateTime  @default(now())
-  end_time       DateTime?
-  date_from      DateTime
-  date_to        DateTime
-  total_records  Int       @default(0)
-  success_count  Int       @default(0)
-  failed_count   Int       @default(0)
-  retry_count    Int       @default(0)
-  error_message  String?
-  failed_items   Json?
-  created_at     DateTime  @default(now())
-  updated_at     DateTime  @default(now()) @updatedAt
+  id            Int       @id @default(autoincrement())
+  sync_type     String
+  status        String    @default("running")
+  start_time    DateTime  @default(now())
+  end_time      DateTime?
+  date_from     DateTime
+  date_to       DateTime
+  total_records Int       @default(0)
+  success_count Int       @default(0)
+  failed_count  Int       @default(0)
+  retry_count   Int       @default(0)
+  error_message String?
+  failed_items  Json?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @default(now()) @updatedAt
 
   @@map("pbx_sync_logs")
 }
 
-model CustomerTicket {
-  id           Int       @id @default(autoincrement())
-  customer_id  Int
-  ticket_id    Int?      // ID from VTTech
-  branch_id    Int?
-  content      String?
-  status_name  String?
-  employee_name String?
-  created_at   DateTime?
-  synced_at    DateTime  @default(now())
 
-  customer Customer @relation(fields: [customer_id], references: [id])
+model CustomerTicket {
+  id            Int       @id @default(autoincrement())
+  customer_id   Int
+  ticket_id     Int?
+  branch_id     Int?
+  content       String?
+  status_name   String?
+  employee_name String?
+  created_at    DateTime?
+  synced_at     DateTime  @default(now())
+  customer      Customer  @relation(fields: [customer_id], references: [id])
 
   @@unique([customer_id, ticket_id])
   @@map("customer_tickets")
 }
 
 model CustomerSms {
-  id           Int       @id @default(autoincrement())
-  customer_id  Int
-  sms_id       Int?      // ID from VTTech
-  branch_id    Int?
-  phone        String?
-  content      String?
-  status_name  String?
-  created_at   DateTime?
-  synced_at    DateTime  @default(now())
-
-  customer Customer @relation(fields: [customer_id], references: [id])
+  id          Int       @id @default(autoincrement())
+  customer_id Int
+  sms_id      Int?
+  branch_id   Int?
+  phone       String?
+  content     String?
+  status_name String?
+  created_at  DateTime?
+  synced_at   DateTime  @default(now())
+  customer    Customer  @relation(fields: [customer_id], references: [id])
 
   @@unique([customer_id, sms_id])
   @@map("customer_sms_history")
 }
 
 model SyncTask {
-  id            Int      @id @default(autoincrement())
-  date          DateTime @db.Date
-  branch_id     Int
-  branch_name   String?
-  type          String   @default("HEADER") // HEADER, DETAIL
-  status        String   @default("PENDING") // PENDING, PROCESSING, SUCCESS, FAILED
-  records_count Int      @default(0)
-  error_message String?
-  retry_count   Int      @default(0)
-  last_run_at   DateTime?
-  created_at    DateTime @default(now())
-  updated_at    DateTime @default(now()) @updatedAt
+  id                 Int       @id @default(autoincrement())
+  date               DateTime  @db.Date
+  branch_id          Int
+  branch_name        String?
+  type               String    @default("HEADER")
+  status             String    @default("PENDING")
+  records_count      Int       @default(0)
+  error_message      String?
+  retry_count        Int       @default(0)
+  last_run_at        DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @default(now()) @updatedAt
+  appointments_count Int       @default(0)
+  customers_count    Int       @default(0)
+  revenue_total      Float     @default(0)
+  sales_total        Float     @default(0)
+  services_count     Int       @default(0)
+  treatments_count   Int       @default(0)
+  total_details      Int       @default(0)
+  completed_details  Int       @default(0)
 
   @@unique([date, branch_id, type])
   @@map("sync_tasks")

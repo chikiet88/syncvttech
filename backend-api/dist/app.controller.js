@@ -67,6 +67,9 @@ let AppController = class AppController {
         this.syncService.stopSync();
         return { message: 'Đang gửi yêu cầu dừng đồng bộ...' };
     }
+    async resetQueue() {
+        return this.syncService.resetQueue();
+    }
     async triggerPbxSync(from, to, date) {
         const dateFrom = from || date || new Date().toISOString().split('T')[0];
         const dateTo = to || date || dateFrom;
@@ -116,17 +119,36 @@ let AppController = class AppController {
         };
     }
     async getTasksSummary() {
-        const summary = await this.prisma.syncTask.groupBy({
-            by: ['status'],
-            _count: { _all: true },
-        });
         const total = await this.prisma.syncTask.count();
         const success = await this.prisma.syncTask.count({ where: { status: 'SUCCESS' } });
+        const progress = total > 0 ? (success / total) * 100 : 0;
+        const details = await this.prisma.syncTask.groupBy({
+            by: ['status'],
+            _count: { _all: true }
+        });
+        const aggregates = await this.prisma.syncTask.aggregate({
+            _sum: {
+                customers_count: true,
+                appointments_count: true,
+                services_count: true,
+                treatments_count: true,
+                sales_total: true,
+                revenue_total: true,
+            }
+        });
         return {
             total,
             success,
-            progress: total > 0 ? (success / total) * 100 : 0,
-            details: summary
+            progress,
+            details,
+            stats: {
+                customers: aggregates._sum.customers_count || 0,
+                appointments: aggregates._sum.appointments_count || 0,
+                services: aggregates._sum.services_count || 0,
+                treatments: aggregates._sum.treatments_count || 0,
+                sales: aggregates._sum.sales_total || 0,
+                revenue: aggregates._sum.revenue_total || 0,
+            }
         };
     }
     async getBranches() {
@@ -178,6 +200,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], AppController.prototype, "stopSync", null);
+__decorate([
+    (0, common_1.Get)('sync/reset-queue'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "resetQueue", null);
 __decorate([
     (0, common_1.Get)('sync/pbx'),
     __param(0, (0, common_1.Query)('from')),

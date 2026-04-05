@@ -23,8 +23,26 @@ import { cn } from "@/lib/utils"
 function BranchReportContent() {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<BranchSummary[]>([])
-  const [dateFrom, setDateFrom] = useState(new Date().toISOString().split('T')[0])
-  const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0])
+  
+  // Cache dates in localStorage
+  const [dateFrom, setDateFrom] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('report_date_from') || new Date().toISOString().split('T')[0]
+    }
+    return new Date().toISOString().split('T')[0]
+  })
+  const [dateTo, setDateTo] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('report_date_to') || new Date().toISOString().split('T')[0]
+    }
+    return new Date().toISOString().split('T')[0]
+  })
+
+  // Sync state to localStorage on change
+  useEffect(() => {
+    localStorage.setItem('report_date_from', dateFrom)
+    localStorage.setItem('report_date_to', dateTo)
+  }, [dateFrom, dateTo])
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => {

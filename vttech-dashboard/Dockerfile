@@ -11,7 +11,7 @@ RUN bun install
 # Copy source
 COPY vttech-dashboard/ .
 
-# Inject Prisma Schema (since it's a symlink on host)
+# Inject Prisma Schema
 COPY backend-api/prisma/ ./prisma/
 
 # Generate Prisma Client

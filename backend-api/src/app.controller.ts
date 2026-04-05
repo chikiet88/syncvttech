@@ -77,6 +77,11 @@ export class AppController {
     return { message: 'Đang gửi yêu cầu dừng đồng bộ...' };
   }
 
+  @Get('sync/reset-queue')
+  async resetQueue() {
+    return this.syncService.resetQueue();
+  }
+
   @Get('sync/pbx')
   async triggerPbxSync(
     @Query('from') from?: string,
@@ -149,19 +154,49 @@ export class AppController {
 
   @Get('sync/tasks-summary')
   async getTasksSummary() {
-    const summary = await this.prisma.syncTask.groupBy({
-      by: ['status'],
-      _count: { _all: true },
-    });
-    
     const total = await this.prisma.syncTask.count();
     const success = await this.prisma.syncTask.count({ where: { status: 'SUCCESS' } });
+    const progress = total > 0 ? (success / total) * 100 : 0;
+    const details = await this.prisma.syncTask.groupBy({
+      by: ['status'],
+      _count: { _all: true }
+    });
     
-    return {
-      total,
-      success,
-      progress: total > 0 ? (success / total) * 100 : 0,
-      details: summary
+    // Aggregates for detailed metrics
+    const aggregates = await this.prisma.syncTask.aggregate({
+       _sum: {
+          customers_count: true,
+          appointments_count: true,
+          services_count: true,
+          treatments_count: true,
+          sales_total: true,
+          revenue_total: true,
+          total_details: true,
+          completed_details: true,
+       } as any
+    });
+
+    const sum = (aggregates as any)._sum;
+    return { 
+      total, 
+      success, 
+      progress, 
+      details,
+      detailProgress: {
+        total: sum.total_details || 0,
+        completed: sum.completed_details || 0,
+        percentage: (sum.total_details || 0) > 0 
+          ? ((sum.completed_details || 0) / (sum.total_details || 0)) * 100 
+          : 0
+      },
+      stats: {
+        customers: sum.customers_count || 0,
+        appointments: sum.appointments_count || 0,
+        services: sum.services_count || 0,
+        treatments: sum.treatments_count || 0,
+        sales: sum.sales_total || 0,
+        revenue: sum.revenue_total || 0,
+      }
     };
   }
 

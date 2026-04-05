@@ -10,6 +10,9 @@ export declare class SyncService implements OnModuleInit {
     private syncQueue;
     private readonly logger;
     private syncStatus;
+    private knownSourceIds;
+    private knownBranchIds;
+    private knownMembershipIds;
     constructor(vttechApi: VttechApiService, prisma: PrismaService, pbxSync: PbxSyncService, syncQueue: Queue);
     onModuleInit(): Promise<void>;
     getSyncStatus(): {
@@ -25,6 +28,9 @@ export declare class SyncService implements OnModuleInit {
         shouldStop: boolean;
     };
     stopSync(): void;
+    resetQueue(): Promise<{
+        success: boolean;
+    }>;
     private addLog;
     private ensureArray;
     private parseDate;
@@ -51,28 +57,39 @@ export declare class SyncService implements OnModuleInit {
     private syncCustomerTickets;
     private syncCustomerSms;
     getLogs(limit?: number): Promise<{
-        status: string;
+        status: string | null;
         error_message: string | null;
         created_at: Date;
         id: number;
-        crawl_date: Date;
-        crawl_type: string;
-        records_count: number;
-        total_branches: number;
-        total_customers: number;
-        total_payments: number;
-        total_treatments: number;
-        total_services: number;
+        task_id: string | null;
+        branch_id: number | null;
+        crawl_date: Date | null;
+        crawl_type: string | null;
+        message: string | null;
+        records_count: number | null;
+        customers_count: number;
+        services_count: number;
+        treatments_count: number;
+        appointments_count: number;
+        sales_total: number;
+        revenue_total: number;
         duration_seconds: number | null;
+        total_branches: number | null;
+        total_services: number | null;
+        total_customers: number | null;
     }[]>;
     private generateHash;
-    processQueuedCustomerDetail(customerId: number): Promise<{
+    processQueuedCustomerDetail(customerId: number, parentTaskId?: number): Promise<{
         payments: number;
         treatments: number;
         services: number;
+        appointments: number;
     }>;
     private sleep;
     private parseNumber;
+    private ensureBranchExists;
+    private ensureSourceExists;
+    private ensureMembershipExists;
     private mapRevenueItem;
     processQueuedRevenueDay(date: string, branchId: number): Promise<void>;
     seedSyncTasks(startDateStr: string, endDateStr: string): Promise<{

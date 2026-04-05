@@ -1,7 +1,7 @@
 FROM oven/bun:latest as base
 WORKDIR /app
 
-# Install dependencies
+# Copy package files
 COPY backend-api/package.json ./
 RUN bun install
 
@@ -9,13 +9,13 @@ RUN bun install
 COPY backend-api/ .
 
 # Generate Prisma Client
-RUN ./node_modules/.bin/prisma generate
+RUN bun prisma generate
 
 # Build the application
 RUN bun run build
 
-# Expose port (Internal 3001)
-EXPOSE 3001
+# Expose port (Internal 5001)
+EXPOSE 5001
 
 # Run the app
 CMD ["bun", "run", "start:prod"]

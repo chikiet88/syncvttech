@@ -15,7 +15,10 @@ import {
   TrendingUp,
   Search,
   Calendar,
-  Zap
+  Zap,
+  Trash2,
+  Hash,
+  Terminal
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -30,10 +33,23 @@ interface SyncSummary {
   total: number
   success: number
   progress: number
+  detailProgress?: {
+    total: number
+    completed: number
+    percentage: number
+  }
   details: {
     status: string
     _count: { _all: number }
   }[]
+  stats?: {
+    customers: number
+    appointments: number
+    services: number
+    treatments: number
+    sales: number
+    revenue: number
+  }
 }
 
 interface SyncLog {
@@ -50,25 +66,50 @@ interface SyncLog {
 export default function SyncMonitoringPage() {
   const [summary, setSummary] = useState<SyncSummary | null>(null)
   const [logs, setLogs] = useState<SyncLog[]>([])
+  const [realtimeLogs, setRealtimeLogs] = useState<string[]>([])
+  const [consoleTab, setConsoleTab] = useState<'tasks' | 'realtime'>('tasks')
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
-  const [dateFrom, setDateFrom] = useState('2019-01-01')
-  const [dateTo, setDateTo] = useState('2019-12-31')
+  
+  // Cache dates in localStorage
+  const [dateFrom, setDateFrom] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sync_date_from') || '2026-04-01'
+    }
+    return '2026-04-01'
+  })
+  const [dateTo, setDateTo] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sync_date_to') || '2026-04-05'
+    }
+    return '2026-04-05'
+  })
+
+  // Sync state to localStorage on change
+  useEffect(() => {
+    localStorage.setItem('sync_date_from', dateFrom)
+    localStorage.setItem('sync_date_to', dateTo)
+  }, [dateFrom, dateTo])
   
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
 
   const fetchData = async () => {
     try {
-      const [summaryRes, logsRes] = await Promise.all([
+      const [summaryRes, logsRes, statusRes] = await Promise.all([
         fetch(`${API_BASE}/sync/tasks-summary`),
-        fetch(`${API_BASE}/monitoring/logs?limit=50`)
+        fetch(`${API_BASE}/monitoring/logs?limit=50`),
+        fetch(`${API_BASE}/sync/status`)
       ])
       
       const summaryData = await summaryRes.json()
       const logsData = await logsRes.json()
+      const statusData = await statusRes.json()
       
       setSummary(summaryData)
       setLogs(logsData)
+      if (statusData && statusData.logs) {
+        setRealtimeLogs(statusData.logs)
+      }
     } catch (error) {
       console.error('Fetch error:', error)
       toast.error('Không thể kết nối với máy chủ API')
@@ -124,6 +165,26 @@ export default function SyncMonitoringPage() {
     }
   }
 
+  const handleResetQueue = async () => {
+    if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ hàng đợi và bắt đầu lại không? Thao tác này sẽ xóa sạch các task chưa xử lý.')) return
+    
+    setActionLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/sync/reset-queue`)
+      const data = await res.json()
+      if (data.success) {
+        toast.success('Đã xóa sạch hàng đợi thành công')
+        fetchData()
+      } else {
+        toast.error('Có lỗi xảy ra khi xóa hàng đợi')
+      }
+    } catch (error) {
+      toast.error('Lỗi kết nối khi xóa hàng đợi')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   const getStatusIcon = (status: string) => {
     switch (status.toUpperCase()) {
       case 'SUCCESS': return <div className="p-1 bg-emerald-100 rounded-lg"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /></div>
@@ -172,6 +233,15 @@ export default function SyncMonitoringPage() {
           >
             <Pause className="w-3 h-3 mr-1.5 fill-current" /> Dừng lại
           </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleResetQueue}
+            disabled={actionLoading}
+            className="h-8 rounded-lg px-4 font-bold border-rose-200 text-rose-600 hover:bg-rose-50 transition-all text-xs"
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Xóa hàng đợi
+          </Button>
         </div>
       </header>
 
@@ -179,9 +249,9 @@ export default function SyncMonitoringPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Tổng gói công việc', value: summary?.total, icon: Database, color: 'zinc', sub: 'Tổng số tasks' },
-          { label: 'Đã hoàn thành', value: summary?.success, icon: CheckCircle2, color: 'emerald', sub: 'Đồng bộ thành công' },
-          { label: 'Đang xử lý', value: (summary?.total || 0) - (summary?.success || 0), icon: Zap, color: 'blue', sub: 'Chờ hoặc đang chạy' },
-          { label: 'Hiệu suất tổng', value: `${summary?.progress.toFixed(1)}%`, icon: TrendingUp, color: 'indigo', sub: 'Tỷ lệ hoàn tất' }
+          { label: 'Đã hoàn thành', value: summary?.success, icon: CheckCircle2, color: 'emerald', sub: 'Đồng bộ xong chi tiết' },
+          { label: 'Đang xử lý', value: (summary?.total || 0) - (summary?.success || 0), icon: Zap, color: 'blue', sub: 'Đang chạy hoặc chờ' },
+          { label: 'Đồng bộ chi tiết', value: `${summary?.detailProgress?.completed || 0} / ${summary?.detailProgress?.total || 0}`, icon: RefreshCw, color: 'indigo', sub: `Tiến độ: ${summary?.detailProgress?.percentage.toFixed(1) || 0}%` }
         ].map((stat, i) => (
           <Card key={i} className="compact-card group hover:scale-[1.01] transition-all duration-300">
             <div className="flex items-start justify-between">
@@ -227,11 +297,33 @@ export default function SyncMonitoringPage() {
               <div className="relative">
                 <Progress value={summary?.progress} className="h-2.5 bg-zinc-100 rounded-full overflow-hidden border border-zinc-50">
                   <div 
-                    className="h-full bg-zinc-900 transition-all duration-1000 ease-out" 
+                    className={cn(
+                      "h-full transition-all duration-1000 ease-out",
+                      summary?.progress === 100 ? "bg-emerald-500" : "bg-zinc-900"
+                    )}
                     style={{ width: `${summary?.progress}%` }} 
                   />
                 </Progress>
               </div>
+
+              {summary?.detailProgress && summary.detailProgress.total > 0 && (
+                <div className="flex flex-col gap-2 p-4 bg-indigo-50/30 rounded-2xl border border-indigo-100/50">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-tight">Tiến độ chi tiết khách hàng</span>
+                    <span className="text-[11px] font-black text-indigo-700 tabular-nums">{summary.detailProgress.percentage.toFixed(1)}%</span>
+                  </div>
+                  <Progress value={summary.detailProgress.percentage} className="h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-indigo-600 transition-all duration-1000 ease-out" 
+                      style={{ width: `${summary.detailProgress.percentage}%` }} 
+                    />
+                  </Progress>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-tighter">Đã xử lý {summary.detailProgress.completed} / {summary.detailProgress.total}</span>
+                    <RefreshCw className={cn("w-2.5 h-2.5 text-indigo-400", summary.detailProgress.percentage < 100 && "animate-spin")} />
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-zinc-50/50 rounded-2xl border border-zinc-50">
                 {summary?.details.map((detail, idx) => (
@@ -284,65 +376,155 @@ export default function SyncMonitoringPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Detailed Statistics Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {[
+              { label: 'Khách hàng', value: summary?.stats?.customers, icon: Database, color: 'blue' },
+              { label: 'Dịch vụ', value: summary?.stats?.services, icon: LayoutGrid, color: 'purple' },
+              { label: 'Điều trị', value: summary?.stats?.treatments, icon: Activity, color: 'rose' },
+              { label: 'Lịch hẹn', value: summary?.stats?.appointments, icon: Calendar, color: 'amber' },
+              { label: 'Doanh số', value: summary?.stats?.sales?.toLocaleString('vi-VN') + ' đ', icon: TrendingUp, color: 'emerald' },
+              { label: 'Doanh thu', value: summary?.stats?.revenue?.toLocaleString('vi-VN') + ' đ', icon: CheckCircle2, color: 'indigo' },
+            ].map((s, i) => (
+              <Card key={i} className="border border-zinc-100 rounded-2xl bg-white p-3 shadow-sm hover:shadow-md transition-all group">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "p-2 rounded-xl group-hover:scale-110 transition-transform",
+                    s.color === 'blue' && "bg-blue-50 text-blue-600",
+                    s.color === 'purple' && "bg-purple-50 text-purple-600",
+                    s.color === 'rose' && "bg-rose-50 text-rose-600",
+                    s.color === 'amber' && "bg-amber-50 text-amber-600",
+                    s.color === 'emerald' && "bg-emerald-50 text-emerald-600",
+                    s.color === 'indigo' && "bg-indigo-50 text-indigo-600"
+                  )}>
+                    <s.icon className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-tighter truncate">{s.label}</span>
+                    <span className="text-xs font-black text-zinc-900 truncate tabular-nums">
+                      {s.value || 0}
+                    </span>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
         </div>
 
         {/* Console Log - Compact List */}
         <Card className="border border-zinc-100 rounded-[1.5rem] bg-zinc-900 overflow-hidden flex flex-col h-[600px] shadow-2xl shadow-black/5">
-          <CardHeader className="flex flex-row items-center justify-between shrink-0 bg-black/20 pb-4">
-            <div>
-              <CardTitle className="text-xs font-bold flex items-center gap-2 text-zinc-100 italic font-mono uppercase tracking-widest">
-                <History className="w-3 h-3 text-emerald-400" /> Operational Console
-              </CardTitle>
-              <CardDescription className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter mt-0.5">Streaming events from worker</CardDescription>
+          <CardHeader className="flex flex-col shrink-0 bg-black/20 pb-2 space-y-4">
+            <div className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-xs font-bold flex items-center gap-2 text-zinc-100 italic font-mono uppercase tracking-widest">
+                  <History className="w-3 h-3 text-emerald-400" /> Operational Console
+                </CardTitle>
+                <CardDescription className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter mt-0.5">Streaming events from worker</CardDescription>
+              </div>
+              <div className="flex items-center gap-1.5">
+                 <span className="text-[9px] font-bold text-emerald-500/80 uppercase">Live</span>
+                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-               <span className="text-[9px] font-bold text-emerald-500/80 uppercase">Live</span>
-               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+
+            <div className="flex p-0.5 bg-white/5 rounded-lg border border-white/5 mx-[-8px]">
+              <button 
+                onClick={() => setConsoleTab('tasks')}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold uppercase transition-all rounded-md px-4",
+                  consoleTab === 'tasks' ? "bg-white/10 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-300"
+                )}
+              >
+                <Hash className="w-3 h-3" /> Task Logs
+              </button>
+              <button 
+                onClick={() => setConsoleTab('realtime')}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold uppercase transition-all rounded-md px-4",
+                  consoleTab === 'realtime' ? "bg-white/10 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-300"
+                )}
+              >
+                <Terminal className="w-3 h-3" /> Real-time
+              </button>
             </div>
           </CardHeader>
           <CardContent className="flex-1 p-0 overflow-hidden bg-black/40">
             <ScrollArea className="h-full">
               <div className="flex flex-col p-4 font-mono">
-                {logs.length > 0 ? (
-                  logs.map((log) => (
-                    <div key={log.id} className="flex gap-3 group border-b border-white/5 py-3 last:border-none">
-                      <div className="shrink-0 pt-0.5">
-                        {getStatusIcon(log.status)}
-                      </div>
-                      <div className="flex flex-col gap-1 w-full min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className={cn(
-                            "text-[10px] font-black px-1.5 py-0.5 rounded-md",
-                            log.crawl_type === 'HEADER' ? "bg-blue-500/10 text-blue-400" : "bg-purple-500/10 text-purple-400"
-                          )}>
-                            {log.crawl_type}
-                          </span>
-                          <span className="text-[9px] font-bold text-zinc-600 tabular-nums">
-                            {new Date(log.created_at).toLocaleTimeString()}
-                          </span>
+                {consoleTab === 'tasks' ? (
+                  logs.length > 0 ? (
+                    logs.map((log) => (
+                      <div key={log.id} className="flex gap-3 group border-b border-white/5 py-3 last:border-none">
+                        <div className="shrink-0 pt-0.5">
+                          {getStatusIcon(log.status)}
                         </div>
-                        <div className="text-[11px] leading-relaxed text-zinc-300 font-medium break-words">
-                          {log.status === 'success' 
-                            ? `Dữ liệu ${log.crawl_date}: Đã nạp ${log.records_count} bản ghi thành công` 
-                            : log.error_message || 'Timeout hoặc lỗi không xác định'}
-                        </div>
-                        {log.duration_seconds && (
-                          <div className="flex items-center gap-2 mt-0.5">
-                             <div className="h-px flex-1 bg-white/5" />
-                             <span className="text-[9px] text-zinc-500 font-bold uppercase italic">Latency: {log.duration_seconds}s</span>
+                        <div className="flex flex-col gap-1 w-full min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={cn(
+                              "text-[10px] font-black px-1.5 py-0.5 rounded-md",
+                              log.crawl_type.includes('HEADER') ? "bg-blue-500/10 text-blue-400" : "bg-purple-500/10 text-purple-400"
+                            )}>
+                              {log.crawl_type}
+                            </span>
+                            <span className="text-[9px] font-bold text-zinc-600 tabular-nums">
+                              {new Date(log.created_at).toLocaleTimeString()}
+                            </span>
                           </div>
-                        )}
+                          <div className="text-[11px] leading-relaxed text-zinc-300 font-medium break-words">
+                            {log.status === 'success' 
+                              ? `Dữ liệu ${log.crawl_date}: Đã nạp ${log.records_count} bản ghi thành công` 
+                              : log.error_message || 'Timeout hoặc lỗi không xác định'}
+                          </div>
+                          {log.duration_seconds && (
+                            <div className="flex items-center gap-2 mt-0.5">
+                               <div className="h-px flex-1 bg-white/5" />
+                               <span className="text-[9px] text-zinc-500 font-bold uppercase italic">Latency: {log.duration_seconds}s</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-12 text-zinc-600">
+                      <History className="w-8 h-8 mb-4 opacity-20" />
+                      <p className="text-[10px] font-bold uppercase">Chưa có log đồng bộ</p>
                     </div>
-                  ))
+                  )
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-48 border border-white/5 rounded-2xl m-4 border-dashed">
-                    <Search className="w-5 h-5 text-zinc-700 mb-2" />
-                    <span className="font-bold text-[10px] text-zinc-600 uppercase tracking-widest">No logs detected</span>
+                  <div className="flex flex-col space-y-1.5">
+                    {realtimeLogs.length > 0 ? (
+                      [...realtimeLogs].reverse().map((log, i) => {
+                        const time = log.match(/\[(.*?)\]/)?.[1] || "";
+                        const message = log.replace(/\[.*?\]/, "").trim();
+                        const isError = message.includes('❌');
+                        const isSuccess = message.includes('✅');
+                        const isWarning = message.includes('⚠️');
+
+                        return (
+                          <div key={i} className="flex gap-2 text-[11px] leading-tight group">
+                            <span className="text-zinc-600 font-bold tabular-nums shrink-0">[{time}]</span>
+                            <span className={cn(
+                              "font-medium break-words",
+                              isError && "text-rose-400",
+                              isSuccess && "text-emerald-400",
+                              isWarning && "text-amber-400",
+                              (!isError && !isSuccess && !isWarning) && "text-zinc-300"
+                            )}>
+                              {message}
+                            </span>
+                          </div>
+                        )
+                      })
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-12 text-zinc-600">
+                        <Terminal className="w-8 h-8 mb-4 opacity-20" />
+                        <p className="text-[10px] font-bold uppercase">Đang chờ sự kiện hệ thống...</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-              <ScrollBar />
             </ScrollArea>
           </CardContent>
         </Card>

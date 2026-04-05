@@ -125,12 +125,12 @@ export class ReportController {
                 }));
                 total = transactions.length;
             }
-        } catch (e) {
-            this.logger.error(`Live Fetch Revenue Error: ${e.message}`);
+        } catch (error: any) {
+            this.logger.error(`Live Fetch Revenue Error: ${error.message}`);
         }
     }
 
-    const [services, branches, serviceGroups] = await Promise.all([
+    const [services, branches, groups] = await Promise.all([
       this.prisma.service.findMany({ select: { id: true, name: true, group_id: true } }),
       this.prisma.branch.findMany({ select: { id: true, name: true } }),
       this.prisma.serviceGroup.findMany({ select: { id: true, name: true } }),
@@ -138,7 +138,7 @@ export class ReportController {
 
     const serviceMap = new Map(services.map(s => [s.id, s]));
     const branchMap = new Map(branches.map(b => [b.id, b.name]));
-    const groupMap = new Map(serviceGroups.map(g => [g.id, g.name]));
+    const groupMap = new Map(groups.map(g => [g.id, g.name]));
 
     const customerIds = [...new Set(transactions.map((t: any) => t.customer_id).filter(Boolean))];
     const customers = await this.prisma.customer.findMany({
@@ -196,40 +196,32 @@ export class ReportController {
     });
 
     const summaries = await Promise.all(branches.map(async (branch) => {
-      const [
-        customerCount,
-        serviceCount,
-        treatmentCount,
-        appointmentCount,
-        revenueAgg
-      ] = await Promise.all([
-        (this.prisma as any).dailyCustomer.count({
-          where: { branch_id: branch.id, date: { gte: start, lte: end } }
-        }),
-        (this.prisma as any).revenueTransaction.count({
-          where: { branch_id: branch.id, date: { gte: start, lte: end }, service_id: { not: null } }
-        }),
-        this.prisma.treatment.count({
-          where: { branch_id: branch.id, treatment_date: { gte: start, lte: end } }
-        }),
-        this.prisma.appointment.count({
-          where: { branch_id: branch.id, appointment_date: { gte: start, lte: end } }
-        }),
-        (this.prisma as any).revenueTransaction.aggregate({
-          where: { branch_id: branch.id, date: { gte: start, lte: end } },
-          _sum: { amount: true, paid: true }
-        })
-      ]);
+      // Group by task for this branch and date range
+      const tasks = await this.prisma.syncTask.aggregate({
+        where: { 
+          branch_id: branch.id, 
+          date: { gte: start, lte: end },
+          status: { in: ['SUCCESS', 'PROCESSING'] }
+        },
+        _sum: {
+          customers_count: true,
+          services_count: true,
+          treatments_count: true,
+          appointments_count: true,
+          sales_total: true,
+          revenue_total: true
+        } as any
+      });
 
       return {
         id: branch.id,
         name: branch.name,
-        customerCount: customerCount || 0,
-        serviceCount: serviceCount || 0,
-        treatmentCount: treatmentCount || 0,
-        appointmentCount: appointmentCount || 0,
-        totalSales: revenueAgg._sum?.amount || 0,
-        totalRevenue: revenueAgg._sum?.paid || 0,
+        customerCount: (tasks._sum as any)?.customers_count || 0,
+        serviceCount: (tasks._sum as any)?.services_count || 0,
+        treatmentCount: (tasks._sum as any)?.treatments_count || 0,
+        appointmentCount: (tasks._sum as any)?.appointments_count || 0,
+        totalSales: (tasks._sum as any)?.sales_total || 0,
+        totalRevenue: (tasks._sum as any)?.revenue_total || 0,
       };
     }));
 

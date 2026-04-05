@@ -27,6 +27,9 @@ export declare class AppController {
     stopSync(): Promise<{
         message: string;
     }>;
+    resetQueue(): Promise<{
+        success: boolean;
+    }>;
     triggerPbxSync(from?: string, to?: string, date?: string): Promise<{
         message: string;
         status: string;
@@ -35,19 +38,26 @@ export declare class AppController {
         message: string;
     }>;
     getCrawlLogs(limit?: string): Promise<{
-        status: string;
+        status: string | null;
         error_message: string | null;
         created_at: Date;
         id: number;
-        crawl_date: Date;
-        crawl_type: string;
-        records_count: number;
-        total_branches: number;
-        total_customers: number;
-        total_payments: number;
-        total_treatments: number;
-        total_services: number;
+        task_id: string | null;
+        branch_id: number | null;
+        crawl_date: Date | null;
+        crawl_type: string | null;
+        message: string | null;
+        records_count: number | null;
+        customers_count: number;
+        services_count: number;
+        treatments_count: number;
+        appointments_count: number;
+        sales_total: number;
+        revenue_total: number;
         duration_seconds: number | null;
+        total_branches: number | null;
+        total_services: number | null;
+        total_customers: number | null;
     }[]>;
     getPbxLogs(limit?: string): Promise<{
         sync_type: string;
@@ -96,6 +106,14 @@ export declare class AppController {
                 _all: number;
             };
         })[];
+        stats: {
+            customers: number;
+            appointments: number;
+            services: number;
+            treatments: number;
+            sales: number;
+            revenue: number;
+        };
     }>;
     getBranches(): Promise<{
         created_at: Date;

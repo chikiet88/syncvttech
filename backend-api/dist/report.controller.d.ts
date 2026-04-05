@@ -19,8 +19,8 @@ export declare class ReportController {
         name: string;
         customerCount: any;
         serviceCount: any;
-        treatmentCount: number;
-        appointmentCount: number;
+        treatmentCount: any;
+        appointmentCount: any;
         totalSales: any;
         totalRevenue: any;
     }[]>;
@@ -39,17 +39,17 @@ export declare class ReportController {
             created_at: Date;
             id: number;
             branch_id: number | null;
+            branch_name: string | null;
             customer_id: number | null;
             customer_name: string | null;
-            branch_name: string | null;
             service_id: number | null;
             service_name: string | null;
+            amount: number;
+            paid: number;
             employee_id: number | null;
             employee_name: string | null;
             note: string | null;
-            amount: number;
             treatment_date: Date | null;
-            paid: number;
         }[];
         pagination: {
             total: number;
@@ -66,9 +66,9 @@ export declare class ReportController {
             id: number;
             phone: string | null;
             branch_id: number | null;
+            branch_name: string | null;
             customer_id: number | null;
             customer_name: string | null;
-            branch_name: string | null;
             service_id: number | null;
             service_name: string | null;
             employee_id: number | null;
