@@ -317,8 +317,12 @@ export class VttechApiService {
   async callHandler(page: string, handler: string, data: any) {
     await this.login();
     
-    // Luôn lấy token tươi cho trang đích trước khi POST handler
-    await this.getXsrfToken(page, true);
+    // Chỉ lấy token tươi nếu chưa có (không force refresh mỗi request)
+    // Nếu phải lấy, lấy từ trang chung (report/reportgeneral hoặc ListCustomer) 
+    // không lấy từ `page` vì `page` có thể yêu cầu CustomerID trong URL gây 302/500
+    if (!this.xsrfToken) {
+      await this.getXsrfToken('/Report/ReportGeneral/', false);
+    }
 
     const url = `${page}?handler=${handler}`;
     const formBody = this.buildFormBody(data, page);

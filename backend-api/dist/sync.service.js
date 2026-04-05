@@ -449,6 +449,8 @@ let SyncService = SyncService_1 = class SyncService {
                             appointments_count: appointmentCount,
                             sales_total: daySales,
                             revenue_total: dayRevenue,
+                            total_details: uniqueBranchIds.length,
+                            completed_details: 0,
                             updated_at: new Date(),
                         },
                     });
@@ -1464,16 +1466,24 @@ let SyncService = SyncService_1 = class SyncService {
         await this.syncCustomerSms(customerId, branchId);
         if (parentTaskId) {
             try {
-                await this.prisma.syncTask.update({
+                const updatedTask = (await this.prisma.syncTask.update({
                     where: { id: parentTaskId },
                     data: {
                         services_count: { increment: stats.services },
                         treatments_count: { increment: stats.treatments },
                         appointments_count: { increment: stats.appointments },
                         revenue_total: { increment: stats.payments },
+                        completed_details: { increment: 1 },
                         updated_at: new Date(),
                     }
-                });
+                }));
+                if (updatedTask.completed_details >= updatedTask.total_details && updatedTask.status === 'PROCESSING') {
+                    await this.prisma.syncTask.update({
+                        where: { id: parentTaskId },
+                        data: { status: 'SUCCESS' }
+                    });
+                    this.logger.log(`[TASK ${parentTaskId}] All ${updatedTask.total_details} detail syncs completed!`);
+                }
             }
             catch (e) {
                 this.logger.warn(`Failed to increment stats for task ${parentTaskId}: ${e.message}`);
@@ -1918,12 +1928,14 @@ let SyncService = SyncService_1 = class SyncService {
                 await this.prisma.syncTask.update({
                     where: { id: taskId },
                     data: {
-                        status: 'SUCCESS',
+                        status: allFoundCustomerIds.size > 0 ? 'PROCESSING' : 'SUCCESS',
                         records_count: totalRecords,
                         customers_count: allFoundCustomerIds.size,
                         appointments_count: appointmentsCount,
                         sales_total: daySales,
                         revenue_total: dayRevenue,
+                        total_details: allFoundCustomerIds.size,
+                        completed_details: 0,
                         error_message: null,
                         updated_at: new Date(),
                     }

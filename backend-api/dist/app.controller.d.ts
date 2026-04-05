@@ -106,13 +106,18 @@ export declare class AppController {
                 _all: number;
             };
         })[];
+        detailProgress: {
+            total: any;
+            completed: any;
+            percentage: number;
+        };
         stats: {
-            customers: number;
-            appointments: number;
-            services: number;
-            treatments: number;
-            sales: number;
-            revenue: number;
+            customers: any;
+            appointments: any;
+            services: any;
+            treatments: any;
+            sales: any;
+            revenue: any;
         };
     }>;
     getBranches(): Promise<{

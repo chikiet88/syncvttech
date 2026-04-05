@@ -134,20 +134,30 @@ let AppController = class AppController {
                 treatments_count: true,
                 sales_total: true,
                 revenue_total: true,
+                total_details: true,
+                completed_details: true,
             }
         });
+        const sum = aggregates._sum;
         return {
             total,
             success,
             progress,
             details,
+            detailProgress: {
+                total: sum.total_details || 0,
+                completed: sum.completed_details || 0,
+                percentage: (sum.total_details || 0) > 0
+                    ? ((sum.completed_details || 0) / (sum.total_details || 0)) * 100
+                    : 0
+            },
             stats: {
-                customers: aggregates._sum.customers_count || 0,
-                appointments: aggregates._sum.appointments_count || 0,
-                services: aggregates._sum.services_count || 0,
-                treatments: aggregates._sum.treatments_count || 0,
-                sales: aggregates._sum.sales_total || 0,
-                revenue: aggregates._sum.revenue_total || 0,
+                customers: sum.customers_count || 0,
+                appointments: sum.appointments_count || 0,
+                services: sum.services_count || 0,
+                treatments: sum.treatments_count || 0,
+                sales: sum.sales_total || 0,
+                revenue: sum.revenue_total || 0,
             }
         };
     }

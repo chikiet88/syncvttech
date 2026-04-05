@@ -339,7 +339,9 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
     }
     async callHandler(page, handler, data) {
         await this.login();
-        await this.getXsrfToken(page, true);
+        if (!this.xsrfToken) {
+            await this.getXsrfToken('/Report/ReportGeneral/', false);
+        }
         const url = `${page}?handler=${handler}`;
         const formBody = this.buildFormBody(data, page);
         const response = await this.axiosInstance.post(url, formBody, {
