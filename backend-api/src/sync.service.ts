@@ -552,7 +552,7 @@ export class SyncService implements OnModuleInit {
 
       sessionStats.customers = syncedIdsInSession.size;
 
-      await (this.prisma.crawlLog as any).create({
+      await this.prisma.crawlLog.create({
         data: {
           crawl_date: this.parseDate(dateFrom) as Date,
           crawl_type: 'full_range_sync',
@@ -574,7 +574,7 @@ export class SyncService implements OnModuleInit {
       this.syncStatus.message = 'Lỗi đồng bộ!';
       this.addLog(`❌ Lỗi: ${error.message}`);
       
-      await (this.prisma.crawlLog as any).create({
+      await this.prisma.crawlLog.create({
         data: {
           crawl_date: this.parseDate(dateFrom) as Date,
           crawl_type: 'full_range_sync',

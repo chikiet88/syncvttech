@@ -58,6 +58,8 @@ export declare class AppController {
         total_branches: number | null;
         total_services: number | null;
         total_customers: number | null;
+        total_payments: number | null;
+        total_treatments: number | null;
     }[]>;
     getPbxLogs(limit?: string): Promise<{
         sync_type: string;

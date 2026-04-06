@@ -31,7 +31,7 @@ interface SyncStatus {
     shouldStop: boolean
 }
 
-export function CrawlLogActions() {
+export function CrawlLogActions({ hideSyncButtons = false }: { hideSyncButtons?: boolean }) {
     const [isOpen, setIsOpen] = useState(false)
     const [status, setStatus] = useState<SyncStatus | null>(null)
     const [isStarting, setIsStarting] = useState(false)
@@ -210,22 +210,26 @@ export function CrawlLogActions() {
                     <ShieldCheck className="w-4 h-4 text-indigo-500" />
                     Check Login
                 </Button>
-                <Button
-                    className="rounded-xl gap-2 font-bold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20"
-                    onClick={handleOpenDialog}
-                    disabled={isStarting}
-                >
-                    {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                    {status?.isSyncing ? "Đang Đồng bộ..." : "Đồng bộ Doanh thu"}
-                </Button>
-                <Button
-                    className="rounded-xl gap-2 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20"
-                    onClick={handleOpenDialog}
-                    disabled={isStarting}
-                >
-                    {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                    {status?.isSyncing ? "Đang Đồng bộ..." : "Đồng bộ Ngay"}
-                </Button>
+                {!hideSyncButtons && (
+                    <>
+                        <Button
+                            className="rounded-xl gap-2 font-bold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20"
+                            onClick={handleOpenDialog}
+                            disabled={isStarting}
+                        >
+                            {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                            {status?.isSyncing ? "Đang Đồng bộ..." : "Đồng bộ Doanh thu"}
+                        </Button>
+                        <Button
+                            className="rounded-xl gap-2 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20"
+                            onClick={handleOpenDialog}
+                            disabled={isStarting}
+                        >
+                            {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                            {status?.isSyncing ? "Đang Đồng bộ..." : "Đồng bộ Ngay"}
+                        </Button>
+                    </>
+                )}
             </div>
 
             {/* Login Test Dialog */}

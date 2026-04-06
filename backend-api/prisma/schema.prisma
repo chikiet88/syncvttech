@@ -357,6 +357,8 @@ model CrawlLog {
   total_branches     Int?      @default(0)
   total_services     Int?      @default(0)
   total_customers    Int?      @default(0)
+  total_payments     Int?      @default(0)
+  total_treatments   Int?      @default(0)
   error_message      String?
 
   @@map("crawl_logs")
