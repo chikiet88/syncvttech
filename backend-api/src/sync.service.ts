@@ -145,14 +145,16 @@ export class SyncService implements OnModuleInit {
     const s = String(dateValue).trim();
     if (!s) return null;
 
-    // Handle DD/MM/YYYY
-    const ddmmyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/;
+    // Handle DD/MM/YYYY or DD-MM-YYYY
+    const ddmmyyyy = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/;
     const match = s.match(ddmmyyyy);
     if (match) {
       const d = parseInt(match[1]);
       const m = parseInt(match[2]);
       const y = parseInt(match[3]);
-      // Use noon to avoid timezone shift issues
+      
+      // If there's time, preserve it as much as possible or stick to 12:00
+      // For VTTech, we mostly care about the day
       const date = new Date(y, m - 1, d, 12, 0, 0);
       return isNaN(date.getTime()) ? null : date;
     }
@@ -168,8 +170,14 @@ export class SyncService implements OnModuleInit {
       return isNaN(date.getTime()) ? null : date;
     }
     
+    // Last resort
     const d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
+    if (!isNaN(d.getTime())) {
+       // Normalize to noon to avoid TZ issues
+       d.setHours(12, 0, 0, 0);
+       return d;
+    }
+    return null;
   }
 
   private formatDate(date: any): string {
@@ -195,6 +203,22 @@ export class SyncService implements OnModuleInit {
     yesterday.setDate(yesterday.getDate() - 1);
     const dateStr = yesterday.toISOString().split('T')[0];
     await this.syncByRange(dateStr, dateStr);
+  }
+
+  @Cron('0 */20 * * * *')
+  async handleFrequentSync() {
+    const today = new Date().toISOString().split('T')[0];
+    this.logger.log(`[CRON] Bắt đầu đồng bộ định kỳ 20p cho ngày ${today}`);
+    // Sync current day without PBX but with detail workers
+    try {
+      if (this.syncStatus.isSyncing) {
+        this.addLog('⏩ Đồng bộ định kỳ 20p bỏ qua do hệ thống đang bận.');
+        return;
+      }
+      await this.syncByRange(today, today, false, false, true);
+    } catch (e) {
+      this.logger.error(`Lỗi đồng bộ 20p: ${e.message}`);
+    }
   }
 
   async syncRevenue(dateFrom: string, dateTo: string) {
@@ -439,7 +463,7 @@ export class SyncService implements OnModuleInit {
           let daySales = 0;
           let dayRevenue = 0;
           try {
-            const res = await this.vttechApi.getRevenueByBranch(this.formatDate(dateStr), this.formatDate(dateStr), branch.id);
+            const res = await this.vttechApi.getRevenueByBranch(dateStr, dateStr, branch.id);
             const revItems = this.ensureArray(res);
             for (const item of revItems) {
               const mapped = this.mapRevenueItem(item, branch.id);
@@ -476,38 +500,34 @@ export class SyncService implements OnModuleInit {
             } as any,
           });
 
-          // 4. Đồng bộ chi tiết cho các khách hàng
+          // 4. Đồng bộ chi tiết cho các khách hàng (Sử dụng BullMQ để chạy SONG SONG)
           if (syncDetails && uniqueBranchIds.length > 0) {
-            const oldMsg = this.syncStatus.message;
-            let detailedStep = 0;
+            this.addLog(`  🚀 [${branch.name}] Đang đẩy ${uniqueBranchIds.length} khách hàng vào Worker để đồng bộ chi tiết...`);
+            
             for (const customerId of uniqueBranchIds) {
               if (this.syncStatus.shouldStop) break;
-              detailedStep++;
-              if (detailedStep % 5 === 0) {
-                this.syncStatus.message = `[${dateStr}] ${branch.name}: Sync chi tiết (${detailedStep}/${uniqueBranchIds.length})`;
-              }
-              try {
-                // Pass task.id to syncSingleCustomerDetail to update report counts in real-time
-                const stats = await this.syncSingleCustomerDetail(customerId, task.id);
-                sessionStats.payments += stats.payments;
-                sessionStats.treatments += stats.treatments;
-                sessionStats.services += stats.services;
-                syncedIdsInSession.add(customerId);
-              } catch (e) {
-                this.addLog(`  ❌ [ID: ${customerId}] Lỗi FULL sync: ${e.message}`);
-              }
-              await new Promise(resolve => setTimeout(resolve, 100));
+              
+              await this.syncQueue.add('sync-job', {
+                type: 'sync-customer-detail',
+                data: { customerId: customerId, parentTaskId: task.id }
+              }, {
+                jobId: `detail-${customerId}-${task.id}`,
+                removeOnComplete: true,
+                attempts: 3,
+                priority: 5,
+                backoff: { type: 'exponential', delay: 10000 },
+              });
             }
-            this.syncStatus.message = oldMsg;
+            this.addLog(`  ✅ Đã đẩy xong Jobs cho ${branch.name}. Chi tiết sẽ được cập nhật bởi các Worker.`);
           }
 
-          // Đánh dấu Task hoàn thành
+          // Đánh dấu Task HEADER hoàn thành (Phần chi tiết sẽ do Worker tự cập nhật vào Task)
           await this.prisma.syncTask.update({
             where: { id: task.id },
-            data: { status: 'SUCCESS', updated_at: new Date() },
+            data: { status: 'PROCESSING', updated_at: new Date() },
           });
         }
-        this.addLog(`✅ Hoàn thành đồng bộ dữ liệu cho ngày: ${dateStr}`);
+        this.addLog(`✅ Đã lập lịch đồng bộ toàn bộ dữ liệu cho ngày: ${dateStr}`);
       }
 
       if (this.syncStatus.shouldStop) {
@@ -607,8 +627,8 @@ export class SyncService implements OnModuleInit {
       let res: any = null;
       try {
         res = await this.vttechApi.callHandler('/Customer/ListCustomer/', 'LoadData', {
-          dateFrom: `${this.formatDate(dateFrom)} 00:00:00`,
-          dateTo: `${this.formatDate(dateTo)} 23:59:59`,
+          dateFrom: dateFrom,
+          dateTo: dateTo,
           branchID: branchId.toString(),
           type: type,
           BeginID: 0,
@@ -833,26 +853,29 @@ export class SyncService implements OnModuleInit {
       return;
     }
 
-    this.addLog(`🔍 Đang đồng bộ chi tiết cho ${customers.length} khách hàng...`);
+    this.addLog(`🔍 Đang đẩy ${customers.length} khách hàng vào hàng đợi đồng bộ chi tiết...`);
     
     for (let i = 0; i < customers.length; i++) {
-      if (this.syncStatus.shouldStop) {
-        this.addLog('🛑 Đã dừng đồng bộ chi tiết khách hàng theo yêu cầu.');
-        break;
-      }
-      const customer = customers[i];
-      if (i % 20 === 0) {
-        this.syncStatus.message = `Đang đồng bộ chi tiết: ${i}/${customers.length} khách hàng`;
-      }
-      try {
-        await this.syncSingleCustomerDetail(customer.id);
-        // Delay 100ms giữa mỗi khách hàng để tránh quá tải API
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (e) {
-        this.logger.error(`Error syncing detail for customer ${customer.id}: ${e.message}`);
-      }
+        if (this.syncStatus.shouldStop) {
+            this.addLog('🛑 Đã dừng đồng bộ chi tiết khách hàng theo yêu cầu.');
+            break;
+        }
+        const customer = customers[i];
+        
+        try {
+            await this.syncQueue.add('sync-job', {
+                type: 'sync-customer-detail',
+                data: { customerId: customer.id }
+            }, {
+                jobId: `manual-detail-${customer.id}-${Date.now()}`,
+                removeOnComplete: true,
+                attempts: 3,
+            });
+        } catch (e) {
+            this.logger.error(`Error queuing detail for customer ${customer.id}: ${e.message}`);
+        }
     }
-    this.addLog('✅ Hoàn thành đồng bộ chi tiết khách hàng');
+    this.addLog('✅ Hoàn thành đẩy dữ liệu vào hàng đợi. Các Worker sẽ xử lý song song.');
   }
 
   private async syncMasterData(force: boolean = false): Promise<{ branches: number, services: number }> {
@@ -1430,10 +1453,10 @@ export class SyncService implements OnModuleInit {
           const sId = parseInt(s.ID || s.id);
           if (!sId) continue;
           
-          const price = this.parseNumber(s.Price);
+          const price = this.parseNumber(s.Price || s.Price_Root || 0);
           const qty = parseInt(s.Quantity) || 1;
-          const total = this.parseNumber(s.Total);
-          const discount = this.parseNumber(s.Discount);
+          const total = this.parseNumber(s.Total || s.TotalPaid || s.Amount || 0);
+          const discount = this.parseNumber(s.Discount || s.Discount_Amount || 0);
 
           await this.prisma.customerServiceTab.upsert({
             where: { customer_id_service_id: { customer_id: customerId, service_id: sId } },
@@ -1444,7 +1467,7 @@ export class SyncService implements OnModuleInit {
               discount: discount,
               total: total, 
               branch_id: branchId || parseInt(s.BranchID) || null,
-              created_at: this.parseDate(s.Date),
+              created_at: this.parseDate(s.Created || s.Date),
               status: s.StatusName || '' 
             },
             create: { 
@@ -1456,7 +1479,7 @@ export class SyncService implements OnModuleInit {
               discount: discount,
               total: total, 
               branch_id: branchId || parseInt(s.BranchID) || null,
-              created_at: this.parseDate(s.Date),
+              created_at: this.parseDate(s.Created || s.Date),
               status: s.StatusName || '' 
             }
           });
@@ -2025,7 +2048,7 @@ export class SyncService implements OnModuleInit {
         let daySales = 0;
         let dayRevenue = 0;
         try {
-          const res = await this.vttechApi.getRevenueByBranch(this.formatDate(dateStr), this.formatDate(dateStr), task.branch_id);
+          const res = await this.vttechApi.getRevenueByBranch(dateStr, dateStr, task.branch_id);
           const revItems = this.ensureArray(res);
           for (const item of revItems) {
             const mapped = this.mapRevenueItem(item, task.branch_id);

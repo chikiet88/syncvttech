@@ -19,6 +19,24 @@ import {
 import { CrawlLogActions } from "@/components/CrawlLogActions"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { 
+  Badge 
+} from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Users as UsersIcon,
+  Scissors as ScissorsIcon,
+  Activity as ActivityIcon,
+  CalendarCheck as CalendarCheckIcon,
+  DollarSign as DollarSignIcon,
+  Wallet as WalletIcon
+} from "lucide-react"
 
 function BranchReportContent() {
   const [loading, setLoading] = useState(false)
@@ -37,12 +55,38 @@ function BranchReportContent() {
     }
     return new Date().toISOString().split('T')[0]
   })
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("all")
+  const [selectedMonth, setSelectedMonth] = useState<string>("none")
 
   // Sync state to localStorage on change
   useEffect(() => {
     localStorage.setItem('report_date_from', dateFrom)
     localStorage.setItem('report_date_to', dateTo)
   }, [dateFrom, dateTo])
+
+  // Helper: Get quick date range
+  const setQuickRange = (days: number) => {
+    const end = new Date()
+    const start = new Date()
+    start.setDate(end.getDate() - days + 1)
+    
+    setDateFrom(start.toISOString().split('T')[0])
+    setDateTo(end.toISOString().split('T')[0])
+    setSelectedMonth("none")
+  }
+
+  // Helper: Set Month range
+  const setMonthRange = (monthValue: string) => {
+    if (monthValue === "none") return
+    
+    const [year, month] = monthValue.split('-').map(Number)
+    const start = new Date(year, month - 1, 1, 12)
+    const end = new Date(year, month, 0, 12) // Last day of month
+    
+    setDateFrom(start.toISOString().split('T')[0])
+    setDateTo(end.toISOString().split('T')[0])
+    setSelectedMonth(monthValue)
+  }
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
@@ -101,32 +145,109 @@ function BranchReportContent() {
         </div>
         
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-zinc-100/50 p-1 rounded-lg border border-zinc-100">
-             <div className="flex items-center gap-1.5 px-3">
-                <CalendarIcon className="w-3.5 h-3.5 text-zinc-400" />
-                <span className="text-xs font-bold text-zinc-600 tabular-nums">{dateFrom}</span>
-                <span className="text-zinc-300 mx-1">→</span>
-                <span className="text-xs font-bold text-zinc-600 tabular-nums">{dateTo}</span>
-             </div>
-          </div>
-          <Button variant="outline" size="sm" className="h-8 rounded-lg border-zinc-200 text-xs font-bold hover:bg-zinc-50">
-            <Download className="w-3.5 h-3.5 mr-1.5" /> Xuất dữ liệu
-          </Button>
         </div>
       </header>
 
-      {/* Filter Section - Zinc Style */}
+      {/* Summary Cards - Compact Row */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-1">
+        {[
+          { label: "Khách hàng", value: data.reduce((acc, curr) => acc + curr.customerCount, 0), icon: UsersIcon, color: "text-emerald-600", bg: "bg-emerald-50/50" },
+          { label: "Dịch vụ", value: data.reduce((acc, curr) => acc + curr.serviceCount, 0), icon: ScissorsIcon, color: "text-blue-600", bg: "bg-blue-50/50" },
+          { label: "Điều trị", value: data.reduce((acc, curr) => acc + curr.treatmentCount, 0), icon: ActivityIcon, color: "text-amber-600", bg: "bg-amber-50/50" },
+          { label: "Lịch hẹn", value: data.reduce((acc, curr) => acc + curr.appointmentCount, 0), icon: CalendarCheckIcon, color: "text-purple-600", bg: "bg-purple-50/50" },
+          { label: "Doanh số", value: data.reduce((acc, curr) => acc + curr.totalSales, 0), icon: DollarSignIcon, color: "text-slate-600", bg: "bg-slate-50/50", type: "currency" },
+          { label: "Doanh thu", value: data.reduce((acc, curr) => acc + curr.totalRevenue, 0), icon: WalletIcon, color: "text-white", bg: "bg-indigo-600 shadow-indigo-200", type: "currency" },
+        ].map((stat, i) => (
+          <div key={i} className={cn("border border-zinc-100 rounded-xl overflow-hidden p-2.5 flex flex-col gap-0.5 group hover:shadow-sm transition-all", stat.bg)}>
+            <div className="flex items-center justify-between opacity-70">
+              <span className={cn("text-[9px] font-bold uppercase tracking-wider", stat.color, stat.type === "currency" ? "opacity-100" : "text-zinc-500")}>{stat.label}</span>
+              <stat.icon className={cn("w-3 h-3 transition-transform group-hover:scale-110", stat.color)} />
+            </div>
+            <div className={cn("text-[13px] font-black tabular-nums tracking-tight", stat.color)}>
+              {stat.type === "currency" 
+                ? new Intl.NumberFormat('vi-VN').format(stat.value) + 'đ'
+                : stat.value.toLocaleString()}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter Section - Advanced Style */}
       <Card className="border border-zinc-100 bg-white shadow-sm rounded-xl overflow-hidden">
-        <CardContent className="p-4">
+        <CardContent className="p-4 flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-zinc-50">
+             <span className="text-[10px] font-bold uppercase text-zinc-400 mr-2">Chọn nhanh:</span>
+             <Badge 
+              variant="outline" 
+              className={cn("cursor-pointer h-7 px-3 rounded-md border-zinc-200 text-xs font-bold hover:bg-zinc-100", (dateFrom === new Date().toISOString().split('T')[0]) && "bg-zinc-900 text-white hover:bg-black border-zinc-900")}
+              onClick={() => setQuickRange(1)}
+             >Hôm nay</Badge>
+             <Badge 
+              variant="outline" 
+              className="cursor-pointer h-7 px-3 rounded-md border-zinc-200 text-xs font-bold hover:bg-zinc-100"
+              onClick={() => {
+                const y = new Date()
+                y.setDate(y.getDate() - 1)
+                const yStr = y.toISOString().split('T')[0]
+                setDateFrom(yStr)
+                setDateTo(yStr)
+                setSelectedMonth("none")
+              }}
+             >Hôm qua</Badge>
+             <Badge 
+              variant="outline" 
+              className="cursor-pointer h-7 px-3 rounded-md border-zinc-200 text-xs font-bold hover:bg-zinc-100"
+              onClick={() => setQuickRange(7)}
+             >7 Ngày qua</Badge>
+             <Badge 
+              variant="outline" 
+              className="cursor-pointer h-7 px-3 rounded-md border-zinc-200 text-xs font-bold hover:bg-zinc-100"
+              onClick={() => setQuickRange(30)}
+             >30 Ngày qua</Badge>
+             
+             <div className="ml-auto flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase text-zinc-400">Chọn chi nhánh:</span>
+                <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+                  <SelectTrigger className="h-8 w-[200px] text-[11px] font-bold border-zinc-200 rounded-lg">
+                    <SelectValue placeholder="Tất cả chi nhánh" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-[11px] font-bold">💎 Tất cả chi nhánh</SelectItem>
+                    {data.sort((a,b) => a.id - b.id).map(b => (
+                      <SelectItem key={b.id} value={String(b.id)} className="text-[11px] font-bold">{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+             </div>
+          </div>
+
           <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-            <div className="grid grid-cols-2 gap-4 flex-1">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 flex-1">
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase text-zinc-400 ml-1">Chọn Tháng</Label>
+                <Select value={selectedMonth} onValueChange={setMonthRange}>
+                  <SelectTrigger className="rounded-lg border-zinc-200 h-9 text-xs font-bold bg-zinc-50/30">
+                    <SelectValue placeholder="Chọn tháng..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- Chọn tháng --</SelectItem>
+                    {Array.from({ length: 12 }, (_, i) => {
+                       const d = new Date()
+                       d.setMonth(d.getMonth() - i)
+                       const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                       const label = `Tháng ${d.getMonth() + 1} / ${d.getFullYear()}`
+                       return <SelectItem key={val} value={val}>{label}</SelectItem>
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-1.5">
                 <Label className="text-[10px] font-bold uppercase text-zinc-400 ml-1">Từ ngày</Label>
                 <div className="relative">
                   <Input
                     type="date"
                     value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
+                    onChange={(e) => { setDateFrom(e.target.value); setSelectedMonth("none"); }}
                     className="rounded-lg border-zinc-200 h-9 text-xs font-bold bg-zinc-50/30 focus-visible:ring-zinc-900"
                   />
                 </div>
@@ -137,7 +258,7 @@ function BranchReportContent() {
                   <Input
                     type="date"
                     value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
+                    onChange={(e) => { setDateTo(e.target.value); setSelectedMonth("none"); }}
                     className="rounded-lg border-zinc-200 h-9 text-xs font-bold bg-zinc-50/30 focus-visible:ring-zinc-900"
                   />
                 </div>
@@ -183,9 +304,9 @@ function BranchReportContent() {
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-700">
               <AdvancedTable 
                 columns={columns} 
-                data={data} 
+                data={selectedBranchId === "all" ? data : data.filter(b => String(b.id) === selectedBranchId)} 
                 onRefresh={handleSearch}
-                height="calc(100vh - 350px)"
+                height="calc(100vh - 430px)"
               />
             </div>
           )}

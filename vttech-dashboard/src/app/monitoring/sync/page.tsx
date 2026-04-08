@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { 
   Activity, 
   Database, 
@@ -18,16 +18,22 @@ import {
   Zap,
   Trash2,
   Hash,
-  Terminal
+  Terminal,
+  Settings2,
+  ListFilter,
+  BarChart3,
+  ArrowRight
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface SyncSummary {
   total: number
@@ -67,9 +73,9 @@ export default function SyncMonitoringPage() {
   const [summary, setSummary] = useState<SyncSummary | null>(null)
   const [logs, setLogs] = useState<SyncLog[]>([])
   const [realtimeLogs, setRealtimeLogs] = useState<string[]>([])
-  const [consoleTab, setConsoleTab] = useState<'tasks' | 'realtime'>('tasks')
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState('overview')
   
   // Cache dates in localStorage
   const [dateFrom, setDateFrom] = useState(() => {
@@ -85,7 +91,6 @@ export default function SyncMonitoringPage() {
     return '2026-04-05'
   })
 
-  // Sync state to localStorage on change
   useEffect(() => {
     localStorage.setItem('sync_date_from', dateFrom)
     localStorage.setItem('sync_date_to', dateTo)
@@ -112,7 +117,7 @@ export default function SyncMonitoringPage() {
       }
     } catch (error) {
       console.error('Fetch error:', error)
-      toast.error('Không thể kết nối với máy chủ API')
+      // Only toast on manual refresh or initial load to avoid clutter
     } finally {
       setLoading(false)
     }
@@ -124,62 +129,15 @@ export default function SyncMonitoringPage() {
     return () => clearInterval(interval)
   }, [])
 
-  const handleSeed = async () => {
+  const handleAction = async (endpoint: string, successMsg: string, errorMsg: string) => {
     setActionLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/sync/seed-tasks?from=${dateFrom}&to=${dateTo}`)
+      const res = await fetch(`${API_BASE}${endpoint}`)
       const data = await res.json()
-      toast.success(data.message || 'Đã khởi tạo task thành công')
+      toast.success(data.message || successMsg)
       fetchData()
     } catch (error) {
-      toast.error('Lỗi khi khởi tạo task')
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const handleStart = async () => {
-    setActionLoading(true)
-    try {
-      const res = await fetch(`${API_BASE}/sync/start-tasks?limit=500`)
-      const data = await res.json()
-      toast.success(data.message || 'Đã bắt đầu tiến trình đồng bộ')
-      fetchData()
-    } catch (error) {
-      toast.error('Lỗi khi bắt đầu tiến trình')
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const handleStop = async () => {
-    setActionLoading(true)
-    try {
-      const res = await fetch(`${API_BASE}/sync/stop`)
-      const data = await res.json()
-      toast.success(data.message || 'Đã gửi lệnh dừng đồng bộ')
-    } catch (error) {
-      toast.error('Lỗi khi dừng đồng bộ')
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const handleResetQueue = async () => {
-    if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ hàng đợi và bắt đầu lại không? Thao tác này sẽ xóa sạch các task chưa xử lý.')) return
-    
-    setActionLoading(true)
-    try {
-      const res = await fetch(`${API_BASE}/sync/reset-queue`)
-      const data = await res.json()
-      if (data.success) {
-        toast.success('Đã xóa sạch hàng đợi thành công')
-        fetchData()
-      } else {
-        toast.error('Có lỗi xảy ra khi xóa hàng đợi')
-      }
-    } catch (error) {
-      toast.error('Lỗi kết nối khi xóa hàng đợi')
+      toast.error(errorMsg)
     } finally {
       setActionLoading(false)
     }
@@ -187,347 +145,292 @@ export default function SyncMonitoringPage() {
 
   const getStatusIcon = (status: string) => {
     switch (status.toUpperCase()) {
-      case 'SUCCESS': return <div className="p-1 bg-emerald-100 rounded-lg"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /></div>
-      case 'FAILED': return <div className="p-1 bg-rose-100 rounded-lg"><AlertCircle className="w-3.5 h-3.5 text-rose-600" /></div>
-      case 'PROCESSING': return <div className="p-1 bg-blue-100 rounded-lg"><RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin" /></div>
-      default: return <div className="p-1 bg-zinc-100 rounded-lg"><Clock className="w-3.5 h-3.5 text-zinc-500" /></div>
+      case 'SUCCESS': return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+      case 'FAILED': return <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+      case 'PROCESSING': return <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />
+      default: return <Clock className="w-3.5 h-3.5 text-zinc-400" />
     }
   }
 
+  const stats = useMemo(() => [
+    { label: 'Khách hàng', value: summary?.stats?.customers, icon: Database, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'Dịch vụ', value: summary?.stats?.services, icon: LayoutGrid, color: 'text-purple-600', bg: 'bg-purple-50' },
+    { label: 'Điều trị', value: summary?.stats?.treatments, icon: Activity, color: 'text-rose-600', bg: 'bg-rose-50' },
+    { label: 'Lịch hẹn', value: summary?.stats?.appointments, icon: Calendar, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Doanh thu', value: summary?.stats?.revenue?.toLocaleString('vi-VN') + ' đ', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  ], [summary])
+
   return (
-    <div className="flex flex-col gap-4 p-4 lg:p-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
-      {/* Page Header - Compact Style */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-1.5 text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
-            <Activity className="w-3 h-3 text-zinc-900" />
-            Vận hành hệ thống
-          </div>
-          <h1 className="text-xl font-bold tracking-tight text-zinc-900">Giám sát đồng bộ <span className="text-zinc-400 font-medium">Real-time</span></h1>
-          <p className="text-xs text-zinc-400 font-medium italic">Tự động cập nhật sau mỗi 5 giây</p>
-        </div>
+    <div className="min-h-screen bg-[#fafafa] p-4 lg:p-8 font-sans selection:bg-zinc-200">
+      <div className="max-w-[1400px] mx-auto space-y-8">
         
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={fetchData} 
-            disabled={loading}
-            className="h-8 rounded-lg border-zinc-200 hover:bg-zinc-50 font-bold transition-all text-xs"
-          >
-            <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", loading && "animate-spin")} /> Làm mới
-          </Button>
-          <Button 
-            size="sm"
-            onClick={handleStart} 
-            disabled={actionLoading}
-            className="h-8 bg-zinc-900 hover:bg-black text-zinc-50 rounded-lg px-4 font-bold shadow-sm transition-all border-none text-xs"
-          >
-            <Play className="w-3 h-3 mr-1.5 fill-current" /> Bắt đầu
-          </Button>
-          <Button 
-            variant="destructive" 
-            size="sm"
-            onClick={handleStop}
-            className="h-8 rounded-lg px-4 font-bold shadow-sm transition-all border-none text-xs"
-          >
-            <Pause className="w-3 h-3 mr-1.5 fill-current" /> Dừng lại
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleResetQueue}
-            disabled={actionLoading}
-            className="h-8 rounded-lg px-4 font-bold border-rose-200 text-rose-600 hover:bg-rose-50 transition-all text-xs"
-          >
-            <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Xóa hàng đợi
-          </Button>
-        </div>
-      </header>
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 overflow-hidden">
+          <div className="space-y-1">
+            <Badge variant="secondary" className="bg-zinc-900 text-white hover:bg-zinc-800 rounded-md px-2 py-0 text-[10px] font-bold tracking-widest uppercase mb-2">
+              System Admin
+            </Badge>
+            <h1 className="text-3xl font-black tracking-tight text-zinc-900">Sync Monitor</h1>
+            <p className="text-zinc-500 text-sm font-medium flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              Hệ thống đang hoạt động • Tự động cập nhật sau 5s
+            </p>
+          </div>
 
-      {/* Stats Cards - Dense Design */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Tổng gói công việc', value: summary?.total, icon: Database, color: 'zinc', sub: 'Tổng số tasks' },
-          { label: 'Đã hoàn thành', value: summary?.success, icon: CheckCircle2, color: 'emerald', sub: 'Đồng bộ xong chi tiết' },
-          { label: 'Đang xử lý', value: (summary?.total || 0) - (summary?.success || 0), icon: Zap, color: 'blue', sub: 'Đang chạy hoặc chờ' },
-          { label: 'Đồng bộ chi tiết', value: `${summary?.detailProgress?.completed || 0} / ${summary?.detailProgress?.total || 0}`, icon: RefreshCw, color: 'indigo', sub: `Tiến độ: ${summary?.detailProgress?.percentage.toFixed(1) || 0}%` }
-        ].map((stat, i) => (
-          <Card key={i} className="compact-card group hover:scale-[1.01] transition-all duration-300">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight mb-1">{stat.label}</p>
-                <h3 className="text-xl font-black text-zinc-900 tabular-nums">
-                  {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value || 0}
-                </h3>
-                <p className="text-[10px] font-medium text-zinc-400 mt-1">{stat.sub}</p>
-              </div>
-              <div className={cn(
-                "p-2 rounded-xl transition-colors",
-                stat.color === 'zinc' && "bg-zinc-100 text-zinc-900",
-                stat.color === 'emerald' && "bg-emerald-50 text-emerald-600",
-                stat.color === 'blue' && "bg-blue-50 text-blue-600",
-                stat.color === 'indigo' && "bg-indigo-50 text-indigo-600"
-              )}>
-                <stat.icon className="w-4 h-4" />
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          {/* Progress Board */}
-          <Card className="border border-zinc-100 rounded-[1.5rem] bg-white overflow-hidden shadow-sm">
-            <CardHeader className="pb-2">
-               <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-sm font-bold flex items-center gap-1.5 uppercase tracking-tighter">
-                      <LayoutGrid className="w-4 h-4 text-zinc-900" /> Tiến độ đồng bộ
-                    </CardTitle>
-                    <CardDescription className="text-xs font-medium text-zinc-400 mt-1">Sơ đồ phân bổ trạng thái công việc</CardDescription>
-                  </div>
-                  <Badge variant="outline" className="rounded-full px-2 py-0 h-5 text-[10px] font-bold bg-zinc-50 border-zinc-200">
-                    {summary?.progress.toFixed(2)}%
-                  </Badge>
-               </div>
-            </CardHeader>
-            <CardContent className="pt-4 flex flex-col gap-6">
-              <div className="relative">
-                <Progress value={summary?.progress} className="h-2.5 bg-zinc-100 rounded-full overflow-hidden border border-zinc-50">
-                  <div 
-                    className={cn(
-                      "h-full transition-all duration-1000 ease-out",
-                      summary?.progress === 100 ? "bg-emerald-500" : "bg-zinc-900"
-                    )}
-                    style={{ width: `${summary?.progress}%` }} 
-                  />
-                </Progress>
-              </div>
-
-              {summary?.detailProgress && summary.detailProgress.total > 0 && (
-                <div className="flex flex-col gap-2 p-4 bg-indigo-50/30 rounded-2xl border border-indigo-100/50">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-tight">Tiến độ chi tiết khách hàng</span>
-                    <span className="text-[11px] font-black text-indigo-700 tabular-nums">{summary.detailProgress.percentage.toFixed(1)}%</span>
-                  </div>
-                  <Progress value={summary.detailProgress.percentage} className="h-1.5 bg-indigo-100 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-indigo-600 transition-all duration-1000 ease-out" 
-                      style={{ width: `${summary.detailProgress.percentage}%` }} 
-                    />
-                  </Progress>
-                  <div className="flex items-center justify-between mt-0.5">
-                    <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-tighter">Đã xử lý {summary.detailProgress.completed} / {summary.detailProgress.total}</span>
-                    <RefreshCw className={cn("w-2.5 h-2.5 text-indigo-400", summary.detailProgress.percentage < 100 && "animate-spin")} />
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-zinc-50/50 rounded-2xl border border-zinc-50">
-                {summary?.details.map((detail, idx) => (
-                  <div key={idx} className="flex flex-col gap-0.5">
-                    <span className="text-[9px] font-bold uppercase text-zinc-400 tracking-wider font-mono truncate">{detail.status}</span>
-                    <span className="text-lg font-black text-zinc-800 tabular-nums">
-                      {detail._count._all.toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Configuration - New York Design */}
-          <Card className="border border-zinc-100 rounded-[1.5rem] bg-white overflow-hidden shadow-sm">
-            <CardHeader className="pb-4">
-               <CardTitle className="text-sm font-bold flex items-center gap-2 uppercase tracking-tighter">
-                 <Calendar className="w-4 h-4 text-zinc-900" /> Khởi tạo khoảng thời gian
-               </CardTitle>
-               <CardDescription className="text-xs font-medium text-zinc-400 mt-1">Cấu hình thời gian để Worker tải dữ liệu về hệ thống</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col md:flex-row gap-4 items-end bg-zinc-50/30 p-4 rounded-2xl border border-zinc-50/50">
-                <div className="flex-1 space-y-1.5 w-full">
-                  <label className="text-[10px] font-bold uppercase text-zinc-400 tracking-tight ml-1">Từ ngày</label>
-                  <Input 
-                    type="date" 
-                    className="rounded-lg border-zinc-200 h-9 text-xs font-bold bg-white focus-visible:ring-zinc-900" 
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                  />
-                </div>
-                <div className="flex-1 space-y-1.5 w-full">
-                  <label className="text-[10px] font-bold uppercase text-zinc-400 tracking-tight ml-1">Đến ngày</label>
-                  <Input 
-                    type="date" 
-                    className="rounded-lg border-zinc-200 h-9 text-xs font-bold bg-white focus-visible:ring-zinc-900" 
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                  />
-                </div>
-                <Button 
-                  onClick={handleSeed}
-                  disabled={actionLoading}
-                  className="w-full md:w-auto bg-zinc-900 hover:bg-black text-white rounded-lg h-9 px-6 font-bold transition-all text-xs active:scale-95"
-                >
-                  Khởi tạo Task
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Detailed Statistics Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {[
-              { label: 'Khách hàng', value: summary?.stats?.customers, icon: Database, color: 'blue' },
-              { label: 'Dịch vụ', value: summary?.stats?.services, icon: LayoutGrid, color: 'purple' },
-              { label: 'Điều trị', value: summary?.stats?.treatments, icon: Activity, color: 'rose' },
-              { label: 'Lịch hẹn', value: summary?.stats?.appointments, icon: Calendar, color: 'amber' },
-              { label: 'Doanh số', value: summary?.stats?.sales?.toLocaleString('vi-VN') + ' đ', icon: TrendingUp, color: 'emerald' },
-              { label: 'Doanh thu', value: summary?.stats?.revenue?.toLocaleString('vi-VN') + ' đ', icon: CheckCircle2, color: 'indigo' },
-            ].map((s, i) => (
-              <Card key={i} className="border border-zinc-100 rounded-2xl bg-white p-3 shadow-sm hover:shadow-md transition-all group">
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "p-2 rounded-xl group-hover:scale-110 transition-transform",
-                    s.color === 'blue' && "bg-blue-50 text-blue-600",
-                    s.color === 'purple' && "bg-purple-50 text-purple-600",
-                    s.color === 'rose' && "bg-rose-50 text-rose-600",
-                    s.color === 'amber' && "bg-amber-50 text-amber-600",
-                    s.color === 'emerald' && "bg-emerald-50 text-emerald-600",
-                    s.color === 'indigo' && "bg-indigo-50 text-indigo-600"
-                  )}>
-                    <s.icon className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-tighter truncate">{s.label}</span>
-                    <span className="text-xs font-black text-zinc-900 truncate tabular-nums">
-                      {s.value || 0}
-                    </span>
-                  </div>
-                </div>
-              </Card>
-            ))}
+          <div className="flex flex-wrap items-center gap-2 p-1 bg-white border border-zinc-200 rounded-xl shadow-sm self-start md:self-auto">
+            <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={fetchData}
+                className="h-9 px-3 rounded-lg text-zinc-600 font-bold hover:bg-zinc-50"
+              >
+              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+            </Button>
+            <Separator orientation="vertical" className="h-6 mx-1" />
+            <Button 
+              size="sm"
+              onClick={() => handleAction(`/sync/start-tasks?limit=500`, 'Đã bắt đầu đồng bộ', 'Lỗi khi bắt đầu')}
+              disabled={actionLoading}
+              className="h-9 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg px-4 font-bold transition-all shadow-sm"
+            >
+              <Play className="w-3.5 h-3.5 mr-2 fill-current" /> Bắt đầu
+            </Button>
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={() => handleAction(`/sync/stop`, 'Đã gửi lệnh dừng', 'Lỗi khi dừng')}
+              className="h-9 border-zinc-200 text-zinc-600 font-bold hover:bg-zinc-50"
+            >
+              <Pause className="w-3.5 h-3.5 mr-2 fill-current" /> Tạm dừng
+            </Button>
+            <Button 
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if(confirm('Xóa sạch hàng đợi?')) handleAction(`/sync/reset-queue`, 'Đã xóa hàng đợi', 'Lỗi khi xóa')
+              }}
+              className="h-9 text-rose-600 font-bold hover:bg-rose-50 hover:text-rose-700"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
           </div>
         </div>
 
-        {/* Console Log - Compact List */}
-        <Card className="border border-zinc-100 rounded-[1.5rem] bg-zinc-900 overflow-hidden flex flex-col h-[600px] shadow-2xl shadow-black/5">
-          <CardHeader className="flex flex-col shrink-0 bg-black/20 pb-2 space-y-4">
-            <div className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-xs font-bold flex items-center gap-2 text-zinc-100 italic font-mono uppercase tracking-widest">
-                  <History className="w-3 h-3 text-emerald-400" /> Operational Console
-                </CardTitle>
-                <CardDescription className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter mt-0.5">Streaming events from worker</CardDescription>
-              </div>
-              <div className="flex items-center gap-1.5">
-                 <span className="text-[9px] font-bold text-emerald-500/80 uppercase">Live</span>
-                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
-              </div>
+        {/* Global Progress Bar */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Tiến độ tổng thể</span>
+            <span className="text-xl font-black text-zinc-900">{summary?.progress.toFixed(1)}%</span>
+          </div>
+          <div className="h-3 w-full bg-zinc-200 rounded-full overflow-hidden shadow-inner">
+            <div 
+              className={cn(
+                "h-full transition-all duration-1000 ease-in-out relative",
+                summary?.progress === 100 ? "bg-emerald-500" : "bg-zinc-900"
+              )}
+              style={{ width: `${summary?.progress}%` }} 
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent animate-shimmer" />
             </div>
+          </div>
+        </div>
 
-            <div className="flex p-0.5 bg-white/5 rounded-lg border border-white/5 mx-[-8px]">
-              <button 
-                onClick={() => setConsoleTab('tasks')}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold uppercase transition-all rounded-md px-4",
-                  consoleTab === 'tasks' ? "bg-white/10 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-300"
-                )}
-              >
-                <Hash className="w-3 h-3" /> Task Logs
-              </button>
-              <button 
-                onClick={() => setConsoleTab('realtime')}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold uppercase transition-all rounded-md px-4",
-                  consoleTab === 'realtime' ? "bg-white/10 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-300"
-                )}
-              >
-                <Terminal className="w-3 h-3" /> Real-time
-              </button>
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1 p-0 overflow-hidden bg-black/40">
-            <ScrollArea className="h-full">
-              <div className="flex flex-col p-4 font-mono">
-                {consoleTab === 'tasks' ? (
-                  logs.length > 0 ? (
-                    logs.map((log) => (
-                      <div key={log.id} className="flex gap-3 group border-b border-white/5 py-3 last:border-none">
-                        <div className="shrink-0 pt-0.5">
-                          {getStatusIcon(log.status)}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* Main Dashboard Area */}
+          <div className="lg:col-span-8 space-y-8">
+            
+            {/* Action Group: Range Configuration */}
+            <Card className="border-none shadow-sm bg-white rounded-2xl overflow-hidden">
+              <CardHeader className="pb-3 border-b border-zinc-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Settings2 className="w-4 h-4 text-zinc-400" />
+                    <CardTitle className="text-sm font-bold uppercase tracking-tight">Cấu hình đồng bộ</CardTitle>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="flex flex-col md:flex-row items-center gap-6">
+                  <div className="grid grid-cols-2 gap-4 flex-1 w-full">
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black uppercase text-zinc-400 ml-1">Kể từ ngày</label>
+                      <Input 
+                        type="date" 
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        className="h-11 rounded-xl bg-zinc-50 border-none focus-visible:ring-2 focus-visible:ring-zinc-200 font-bold text-zinc-700" 
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black uppercase text-zinc-400 ml-1">Đến ngày</label>
+                      <Input 
+                        type="date" 
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        className="h-11 rounded-xl bg-zinc-50 border-none focus-visible:ring-2 focus-visible:ring-zinc-200 font-bold text-zinc-700" 
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 w-full md:w-auto self-end md:self-auto">
+                    <Button 
+                      onClick={() => handleAction(`/sync/seed-tasks?from=${dateFrom}&to=${dateTo}`, 'Khởi tạo task thành công', 'Lỗi khởi tạo')}
+                      className="bg-zinc-900 hover:bg-black text-white rounded-xl h-11 px-8 font-bold transition-all shadow-md active:scale-95"
+                    >
+                      Khởi tạo hàng đợi
+                    </Button>
+                    <p className="text-[9px] font-medium text-zinc-400 text-center uppercase tracking-tighter">
+                      Cần khởi tạo task trước khi nhấn Bắt đầu
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Stats Dashboard */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Detailed Metrics */}
+              <div className="space-y-4">
+                 <div className="flex items-center gap-2 px-1">
+                    <BarChart3 className="w-4 h-4 text-zinc-400" />
+                    <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Metrics Chi Tiết</span>
+                 </div>
+                 <div className="grid grid-cols-2 gap-3">
+                    {stats.map((s, i) => (
+                      <div key={i} className="bg-white p-4 rounded-2xl border border-zinc-100 shadow-sm flex flex-col gap-3 group hover:border-zinc-200 transition-colors">
+                        <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110", s.bg)}>
+                          <s.icon className={cn("w-4 h-4", s.color)} />
                         </div>
-                        <div className="flex flex-col gap-1 w-full min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className={cn(
-                              "text-[10px] font-black px-1.5 py-0.5 rounded-md",
-                              log.crawl_type.includes('HEADER') ? "bg-blue-500/10 text-blue-400" : "bg-purple-500/10 text-purple-400"
-                            )}>
-                              {log.crawl_type}
-                            </span>
-                            <span className="text-[9px] font-bold text-zinc-600 tabular-nums">
-                              {new Date(log.created_at).toLocaleTimeString()}
-                            </span>
-                          </div>
-                          <div className="text-[11px] leading-relaxed text-zinc-300 font-medium break-words">
-                            {log.status === 'success' 
-                              ? `Dữ liệu ${log.crawl_date}: Đã nạp ${log.records_count} bản ghi thành công` 
-                              : log.error_message || 'Timeout hoặc lỗi không xác định'}
-                          </div>
-                          {log.duration_seconds && (
-                            <div className="flex items-center gap-2 mt-0.5">
-                               <div className="h-px flex-1 bg-white/5" />
-                               <span className="text-[9px] text-zinc-500 font-bold uppercase italic">Latency: {log.duration_seconds}s</span>
-                            </div>
-                          )}
+                        <div className="space-y-0.5">
+                          <p className="text-[9px] font-bold text-zinc-400 uppercase">{s.label}</p>
+                          <p className="text-sm font-black text-zinc-900 tabular-nums">{s.value || 0}</p>
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-zinc-600">
-                      <History className="w-8 h-8 mb-4 opacity-20" />
-                      <p className="text-[10px] font-bold uppercase">Chưa có log đồng bộ</p>
-                    </div>
-                  )
-                ) : (
-                  <div className="flex flex-col space-y-1.5">
-                    {realtimeLogs.length > 0 ? (
-                      [...realtimeLogs].reverse().map((log, i) => {
-                        const time = log.match(/\[(.*?)\]/)?.[1] || "";
-                        const message = log.replace(/\[.*?\]/, "").trim();
-                        const isError = message.includes('❌');
-                        const isSuccess = message.includes('✅');
-                        const isWarning = message.includes('⚠️');
+                    ))}
+                 </div>
+              </div>
 
-                        return (
-                          <div key={i} className="flex gap-2 text-[11px] leading-tight group">
-                            <span className="text-zinc-600 font-bold tabular-nums shrink-0">[{time}]</span>
-                            <span className={cn(
-                              "font-medium break-words",
-                              isError && "text-rose-400",
-                              isSuccess && "text-emerald-400",
-                              isWarning && "text-amber-400",
-                              (!isError && !isSuccess && !isWarning) && "text-zinc-300"
-                            )}>
-                              {message}
-                            </span>
+              {/* Status Breakdown */}
+              <div className="space-y-4">
+                 <div className="flex items-center gap-2 px-1">
+                    <ListFilter className="w-4 h-4 text-zinc-400" />
+                    <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Trạng thái Tasks</span>
+                 </div>
+                 <Card className="border-none shadow-sm bg-white rounded-2xl p-6 h-full flex flex-col justify-between">
+                    <div className="space-y-6">
+                      {summary?.details.map((detail, idx) => (
+                        <div key={idx} className="flex items-center justify-between group">
+                          <div className="flex items-center gap-3">
+                            <div className="h-2 w-2 rounded-full bg-zinc-200 group-hover:bg-zinc-900 transition-colors" />
+                            <span className="text-xs font-bold text-zinc-500 uppercase tracking-tight">{detail.status}</span>
                           </div>
-                        )
-                      })
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-12 text-zinc-600">
-                        <Terminal className="w-8 h-8 mb-4 opacity-20" />
-                        <p className="text-[10px] font-bold uppercase">Đang chờ sự kiện hệ thống...</p>
+                          <span className="text-sm font-black text-zinc-900 tabular-nums">
+                            {detail._count._all.toLocaleString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {summary?.detailProgress && (
+                      <div className="mt-8 p-4 bg-zinc-900 rounded-xl text-white space-y-3">
+                        <div className="flex items-center justify-between">
+                           <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Worker Progress</span>
+                           <span className="text-[11px] font-black text-emerald-400">{summary.detailProgress.percentage.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-500 transition-all duration-700" style={{ width: `${summary.detailProgress.percentage}%` }} />
+                        </div>
+                        <p className="text-[9px] font-medium text-zinc-400 text-right">
+                          {summary.detailProgress.completed} / {summary.detailProgress.total} chi tiết
+                        </p>
                       </div>
                     )}
-                  </div>
-                )}
+                 </Card>
               </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
+            </div>
+          </div>
+
+          {/* Console / Log Area */}
+          <div className="lg:col-span-4 self-start sticky top-8">
+            <div className="bg-zinc-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[calc(100vh-100px)]">
+              <div className="p-6 bg-black/40 border-b border-white/5 space-y-4">
+                <div className="flex items-center justify-between">
+                   <h2 className="text-[10px] font-black uppercase text-zinc-500 tracking-widest flex items-center gap-2">
+                     <Terminal className="w-3 h-3 text-emerald-500" /> Operational Log
+                   </h2>
+                   <Badge className="bg-emerald-500/10 text-emerald-500 border-none text-[9px]">Live</Badge>
+                </div>
+                
+                <Tabs defaultValue="tasks" className="w-full">
+                  <TabsList className="grid grid-cols-2 bg-white/5 w-full h-9 p-1 rounded-xl">
+                    <TabsTrigger value="tasks" className="text-[10px] font-black uppercase rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white">Tasks</TabsTrigger>
+                    <TabsTrigger value="realtime" className="text-[10px] font-black uppercase rounded-lg data-[state=active]:bg-white/10 data-[state=active]:text-white">Events</TabsTrigger>
+                  </TabsList>
+                  
+                  <div className="mt-6">
+                    <TabsContent value="tasks" className="m-0 focus-visible:outline-none">
+                      <ScrollArea className="h-[450px] pr-4">
+                        <div className="space-y-4">
+                          {logs.map((log) => (
+                            <div key={log.id} className="group border-b border-white/5 pb-4 last:border-none flex items-start gap-3">
+                              <div className="shrink-0 mt-0.5">
+                                {getStatusIcon(log.status)}
+                              </div>
+                              <div className="space-y-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-black text-zinc-200">
+                                    {log.crawl_type}
+                                  </span>
+                                  <span className="text-[8px] font-bold text-zinc-600">
+                                    {new Date(log.created_at).toLocaleTimeString()}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-zinc-400 leading-snug line-clamp-2">
+                                  {log.status === 'success' 
+                                    ? `Đã nhận ${log.records_count} bản ghi từ VTTech thành công.`
+                                    : log.error_message || 'Có lỗi xảy ra'}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+                    
+                    <TabsContent value="realtime" className="m-0 focus-visible:outline-none">
+                      <ScrollArea className="h-[450px]">
+                        <div className="space-y-1.5 font-mono text-[10px]">
+                           {realtimeLogs.length > 0 ? (
+                              [...realtimeLogs].reverse().map((log, i) => (
+                                <div key={i} className="flex gap-2 leading-tight">
+                                   <span className="text-zinc-600 shrink-0">[{log.match(/\[(.*?)\]/)?.[1] || '--:--'}]</span>
+                                   <span className={cn(
+                                     "break-words",
+                                     log.includes('❌') ? "text-rose-400" : log.includes('✅') ? "text-emerald-400" : "text-zinc-400"
+                                   )}>
+                                     {log.replace(/\[.*?\]/, "").trim()}
+                                   </span>
+                                </div>
+                              ))
+                           ) : (
+                             <div className="h-full flex items-center justify-center py-20 opacity-20 italic">No events streaming...</div>
+                           )}
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+                  </div>
+                </Tabs>
+              </div>
+              <div className="p-4 bg-black/20 text-center">
+                 <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest flex items-center justify-center gap-2">
+                   Last update {new Date().toLocaleTimeString()} <ArrowRight className="w-2 h-2" />
+                 </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

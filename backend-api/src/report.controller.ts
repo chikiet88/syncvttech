@@ -196,32 +196,65 @@ export class ReportController {
     });
 
     const summaries = await Promise.all(branches.map(async (branch) => {
-      // Group by task for this branch and date range
-      const tasks = await this.prisma.syncTask.aggregate({
-        where: { 
-          branch_id: branch.id, 
-          date: { gte: start, lte: end },
-          status: { in: ['SUCCESS', 'PROCESSING'] }
-        },
-        _sum: {
-          customers_count: true,
-          services_count: true,
-          treatments_count: true,
-          appointments_count: true,
-          sales_total: true,
-          revenue_total: true
-        } as any
-      });
+      // Aggregate directly from data tables for accuracy
+      const [
+        customersCountResult,
+        appointmentsCount,
+        treatmentsCount,
+        servicesCount,
+        revenueData
+      ] = await Promise.all([
+        // Count unique customer IDs across multiple tables for this branch and date range
+        this.prisma.$queryRaw<{ count: bigint }[]>`
+          SELECT count(DISTINCT customer_id) as "count" 
+          FROM (
+            SELECT customer_id FROM daily_customers 
+            WHERE branch_id = ${branch.id} 
+              AND date >= ${start} 
+              AND date <= ${end}
+            UNION
+            SELECT customer_id FROM appointments 
+            WHERE branch_id = ${branch.id} 
+              AND appointment_date >= ${start} 
+              AND appointment_date <= ${end}
+            UNION
+            SELECT customer_id FROM treatments 
+            WHERE branch_id = ${branch.id} 
+              AND treatment_date >= ${start} 
+              AND treatment_date <= ${end}
+            UNION
+            SELECT customer_id FROM revenue_transactions 
+            WHERE branch_id = ${branch.id} 
+              AND date >= ${start} 
+              AND date <= ${end}
+          ) AS active_customers
+        `,
+        this.prisma.appointment.count({
+          where: { branch_id: branch.id, appointment_date: { gte: start, lte: end } }
+        }),
+        this.prisma.treatment.count({
+          where: { branch_id: branch.id, treatment_date: { gte: start, lte: end } }
+        }),
+        (this.prisma as any).revenueTransaction.count({
+          where: { branch_id: branch.id, date: { gte: start, lte: end }, service_id: { not: null } }
+        }),
+        (this.prisma as any).revenueTransaction.aggregate({
+          where: { branch_id: branch.id, date: { gte: start, lte: end } },
+          _sum: { amount: true, paid: true }
+        })
+      ]);
+
+      const customerCount = Number(customersCountResult[0]?.count || 0);
 
       return {
         id: branch.id,
         name: branch.name,
-        customerCount: (tasks._sum as any)?.customers_count || 0,
-        serviceCount: (tasks._sum as any)?.services_count || 0,
-        treatmentCount: (tasks._sum as any)?.treatments_count || 0,
-        appointmentCount: (tasks._sum as any)?.appointments_count || 0,
-        totalSales: (tasks._sum as any)?.sales_total || 0,
-        totalRevenue: (tasks._sum as any)?.revenue_total || 0,
+        customerCount: customerCount,
+        serviceCount: servicesCount || 0,
+        treatmentCount: treatmentsCount || 0,
+        appointmentCount: appointmentsCount || 0,
+        totalSales: revenueData._sum?.amount || 0,
+        totalRevenue: revenueData._sum?.paid || 0,
       };
     }));
 

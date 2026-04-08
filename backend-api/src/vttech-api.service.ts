@@ -268,12 +268,28 @@ export class VttechApiService {
     } catch { try { return JSON.parse(data); } catch { return data; } }
   }
 
-  private formatDate(dateStr: string): string {
-    if (!dateStr) return dateStr;
-    const d = dateStr.split(' ')[0];
-    const p = d.split('-');
-    if (p.length === 3 && p[0].length === 4) return `${p[2]}-${p[1]}-${p[0]}`;
-    return d;
+  private formatDate(date: any): string {
+    if (!date) return '';
+    let d: Date;
+    if (date instanceof Date) {
+      d = date;
+    } else {
+      // Handle YYYY-MM-DD or other strings
+      const s = String(date).split(' ')[0];
+      const p = s.split('-');
+      if (p.length === 3 && p[0].length === 4) {
+        d = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]), 12, 0, 0);
+      } else {
+        d = new Date(s);
+      }
+    }
+    
+    if (isNaN(d.getTime())) return String(date);
+    
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`; // Default to dashes as used in Report grids
   }
 
   /**
@@ -289,11 +305,20 @@ export class VttechApiService {
     for (const k of ['dateFrom', 'dateTo', 'DateFrom', 'DateTo']) {
       if (processed[k]) {
         if (isCustomerPage) {
-          if (typeof processed[k] === 'string' && !processed[k].includes(':')) {
-            processed[k] = `${processed[k].split(' ')[0]} 00:00:00`;
-          }
+           // For Customer page, it often expects DD/MM/YYYY HH:mm:ss or similar
+           // We use the dashboard-friendly DD/MM/YYYY HH:mm:ss
+           if (typeof processed[k] === 'string' && !processed[k].includes(':')) {
+              const dPart = processed[k].split(' ')[0];
+              const p = dPart.split('-');
+              if (p.length === 3 && p[0].length === 4) {
+                processed[k] = `${p[2]}/${p[1]}/${p[0]} ${k.toLowerCase().includes('to') ? '23:59:59' : '00:00:00'}`;
+              } else if (dPart.includes('/')) {
+                processed[k] = `${dPart} ${k.toLowerCase().includes('to') ? '23:59:59' : '00:00:00'}`;
+              }
+           }
         } else {
-          processed[k] = this.formatDate(processed[k]);
+           // For reports, dashes are common (DD-MM-YYYY)
+           processed[k] = this.formatDate(processed[k]).replace(/\//g, '-');
         }
       }
     }
