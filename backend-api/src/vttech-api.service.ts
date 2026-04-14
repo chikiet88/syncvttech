@@ -289,7 +289,7 @@ export class VttechApiService {
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const year = d.getFullYear();
-    return `${day}-${month}-${year}`; // Default to dashes as used in Report grids
+    return `${year}-${month}-${day}`; // Using ISO format (YYYY-MM-DD) for consistency
   }
 
   /**
@@ -300,25 +300,38 @@ export class VttechApiService {
     const form = new URLSearchParams();
     const processed = { ...data };
     
-    const isCustomerPage = page?.includes('/Customer/ListCustomer/');
-
     for (const k of ['dateFrom', 'dateTo', 'DateFrom', 'DateTo']) {
       if (processed[k]) {
-        if (isCustomerPage) {
-           // For Customer page, it often expects DD/MM/YYYY HH:mm:ss or similar
-           // We use the dashboard-friendly DD/MM/YYYY HH:mm:ss
-           if (typeof processed[k] === 'string' && !processed[k].includes(':')) {
-              const dPart = processed[k].split(' ')[0];
-              const p = dPart.split('-');
-              if (p.length === 3 && p[0].length === 4) {
-                processed[k] = `${p[2]}/${p[1]}/${p[0]} ${k.toLowerCase().includes('to') ? '23:59:59' : '00:00:00'}`;
-              } else if (dPart.includes('/')) {
-                processed[k] = `${dPart} ${k.toLowerCase().includes('to') ? '23:59:59' : '00:00:00'}`;
-              }
-           }
+        let d: Date | null = null;
+        if (processed[k] instanceof Date) {
+          d = processed[k];
         } else {
-           // For reports, dashes are common (DD-MM-YYYY)
-           processed[k] = this.formatDate(processed[k]).replace(/\//g, '-');
+          const s = String(processed[k]).trim();
+          if (/^\d{4}-\d{1,2}-\d{1,2}/.test(s)) {
+            const parts = s.split(/[T ]/)[0].split('-');
+            d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+          } else if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}/.test(s)) {
+            // Try to handle both DD/MM/YYYY and MM/DD/YYYY if possible, but YYYY-MM-DD is preferred
+            const parts = s.split(/[T ]/)[0].split(/[\/\-]/);
+            // Default to DD/MM/YYYY if the first part looks like a day (>12)
+            if (parseInt(parts[0]) > 12) {
+              d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+            } else {
+              // Otherwise try MM/DD/YYYY as fallback (standard JS behavior)
+              const tryDate = new Date(s);
+              if (!isNaN(tryDate.getTime())) d = tryDate;
+            }
+          } else {
+            const tryDate = new Date(s);
+            if (!isNaN(tryDate.getTime())) d = tryDate;
+          }
+        }
+
+        if (d && !isNaN(d.getTime())) {
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          processed[k] = `${year}-${month}-${day}`;
         }
       }
     }

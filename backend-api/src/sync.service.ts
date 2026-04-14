@@ -194,7 +194,7 @@ export class SyncService implements OnModuleInit {
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const year = d.getFullYear();
-    return `${day}/${month}/${year}`;
+    return `${year}-${month}-${day}`;
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -743,18 +743,10 @@ export class SyncService implements OnModuleInit {
 
   private async syncAppointments(dateFrom: string, dateTo: string, branchId: number = 0): Promise<number[]> {
     const customerIds: number[] = [];
-    const formatDateMMDDYYYY = (date: any) => {
-      const d = new Date(date);
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = d.getFullYear();
-      return `${month}/${day}/${year}`;
-    };
-
     let res: any = null;
     try {
       res = await this.vttechApi.callHandler('/Desk/Appointment/AppointmentInDay_Desk_Branch/', 'LoadataAppointmentList', {
-        DateFrom: `${formatDateMMDDYYYY(dateFrom)} 00:00:00`,
+        DateFrom: dateFrom,
         BranchID: branchId.toString(),
         AppID: '0',
         StatusID: '0',
@@ -1846,7 +1838,7 @@ export class SyncService implements OnModuleInit {
 
   private mapRevenueItem(item: any, branchId: number) {
     // VTTech often varies field names for amounts (e.g., Amount, AmountPaid, PaymentDeposit, Price_Root, TotalPaid)
-    const rawAmount = item.Amount || item.AmountPaid || item.PaidAmount || item.Price || item.Price_Root || item.PaymentDeposit || item.TotalPaid || 0;
+    const rawAmount = item.PriceDiscounted || item.Price_Treat || item.Amount || item.AmountPaid || item.PaidAmount || item.Price || item.Price_Root || item.PaymentDeposit || item.TotalPaid || 0;
     const rawPaid = item.Paid || item.PaidAmount || item.TotalPaid || item.AmountPaid || item.PaymentDeposit || item.Amount || 0;
     
     const amount = this.parseNumber(rawAmount);
@@ -1881,7 +1873,7 @@ export class SyncService implements OnModuleInit {
       await this.vttechApi.login();
       await this.vttechApi.getXsrfToken();
       
-      const res = await this.vttechApi.getRevenueByBranch(this.formatDate(date), this.formatDate(date), branchId);
+      const res = await this.vttechApi.getRevenueByBranch(date, date, branchId);
       const items = this.ensureArray(res);
       
       for (const item of items) {

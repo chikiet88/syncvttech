@@ -1,0 +1,172 @@
+[
+  {
+    "id": 1,
+    "name": "Taza Skin Clinic Thủ Đức",
+    "customerCount": 2,
+    "serviceCount": 2,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 700000,
+    "totalRevenue": 700000
+  },
+  {
+    "id": 2,
+    "name": "Taza Skin Clinic Quận 10",
+    "customerCount": 2,
+    "serviceCount": 3,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 10000000,
+    "totalRevenue": 36000000
+  },
+  {
+    "id": 3,
+    "name": "Taza Skin Clinic Gò Vấp",
+    "customerCount": 3,
+    "serviceCount": 4,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 12799000,
+    "totalRevenue": 12799000
+  },
+  {
+    "id": 4,
+    "name": "Taza Skin Clinic Nha Trang",
+    "customerCount": 2,
+    "serviceCount": 2,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 600000,
+    "totalRevenue": 600000
+  },
+  {
+    "id": 6,
+    "name": "TAZA Skin Clinic Đà Nẵng",
+    "customerCount": 4,
+    "serviceCount": 4,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 2300000,
+    "totalRevenue": 2300000
+  },
+  {
+    "id": 7,
+    "name": "Văn Phòng",
+    "customerCount": 0,
+    "serviceCount": 0,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 0,
+    "totalRevenue": 0
+  },
+  {
+    "id": 14,
+    "name": "Timona Quận 10",
+    "customerCount": 0,
+    "serviceCount": 0,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 0,
+    "totalRevenue": 0
+  },
+  {
+    "id": 15,
+    "name": "Timona Thủ Đức",
+    "customerCount": 1,
+    "serviceCount": 1,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": -6200000,
+    "totalRevenue": -6200000
+  },
+  {
+    "id": 16,
+    "name": "Timona Gò Vấp",
+    "customerCount": 1,
+    "serviceCount": 1,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 620000,
+    "totalRevenue": 620000
+  },
+  {
+    "id": 17,
+    "name": "Timona Nha Trang",
+    "customerCount": 2,
+    "serviceCount": 3,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 19340000,
+    "totalRevenue": 19640000
+  },
+  {
+    "id": 18,
+    "name": "Timona Đà Nẵng",
+    "customerCount": 0,
+    "serviceCount": 0,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 0,
+    "totalRevenue": 0
+  },
+  {
+    "id": 21,
+    "name": "Building Timona CMT8",
+    "customerCount": 6,
+    "serviceCount": 9,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 6997000,
+    "totalRevenue": 6997000
+  },
+  {
+    "id": 22,
+    "name": "Timona Bình Tân",
+    "customerCount": 0,
+    "serviceCount": 0,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 0,
+    "totalRevenue": 0
+  },
+  {
+    "id": 23,
+    "name": "Taza Skin Clinic Bình Tân",
+    "customerCount": 2,
+    "serviceCount": 2,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 1500000,
+    "totalRevenue": 3500000
+  },
+  {
+    "id": 24,
+    "name": "Chi nhánh Hderma",
+    "customerCount": 0,
+    "serviceCount": 0,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 0,
+    "totalRevenue": 0
+  },
+  {
+    "id": 25,
+    "name": "Timona Tân Phú",
+    "customerCount": 0,
+    "serviceCount": 0,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 0,
+    "totalRevenue": 0
+  },
+  {
+    "id": 26,
+    "name": "Taza Skin Clinic Tân Phú",
+    "customerCount": 1,
+    "serviceCount": 1,
+    "treatmentCount": 0,
+    "appointmentCount": 0,
+    "totalSales": 400000,
+    "totalRevenue": 400000
+  }
+]

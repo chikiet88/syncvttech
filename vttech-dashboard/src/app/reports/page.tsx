@@ -93,7 +93,7 @@ function BranchReportContent() {
     setMounted(true)
   }, [])
 
-  const handleSearch = async () => {
+  const handleSearch = async (overrideFrom?: string, overrideTo?: string) => {
     setLoading(true)
     try {
       const formatDateForApi = (dateStr: string) => {
@@ -103,17 +103,20 @@ function BranchReportContent() {
 
       const apiHost = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
       
+      const targetFrom = overrideFrom || dateFrom;
+      const targetTo = overrideTo || dateTo;
+
       const url = new URL(`${apiHost}/reports/branches`)
-      url.searchParams.set("dateFrom", formatDateForApi(dateFrom))
-      url.searchParams.set("dateTo", formatDateForApi(dateTo))
+      url.searchParams.set("dateFrom", formatDateForApi(targetFrom))
+      url.searchParams.set("dateTo", formatDateForApi(targetTo))
 
       const res = await fetch(url.toString())
       if (res.ok) {
         const result = await res.json()
         const enhancedResult = result.map((item: any) => ({
           ...item,
-          queryDateFrom: formatDateForApi(dateFrom),
-          queryDateTo: formatDateForApi(dateTo)
+          queryDateFrom: formatDateForApi(targetFrom),
+          queryDateTo: formatDateForApi(targetTo)
         }))
         setData(enhancedResult)
         toast.success("Đã cập nhật dữ liệu báo cáo")
@@ -204,6 +207,39 @@ function BranchReportContent() {
               className="cursor-pointer h-7 px-3 rounded-md border-zinc-200 text-xs font-bold hover:bg-zinc-100"
               onClick={() => setQuickRange(30)}
              >30 Ngày qua</Badge>
+             <div className="w-px h-4 bg-zinc-200 mx-1"></div>
+             <Badge 
+              variant="outline" 
+              className="cursor-pointer h-7 px-3 rounded-md border-zinc-200 text-xs font-bold hover:bg-zinc-100"
+              onClick={() => {
+                const parts = dateFrom.split('-');
+                if (parts.length === 3) {
+                  const currentFrom = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                  currentFrom.setDate(currentFrom.getDate() - 1);
+                  const prev = `${currentFrom.getFullYear()}-${String(currentFrom.getMonth() + 1).padStart(2, '0')}-${String(currentFrom.getDate()).padStart(2, '0')}`;
+                  setDateFrom(prev);
+                  setDateTo(prev);
+                  setSelectedMonth("none");
+                  handleSearch(prev, prev);
+                }
+              }}
+             >Trước</Badge>
+             <Badge 
+              variant="outline" 
+              className="cursor-pointer h-7 px-3 rounded-md border-zinc-200 text-xs font-bold hover:bg-zinc-100"
+              onClick={() => {
+                const parts = dateFrom.split('-');
+                if (parts.length === 3) {
+                  const currentFrom = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                  currentFrom.setDate(currentFrom.getDate() + 1);
+                  const next = `${currentFrom.getFullYear()}-${String(currentFrom.getMonth() + 1).padStart(2, '0')}-${String(currentFrom.getDate()).padStart(2, '0')}`;
+                  setDateFrom(next);
+                  setDateTo(next);
+                  setSelectedMonth("none");
+                  handleSearch(next, next);
+                }
+              }}
+             >Tiếp</Badge>
              
              <div className="ml-auto flex items-center gap-2">
                 <span className="text-[10px] font-bold uppercase text-zinc-400">Chọn chi nhánh:</span>
@@ -267,7 +303,7 @@ function BranchReportContent() {
             
             <div className="flex items-center gap-2">
               <Button 
-                onClick={handleSearch}
+                onClick={() => handleSearch()}
                 disabled={loading}
                 className="bg-zinc-900 hover:bg-black text-white rounded-lg h-9 px-6 font-bold transition-all text-xs active:scale-95 flex-1 md:flex-none"
               >
