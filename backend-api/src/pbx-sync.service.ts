@@ -95,7 +95,7 @@ export class PbxSyncService {
           });
           successCount++;
         } catch (error) {
-          this.logger.error(`Error upserting record ${record.uuid}: ${error.message}`);
+          this.logger.error(`❌ [Loicansua] Error upserting record ${record.uuid}: ${error.message}`);
           failedCount++;
         }
       }
@@ -113,7 +113,7 @@ export class PbxSyncService {
 
       return { total: records.length, success: successCount, failed: failedCount };
     } catch (error) {
-      this.logger.error(`Error in syncCdr: ${error.message}`);
+      this.logger.error(`❌ [Loicansua] Error in syncCdr: ${error.message}`);
       await this.prisma.pbxSyncLog.update({
         where: { id: syncLog.id },
         data: {
@@ -171,7 +171,7 @@ export class PbxSyncService {
       this.logger.log(`✅ Synced ${count} extensions`);
       return count;
     } catch (error) {
-      this.logger.error(`Error syncing extensions: ${error.message}`);
+      this.logger.error(`❌ [Loicansua] Error syncing extensions: ${error.message}`);
       throw error;
     }
   }
@@ -243,7 +243,7 @@ export class PbxSyncService {
       this.logger.log(`✅ Synced ${count} Call Center employees`);
       return count;
     } catch (error) {
-      this.logger.error(`Error syncing PBX employees: ${error.message}`);
+      this.logger.error(`❌ [Loicansua] Error syncing PBX employees: ${error.message}`);
       throw error;
     }
   }
@@ -325,7 +325,7 @@ export class PbxSyncService {
           });
           successCount++;
         } catch (error) {
-          this.logger.error(`Error upserting VTTech call record ${callId}: ${error.message}`);
+          this.logger.error(`❌ [Loicansua] Error upserting VTTech call record ${callId}: ${error.message}`);
           failedCount++;
         }
       }
@@ -343,7 +343,7 @@ export class PbxSyncService {
 
       return { total: records.length, success: successCount, failed: failedCount };
     } catch (error) {
-      this.logger.error(`Error in syncVttechCallHistory: ${error.message}`);
+      this.logger.error(`❌ [Loicansua] Error in syncVttechCallHistory: ${error.message}`);
       await this.prisma.pbxSyncLog.update({
         where: { id: syncLog.id },
         data: {

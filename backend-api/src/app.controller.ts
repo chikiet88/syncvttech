@@ -18,7 +18,7 @@ export class AppController {
 
   @Get('check-login')
   async checkLogin(@Query('user') user?: string, @Query('pass') pass?: string) {
-    return this.vttechApi.checkLoginStatus(user, pass);
+    return this.vttechApi.checkLoginStatus();
   }
 
   @Get()

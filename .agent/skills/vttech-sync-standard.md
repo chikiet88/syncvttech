@@ -28,11 +28,26 @@ Hướng dẫn chuẩn mực để duy trì, mở rộng và bảo trì hệ th�
     - Báo cáo Doanh thu: `DD-MM-YYYY`
     - Danh sách khách hàng: `YYYY-MM-DD 00:00:00`
 
-## 4. Quản lý Hạn mức (Quota & Limits)
+## 4. Quản lý Hạn mức (Rate Limits & Quota)
 
-* Hạn mức server hiện tại: **~100 requests / 1 phút**.
-* Khi thực hiện đồng bộ lớn, phải chia nhỏ batch hoặc thêm khoảng nghỉ (delay) nếu cần thiết.
-* Tránh khởi động lại server quá nhiều lần trong thời gian ngắn (mỗi lần khởi động đều thực hiện đăng nhập mới).
+Hệ thống VTTech áp dụng cơ chế Rate Limit khắt khe theo từng cấp độ ưu tiên của Endpoint. Việc vi phạm sẽ dẫn đến khóa IP hoặc lỗi 429.
+
+### 4.1 Chi tiết Rate Limit theo cấp độ (Level):
+
+| Cấp độ (Level) | Giới hạn theo Phút | Giới hạn theo Giây |
+| :--- | :--- | :--- |
+| **Default** | 20 calls / 1 phút | 2 calls / 3 giây |
+| **High** | 5 calls / 1 phút | 1 call / 3 giây |
+| **Medium** | 10 calls / 1 phút | 1 call / 2 giây |
+| **Low** | 15 calls / 1 phút | 2 calls / 3 giây |
+
+### 4.2 Quản lý Phiên làm việc (Session):
+* **Session Timeout:** 20 phút. Hệ thống phải thực hiện Re-login hoặc Call Heartbeat định kỳ để duy trì phiên.
+* Tránh khởi động lại server quá nhiều lần trong thời gian ngắn (mỗi lần khởi động đều thực hiện đăng nhập mới, dễ bị coi là tấn công Brute-force).
+
+### 4.3 Khuyến nghị đồng bộ:
+* Đối với các Endpoint cấp độ **High**, bắt buộc phải sử dụng Queue với `delay` tối thiểu 3 giây giữa các Job.
+* Khi thực hiện đồng bộ lớn, nên chia nhỏ batch và tính toán tổng số request để không vượt quá 20 calls/phút (ngưỡng an toàn Default).
 
 ## 5. Cấu trúc Project khuyến nghị
 

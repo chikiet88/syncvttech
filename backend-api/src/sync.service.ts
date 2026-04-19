@@ -41,10 +41,9 @@ export class SyncService implements OnModuleInit {
     // Chạy ngầm để không chặn việc mở Port 5001
     this.vttechApi.checkLoginStatus().then(result => {
       if (result.success) {
-        this.logger.log(`✅ [LOGIN OK] Người dùng: ${result.user}`);
-        this.logger.log(`✅ [STATUS] ${result.message}`);
+        this.logger.log(`✅ [STATUS] ${result.message} (${result.accounts} accounts)`);
       } else {
-        this.logger.error(`❌ [LOGIN FAILED] ${result.message}`);
+        this.logger.error(`❌ [Loicansua] [LOGIN FAILED] ${result.message}`);
       }
     }).catch(err => {
       this.logger.error(`🔥 [STARTUP ERROR] ${err.message}`);
@@ -140,10 +139,21 @@ export class SyncService implements OnModuleInit {
   private parseDate(dateValue: any): Date | null {
     if (!dateValue) return null;
     
-    if (dateValue instanceof Date) return dateValue;
+    if (dateValue instanceof Date) {
+      return isNaN(dateValue.getTime()) ? null : dateValue;
+    }
     
     const s = String(dateValue).trim();
     if (!s) return null;
+
+    // Handle YYYYMMDDHHMMSS or YYYYMMDD (Common in VTTech logs)
+    if (/^\d{8,14}$/.test(s)) {
+      const y = parseInt(s.substring(0, 4));
+      const m = parseInt(s.substring(4, 6));
+      const d = parseInt(s.substring(6, 8));
+      const date = new Date(y, m - 1, d, 12, 0, 0);
+      return isNaN(date.getTime()) ? null : date;
+    }
 
     // Handle DD/MM/YYYY or DD-MM-YYYY
     const ddmmyyyy = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/;
@@ -153,8 +163,6 @@ export class SyncService implements OnModuleInit {
       const m = parseInt(match[2]);
       const y = parseInt(match[3]);
       
-      // If there's time, preserve it as much as possible or stick to 12:00
-      // For VTTech, we mostly care about the day
       const date = new Date(y, m - 1, d, 12, 0, 0);
       return isNaN(date.getTime()) ? null : date;
     }
@@ -179,6 +187,7 @@ export class SyncService implements OnModuleInit {
     }
     return null;
   }
+
 
   private formatDate(date: any): string {
     if (!date) return '';
@@ -254,7 +263,7 @@ export class SyncService implements OnModuleInit {
       this.addLog(`✅ Hoàn thành đồng bộ Doanh thu.`);
     } catch (error) {
       this.syncStatus.error = error.message;
-      this.addLog(`❌ Lỗi đồng bộ doanh thu: ${error.message}`);
+      this.addLog(`❌ [Loicansua] Lỗi đồng bộ doanh thu: ${error.message}`);
     } finally {
       this.syncStatus.isSyncing = false;
     }
@@ -436,15 +445,12 @@ export class SyncService implements OnModuleInit {
           try {
             const ids5 = await this.syncCustomers(dateStr, dateStr, 5, branch.id);
             branchCustomerIds.push(...ids5);
-            await this.sleep(1000);
             
             const ids2 = await this.syncCustomers(dateStr, dateStr, 2, branch.id);
             branchCustomerIds.push(...ids2);
-            await this.sleep(1000);
 
             const ids3 = await this.syncCustomers(dateStr, dateStr, 3, branch.id);
             branchCustomerIds.push(...ids3);
-            await this.sleep(1000);
           } catch (e) {
             this.addLog(`  ❌ [${branch.name}] Lỗi khi lấy danh sách khách hàng: ${e.message}`);
           }
@@ -592,7 +598,7 @@ export class SyncService implements OnModuleInit {
     } catch (error) {
       this.syncStatus.error = error.message;
       this.syncStatus.message = 'Lỗi đồng bộ!';
-      this.addLog(`❌ Lỗi: ${error.message}`);
+      this.addLog(`❌ [Loicansua] Lỗi: ${error.message}`);
       
       await this.prisma.crawlLog.create({
         data: {
@@ -631,12 +637,12 @@ export class SyncService implements OnModuleInit {
           dateTo: dateTo,
           branchID: branchId.toString(),
           type: type,
-          BeginID: 0,
+          BeginID: start,
           BeginCustID: 0,
           Limit: length,
         });
       } catch (e) {
-        this.addLog(`   ❌ [SyncCustomers] Lỗi API (Type ${type}): ${e.message}`);
+        this.addLog(`   ❌ [Loicansua] [SyncCustomers] Lỗi API (Type ${type}): ${e.message}`);
         hasMore = false; 
         break;
       }
@@ -754,7 +760,7 @@ export class SyncService implements OnModuleInit {
         TypeApp: '1',
       });
     } catch (e) {
-      this.addLog(`   ❌ [SyncAppointments] Lỗi API: ${e.message}`);
+      this.addLog(`   ❌ [Loicansua] [SyncAppointments] Lỗi API: ${e.message}`);
       return [];
     }
 
