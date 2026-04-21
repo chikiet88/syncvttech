@@ -145,8 +145,10 @@ export class VttechApiService {
   }
 
   private getBestSession(): VttechSession {
-    // Luôn chọn session đã được sử dụng từ lâu nhất để phân bổ đều
-    return this.sessions.sort((a, b) => a.lastUsedAt - b.lastUsedAt)[0];
+    // Ưu tiên session ít được dùng nhất (lastUsedAt nhỏ nhất)
+    // Nếu có nhiều session chưa dùng hoặc dùng cùng lúc, chọn theo thứ tự xoay vòng
+    const sorted = [...this.sessions].sort((a, b) => a.lastUsedAt - b.lastUsedAt);
+    return sorted[0];
   }
 
   private async delayForSession(session: VttechSession) {
@@ -154,7 +156,7 @@ export class VttechApiService {
     const elapsed = now - session.lastUsedAt;
     // Ngưỡng an toàn Default là 2 calls / 3 seconds (~1.5s per call)
     // Cấp độ High là 1 call / 3 seconds. Ở đây ta chọn 1.5s làm mặc định.
-    const minDelay = 1500; 
+    const minDelay = 1000; 
     
     if (elapsed < minDelay) {
       const wait = minDelay - elapsed;

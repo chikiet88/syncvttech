@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { SyncService } from './sync.service';
 
-@Processor('sync-queue', { concurrency: 15 })
+@Processor('sync-queue', { concurrency: 5 })
 export class SyncProcessor extends WorkerHost {
   private readonly logger = new Logger(SyncProcessor.name);
 
