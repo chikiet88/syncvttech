@@ -18,7 +18,7 @@ export class SyncProcessor extends WorkerHost {
     try {
       switch (type) {
         case 'sync-customer-detail':
-          return await this.syncService.processQueuedCustomerDetail(data.customerId, data.parentTaskId);
+          return await this.syncService.processQueuedCustomerDetail(data.customerId, data.parentTaskId, data.syncDate);
         
         case 'sync-revenue-day':
           return await this.syncService.processQueuedRevenueDay(data.date, data.branchId);
