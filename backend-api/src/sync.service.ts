@@ -252,10 +252,10 @@ export class SyncService implements OnModuleInit {
           date: { lt: today }
         },
         orderBy: [
-          { date: 'desc' }, // Ưu tiên những ngày gần đây trước (LIFO cho lịch sử)
+          { date: 'asc' }, // Ưu tiên cày từ quá khứ (2019) trở lên theo yêu cầu
           { id: 'asc' }
         ],
-        take: 50
+        take: 10 // Lấy ít hơn mỗi lần để đảm bảo hệ thống ổn định khi cày dải ngày dài
       });
 
       if (pendingTasks.length === 0) {
@@ -565,7 +565,7 @@ export class SyncService implements OnModuleInit {
               await this.prisma.revenueTransaction.create({ data: dataWithoutId });
             }
 
-            // 6. Tính toán lại tổng CHUẨN từ Database
+            // 6. Tính toán tổng CHUẨN từ Database (Khớp với Dashboard 143.9M)
             const totals = await this.prisma.revenueTransaction.aggregate({
               where: { branch_id: branch.id, date: { gte: syncDate, lt: nextDate } },
               _sum: { amount: true, paid: true }
@@ -1769,9 +1769,6 @@ export class SyncService implements OnModuleInit {
   }
 
   private mapRevenueItem(item: any, branchId: number, fallbackDate?: string) {
-    // VTTech often varies field names for amounts. 
-    // amount (Sales): Only from invoice/service value fields
-    // paid (Revenue): From payment/collection fields
     const rawAmount = item.PriceDiscounted || item.Price_Treat || item.Price || item.Price_Root || 0;
     const rawPaid = item.Paid || item.PaidAmount || item.TotalPaid || item.AmountPaid || item.PaymentDeposit || item.Amount || 0;
     
