@@ -12,6 +12,8 @@ interface VttechSession {
   cookies: string[];
   xsrfToken: string | null;
   lastUsedAt: number;
+  errorCount: number;
+  lastErrorAt: number;
   loginByUsernamePromise: Promise<boolean> | null;
 }
 
@@ -112,7 +114,7 @@ export class VttechApiService {
     return {
       username: u, password: p,
       token: null, secretKey: null, cookies: [], xsrfToken: null,
-      lastUsedAt: 0, loginByUsernamePromise: null
+      lastUsedAt: 0, errorCount: 0, lastErrorAt: 0, loginByUsernamePromise: null
     };
   }
 
@@ -145,9 +147,18 @@ export class VttechApiService {
   }
 
   private getBestSession(): VttechSession {
-    // Ưu tiên session ít được dùng nhất (lastUsedAt nhỏ nhất)
-    // Nếu có nhiều session chưa dùng hoặc dùng cùng lúc, chọn theo thứ tự xoay vòng
-    const sorted = [...this.sessions].sort((a, b) => a.lastUsedAt - b.lastUsedAt);
+    const now = Date.now();
+    // Ưu tiên session ít lỗi nhất và được dùng lâu nhất
+    const sorted = [...this.sessions].sort((a, b) => {
+      // Nếu một session có quá nhiều lỗi gần đây (trong 15p qua), đẩy nó xuống cuối
+      const aIsUnhealthy = a.errorCount > 3 && (now - a.lastErrorAt < 15 * 60000);
+      const bIsUnhealthy = b.errorCount > 3 && (now - b.lastErrorAt < 15 * 60000);
+      
+      if (aIsUnhealthy && !bIsUnhealthy) return 1;
+      if (!aIsUnhealthy && bIsUnhealthy) return -1;
+      
+      return a.lastUsedAt - b.lastUsedAt;
+    });
     return sorted[0];
   }
 
@@ -394,66 +405,63 @@ export class VttechApiService {
 
   async callHandler(page: string, handler: string, data: any, username?: string) {
     const session = username ? (this.sessions.find(s => s.username === username) || this.getBestSession()) : this.getBestSession();
-    await this.login(session);
-    await this.delayForSession(session);
     
-    if (!session.xsrfToken) await this.getXsrfToken(session, '/Report/ReportGeneral/', false);
+    let retryCount = 0;
+    const maxRetries = 2;
+    let lastError: any = null;
 
-    const url = `${page}?handler=${handler}`;
-    const formBody = this.buildFormBody(data, session);
-    const handlerHeaders = this.handlerHeaders(session, page);
+    while (retryCount <= maxRetries) {
+      try {
+        await this.login(session, retryCount > 0);
+        await this.delayForSession(session);
+        
+        if (!session.xsrfToken) await this.getXsrfToken(session, page, false);
 
-    this.log(`📡 Calling Handler: ${url} [${session.username}]`);
-    // this.log(`📡 Headers: ${JSON.stringify(handlerHeaders)}`);
+        const url = `${page}?handler=${handler}`;
+        const formBody = this.buildFormBody(data, session);
+        const handlerHeaders = this.handlerHeaders(session, page);
 
-    let response = await this.axiosInstance.post(url, formBody, {
-      headers: handlerHeaders,
-      session
-    } as any);
+        this.log(`📡 [Attempt ${retryCount + 1}] Calling: ${url} [${session.username}]`);
 
-    if ((response.status >= 300 && response.status < 400) || response.status === 400) {
-      const is400 = response.status === 400;
-      if (is400) {
-        this.log(`⚠️ [Loicansua] Handler ${handler} [${session.username}] returned 400. Refreshing XSRF and retrying...`);
-        await this.getXsrfToken(session, page, true);
-      } else {
-        const loc = response.headers['location'];
-        this.log(`🔄 [Loicansua] Call 302: ${url} -> ${loc}. Re-login and refreshing page context [${session.username}]...`);
-        await this.login(session, true);
-        // Ensure page context is established after re-login
-        await this.getXsrfToken(session, page, true);
+        const response = await this.axiosInstance.post(url, formBody, {
+          headers: handlerHeaders,
+          session
+        } as any);
+
+        // Check for 302 or 401/400 that indicates session issues
+        const isSessionIssue = response.status === 302 || response.status === 401 || response.status === 400 || 
+                              (typeof response.data === 'string' && response.data.trim().startsWith('<'));
+
+        if (isSessionIssue) {
+          const reason = response.status === 302 ? 'Redirect' : 
+                         response.status === 400 ? 'Bad Request/Token' : 
+                         typeof response.data === 'string' && response.data.trim().startsWith('<') ? 'HTML Response' : 'Session Expired';
+          
+          this.log(`⚠️ [Loicansua] [${session.username}] ${reason} detected. Retrying ${retryCount + 1}/${maxRetries}...`);
+          
+          if (typeof response.data === 'string' && response.data.trim().startsWith('<') && retryCount === maxRetries) {
+            this.log(`❌ [Loicansua] [${session.username}] Final attempt failed. HTML snippet: ${response.data.trim().slice(0, 200)}`);
+          }
+          
+          retryCount++;
+          continue;
+        }
+
+        // Success!
+        session.errorCount = 0; // Reset lỗi khi thành công
+        return this.decompress(response.data);
+
+      } catch (e) {
+        lastError = e;
+        session.errorCount++;
+        session.lastErrorAt = Date.now();
+        this.log(`❌ [Loicansua] [${session.username}] Exception in callHandler: ${e.message}. Retry ${retryCount + 1}...`);
+        retryCount++;
       }
-      
-      response = await this.axiosInstance.post(url, this.buildFormBody(data, session), {
-        headers: this.handlerHeaders(session, page),
-        session
-      } as any);
-      this.log(`🔄 [Loicansua] Retry [${session.username}] result: ${response.status}`);
     }
 
-    if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
-      this.log(`⚠️ [Loicansua] Handler ${handler} [${session.username}] returned HTML ${response.status}. Session might be expired. Retrying login and refreshing page context...`);
-      await this.login(session, true);
-      
-      // Crucial: Establishing session context for the SPECIFIC page
-      await this.getXsrfToken(session, page, true);
-      
-      response = await this.axiosInstance.post(url, this.buildFormBody(data, session), {
-        headers: this.handlerHeaders(session, page),
-        session
-      } as any);
-
-      if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
-         this.log(`❌ [Loicansua] Handler ${handler} [${session.username}] still returned HTML after retry. Snippet: ${response.data.trim().slice(0, 100)}`);
-         return [];
-      }
-    }
-
-    if (typeof response.data === 'string' && response.data.trim() === '') {
-      this.log(`⚠️ [Loicansua] Handler ${handler} [${session.username}] returned EMPTY ${response.status}. Headers: ${JSON.stringify(response.headers).slice(0, 200)}`);
-    }
-    const decompressed = this.decompress(response.data);
-    return decompressed;
+    this.log(`🔥 [Loicansua] [${session.username}] All retries failed for ${handler}.`);
+    return [];
   }
 
   async callApi(url: string, data: any) {
@@ -465,9 +473,17 @@ export class VttechApiService {
   }
 
   async checkLoginStatus() {
-    const results = await Promise.all(this.sessions.map(s => this.login(s, true)));
-    const ok = results.every(r => r);
-    return { success: ok, message: ok ? 'All accounts OK' : 'Some accounts failed', accounts: this.sessions.length };
+    const results = await Promise.all(this.sessions.map(async s => {
+      const ok = await this.login(s, true);
+      return { username: s.username, success: ok };
+    }));
+    const okCount = results.filter(r => r.success).length;
+    return { 
+      success: okCount === this.sessions.length, 
+      message: `${okCount}/${this.sessions.length} accounts OK`, 
+      accounts: this.sessions.length,
+      details: results
+    };
   }
 
   async fetchExtensions() { return this.callHandler('/marketing/ticketgeneral/', 'LoadIni', {}); }
@@ -477,5 +493,11 @@ export class VttechApiService {
   }
   async getRevenueByBranch(dateFrom: string, dateTo: string, branchId: number) {
     return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'LoadataDetailByBranch', { BranchID: branchId.toString(), dateFrom, dateTo });
+  }
+  async getPaymentByBranch(dateFrom: string, dateTo: string, branchId: number) {
+    return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'LoadataPaymentDetailByBranch', { BranchID: branchId.toString(), dateFrom, dateTo });
+  }
+  async getDepositByBranch(dateFrom: string, dateTo: string, branchId: number) {
+    return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'LoadataDepositDetailByBranch', { BranchID: branchId.toString(), dateFrom, dateTo });
   }
 }

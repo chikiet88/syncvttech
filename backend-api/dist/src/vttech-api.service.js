@@ -90,9 +90,12 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
             }
         });
         this.axiosInstance.interceptors.request.use(config => {
-            const session = config.session;
+            let session = config.session;
             if (!session)
                 return config;
+            const realSession = this.sessions.find(s => s.username === session.username);
+            if (realSession)
+                session = realSession;
             const headers = config.headers || {};
             const ck = [...session.cookies];
             if (session.token) {
@@ -124,8 +127,10 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         });
         this.axiosInstance.interceptors.response.use(response => {
             const session = response.config.session;
-            if (session)
-                this.updateSessionCookies(session, response.headers['set-cookie']);
+            if (session) {
+                const realSession = this.sessions.find(s => s.username === session.username);
+                this.updateSessionCookies(realSession || session, response.headers['set-cookie']);
+            }
             return response;
         });
     }
@@ -133,16 +138,13 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         return {
             username: u, password: p,
             token: null, secretKey: null, cookies: [], xsrfToken: null,
-            lastUsedAt: 0, loginByUsernamePromise: null
+            lastUsedAt: 0, errorCount: 0, lastErrorAt: 0, loginByUsernamePromise: null
         };
     }
     updateSessionCookies(session, newCookies) {
         if (!newCookies || !Array.isArray(newCookies))
             return;
         for (const raw of newCookies) {
-            if (raw.toLowerCase().includes('session') || raw.toLowerCase().includes('antiforgery')) {
-                this.log(`🍪 [${session.username}] RAW Cookie: ${raw}`);
-            }
             const firstPart = raw.split(';')[0];
             const [name] = firstPart.split('=');
             if (!name)
@@ -164,12 +166,22 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         }
     }
     getBestSession() {
-        return this.sessions.sort((a, b) => a.lastUsedAt - b.lastUsedAt)[0];
+        const now = Date.now();
+        const sorted = [...this.sessions].sort((a, b) => {
+            const aIsUnhealthy = a.errorCount > 3 && (now - a.lastErrorAt < 15 * 60000);
+            const bIsUnhealthy = b.errorCount > 3 && (now - b.lastErrorAt < 15 * 60000);
+            if (aIsUnhealthy && !bIsUnhealthy)
+                return 1;
+            if (!aIsUnhealthy && bIsUnhealthy)
+                return -1;
+            return a.lastUsedAt - b.lastUsedAt;
+        });
+        return sorted[0];
     }
     async delayForSession(session) {
         const now = Date.now();
         const elapsed = now - session.lastUsedAt;
-        const minDelay = 1500;
+        const minDelay = 1000;
         if (elapsed < minDelay) {
             const wait = minDelay - elapsed;
             await new Promise(r => setTimeout(r, wait));
@@ -193,7 +205,9 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                 : await this.axiosInstance.post(currentUrl, config?.data, finalConfig);
             if (resp.status >= 300 && resp.status < 400) {
                 const location = resp.headers['location'];
-                this.log(`↪️ [${session.username}] Redirect (${resp.status}): ${currentUrl} -> ${location}`);
+                const setCookie = resp.headers['set-cookie'];
+                const isLoicansua = location?.includes('index.html') || (setCookie ? (Array.isArray(setCookie) ? setCookie.length : 1) : 0) === 0;
+                this.log(`↪️ ${isLoicansua ? '[Loicansua] ' : ''}[${session.username}] Redirect (${resp.status}): ${currentUrl} -> ${location} | Cookies: ${setCookie ? (Array.isArray(setCookie) ? setCookie.length : 1) : 0}`);
                 if (location === currentUrl || (location && location.endsWith(currentUrl))) {
                     return resp;
                 }
@@ -252,9 +266,19 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                 if (data && data.Session) {
                     s.token = data.Session;
                     s.secretKey = data.SecretKey || data.secretkey || s.secretKey || '';
-                    this.log(`✅ Login OK [${s.username}]. SK: ${s.secretKey ? 'OK' : '???'}`);
+                    this.log(`✅ Login OK [${s.username}]. SK: ${s.secretKey ? 'OK' : '???'} | Token: ${s.token?.slice(0, 10)}...`);
+                    if (data.XSRFToken) {
+                        s.xsrfToken = data.XSRFToken;
+                        this.log(`💡 [${s.username}] Found XSRF in login response: ${s.xsrfToken?.slice(0, 10)}...`);
+                    }
                     await this.followRedirects(s, 'get', '/', { headers: { 'Accept': 'text/html' } });
-                    await this.getXsrfToken(s, '/', true);
+                    await this.axiosInstance.get('/api/Home/Language/?ver=' + Date.now(), { session: s });
+                    await this.axiosInstance.post('/api/Home/SessionData', {}, {
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.token}` },
+                        session: s
+                    });
+                    await this.followRedirects(s, 'get', '/Main/Dashboard/', { headers: { 'Accept': 'text/html' } });
+                    await this.getXsrfToken(s, '/Customer/ListCustomer/', true);
                     return true;
                 }
                 return false;
@@ -273,32 +297,49 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         const s = session || this.getBestSession();
         if (!force && s.xsrfToken)
             return s.xsrfToken;
-        try {
-            const resp = await this.followRedirects(s, 'get', page, {
-                headers: { 'Referer': this.baseUrl + '/', 'Accept': 'text/html' }
-            });
-            if (typeof resp.data === 'string') {
-                const $ = cheerio.load(resp.data);
-                const token = $('input[name="__RequestVerificationToken"]').val() ||
-                    $('meta[name="request-verification-token"]').attr('content') ||
-                    $('meta[name="xsrf-token"]').attr('content');
-                if (token) {
-                    s.xsrfToken = token;
-                    this.log(`✅ [${s.username}] Extracted XSRF from ${page}: ${s.xsrfToken.slice(0, 10)}...`);
-                    return s.xsrfToken;
-                }
-                else if (resp.data.includes('<script>') && resp.data.trim().startsWith('<script>')) {
-                    this.log(`⚠️ [${s.username}] Page ${page} is a script loader, no token found.`);
-                }
-                else {
-                    this.log(`⚠️ [${s.username}] No XSRF found on ${page}. Snippet: ${resp.data.trim().slice(0, 50)}`);
+        const pagesToTry = [page, '/Report/ReportGeneral/', '/', '/Login/Login/'];
+        if (page !== '/Customer/ListCustomer/')
+            pagesToTry.unshift('/Customer/ListCustomer/');
+        const uniquePages = [...new Set(pagesToTry)];
+        for (const targetPage of uniquePages) {
+            try {
+                const resp = await this.followRedirects(s, 'get', targetPage, {
+                    headers: { 'Referer': this.baseUrl + '/', 'Accept': 'text/html' }
+                });
+                if (typeof resp.data === 'string') {
+                    const $ = cheerio.load(resp.data);
+                    const token = $('input[name="__RequestVerificationToken"]').val() ||
+                        $('meta[name="request-verification-token"]').attr('content') ||
+                        $('meta[name="xsrf-token"]').attr('content') ||
+                        $('meta[name="RequestVerificationToken"]').attr('content');
+                    if (token) {
+                        s.xsrfToken = token;
+                        this.log(`✅ [${s.username}] Extracted XSRF from ${targetPage}: ${s.xsrfToken.slice(0, 10)}...`);
+                        return s.xsrfToken;
+                    }
+                    if (targetPage === '/') {
+                    }
+                    const xsrfCookie = s.cookies.find(c => c.toLowerCase().includes('xsrf-token') || c.toLowerCase().includes('antiforgery'));
+                    if (xsrfCookie) {
+                        const m = xsrfCookie.match(/=([^;]+)/);
+                        if (m && m[1] && m[1].length > 20) {
+                            this.log(`💡 [Loicansua] [${s.username}] Found potential token in cookie: ${xsrfCookie.slice(0, 30)}...`);
+                        }
+                    }
+                    const scriptMatches = resp.data.match(/["']?RequestVerificationToken["']?\s*[:=]\s*["']([^"']+)["']/i);
+                    if (scriptMatches && scriptMatches[1]) {
+                        s.xsrfToken = scriptMatches[1];
+                        this.log(`✅ [${s.username}] Extracted XSRF from ${targetPage} script: ${s.xsrfToken.slice(0, 10)}...`);
+                        return s.xsrfToken;
+                    }
                 }
             }
-            return s.xsrfToken;
+            catch (e) {
+                this.log(`⚠️ [${s.username}] Error fetching XSRF from ${targetPage}: ${e.message}`);
+            }
         }
-        catch {
-            return s.xsrfToken;
-        }
+        this.log(`❌ [Loicansua] [${s.username}] Global fail to get XSRF token after trying multiple pages.`);
+        return s.xsrfToken;
     }
     decompress(data) {
         if (!data || typeof data !== 'string')
@@ -356,37 +397,49 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
     }
     async callHandler(page, handler, data, username) {
         const session = username ? (this.sessions.find(s => s.username === username) || this.getBestSession()) : this.getBestSession();
-        await this.login(session);
-        await this.delayForSession(session);
-        if (!session.xsrfToken)
-            await this.getXsrfToken(session, '/Report/ReportGeneral/', false);
-        const url = `${page}?handler=${handler}`;
-        const formBody = this.buildFormBody(data, session);
-        const handlerHeaders = this.handlerHeaders(session, page);
-        this.log(`📡 Calling Handler: ${url} [${session.username}]`);
-        let response = await this.axiosInstance.post(url, formBody, {
-            headers: handlerHeaders,
-            session
-        });
-        if (response.status >= 300 && response.status < 400) {
-            const loc = response.headers['location'];
-            this.log(`🔄 Call 302: ${url} -> ${loc}. Re-login [${session.username}]...`);
-            await this.login(session, true);
-            response = await this.axiosInstance.post(url, this.buildFormBody(data, session), {
-                headers: this.handlerHeaders(session, page),
-                session
-            });
-            this.log(`🔄 Retry [${session.username}] status: ${response.status}`);
+        let retryCount = 0;
+        const maxRetries = 2;
+        let lastError = null;
+        while (retryCount <= maxRetries) {
+            try {
+                await this.login(session, retryCount > 0);
+                await this.delayForSession(session);
+                if (!session.xsrfToken)
+                    await this.getXsrfToken(session, page, false);
+                const url = `${page}?handler=${handler}`;
+                const formBody = this.buildFormBody(data, session);
+                const handlerHeaders = this.handlerHeaders(session, page);
+                this.log(`📡 [Attempt ${retryCount + 1}] Calling: ${url} [${session.username}]`);
+                const response = await this.axiosInstance.post(url, formBody, {
+                    headers: handlerHeaders,
+                    session
+                });
+                const isSessionIssue = response.status === 302 || response.status === 401 || response.status === 400 ||
+                    (typeof response.data === 'string' && response.data.trim().startsWith('<'));
+                if (isSessionIssue) {
+                    const reason = response.status === 302 ? 'Redirect' :
+                        response.status === 400 ? 'Bad Request/Token' :
+                            typeof response.data === 'string' && response.data.trim().startsWith('<') ? 'HTML Response' : 'Session Expired';
+                    this.log(`⚠️ [Loicansua] [${session.username}] ${reason} detected. Retrying ${retryCount + 1}/${maxRetries}...`);
+                    if (typeof response.data === 'string' && response.data.trim().startsWith('<') && retryCount === maxRetries) {
+                        this.log(`❌ [Loicansua] [${session.username}] Final attempt failed. HTML snippet: ${response.data.trim().slice(0, 200)}`);
+                    }
+                    retryCount++;
+                    continue;
+                }
+                session.errorCount = 0;
+                return this.decompress(response.data);
+            }
+            catch (e) {
+                lastError = e;
+                session.errorCount++;
+                session.lastErrorAt = Date.now();
+                this.log(`❌ [Loicansua] [${session.username}] Exception in callHandler: ${e.message}. Retry ${retryCount + 1}...`);
+                retryCount++;
+            }
         }
-        if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
-            this.log(`⚠️ Handler ${handler} [${session.username}] returned HTML ${response.status}. Snippet: ${response.data.trim().slice(0, 100)}`);
-            return [];
-        }
-        if (typeof response.data === 'string' && response.data.trim() === '') {
-            this.log(`⚠️ Handler ${handler} [${session.username}] returned EMPTY ${response.status}. Headers: ${JSON.stringify(response.headers).slice(0, 200)}`);
-        }
-        const decompressed = this.decompress(response.data);
-        return decompressed;
+        this.log(`🔥 [Loicansua] [${session.username}] All retries failed for ${handler}.`);
+        return [];
     }
     async callApi(url, data) {
         const session = this.getBestSession();
@@ -396,9 +449,17 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         return this.decompress(resp.data);
     }
     async checkLoginStatus() {
-        const results = await Promise.all(this.sessions.map(s => this.login(s, true)));
-        const ok = results.every(r => r);
-        return { success: ok, message: ok ? 'All accounts OK' : 'Some accounts failed', accounts: this.sessions.length };
+        const results = await Promise.all(this.sessions.map(async (s) => {
+            const ok = await this.login(s, true);
+            return { username: s.username, success: ok };
+        }));
+        const okCount = results.filter(r => r.success).length;
+        return {
+            success: okCount === this.sessions.length,
+            message: `${okCount}/${this.sessions.length} accounts OK`,
+            accounts: this.sessions.length,
+            details: results
+        };
     }
     async fetchExtensions() { return this.callHandler('/marketing/ticketgeneral/', 'LoadIni', {}); }
     async fetchTicketGroups() { const r = await this.callHandler('/marketing/ticketgeneral/', 'LoadIni', {}); return r?.TicketGroups || []; }
@@ -406,7 +467,13 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         return this.callHandler('/marketing/call/historycall/', 'LoadData', { DateFrom: dateFrom, DateTo: dateTo, BranchID: 0, Type: 0 });
     }
     async getRevenueByBranch(dateFrom, dateTo, branchId) {
-        return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'LoadataDetailByBranch', { branchID: branchId.toString(), dateFrom, dateTo });
+        return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'LoadataDetailByBranch', { BranchID: branchId.toString(), dateFrom, dateTo });
+    }
+    async getPaymentByBranch(dateFrom, dateTo, branchId) {
+        return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'LoadataPaymentDetailByBranch', { BranchID: branchId.toString(), dateFrom, dateTo });
+    }
+    async getDepositByBranch(dateFrom, dateTo, branchId) {
+        return this.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'LoadataDepositDetailByBranch', { BranchID: branchId.toString(), dateFrom, dateTo });
     }
 };
 exports.VttechApiService = VttechApiService;

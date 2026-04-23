@@ -7,6 +7,8 @@ interface VttechSession {
     cookies: string[];
     xsrfToken: string | null;
     lastUsedAt: number;
+    errorCount: number;
+    lastErrorAt: number;
     loginByUsernamePromise: Promise<boolean> | null;
 }
 export declare class VttechApiService {
@@ -37,10 +39,16 @@ export declare class VttechApiService {
         success: boolean;
         message: string;
         accounts: number;
+        details: {
+            username: string;
+            success: boolean;
+        }[];
     }>;
     fetchExtensions(): Promise<any>;
     fetchTicketGroups(): Promise<any>;
     fetchCallHistory(dateFrom: string, dateTo: string): Promise<any>;
     getRevenueByBranch(dateFrom: string, dateTo: string, branchId: number): Promise<any>;
+    getPaymentByBranch(dateFrom: string, dateTo: string, branchId: number): Promise<any>;
+    getDepositByBranch(dateFrom: string, dateTo: string, branchId: number): Promise<any>;
 }
 export {};

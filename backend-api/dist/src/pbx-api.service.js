@@ -58,12 +58,12 @@ let PbxApiService = PbxApiService_1 = class PbxApiService {
                 return response.data;
             }
             else {
-                this.logger.error(`PBX API error: ${response.status} - ${response.statusText}`);
+                this.logger.error(`❌ [Loicansua] PBX API error: ${response.status} - ${response.statusText}`);
                 return { data: [], total: 0 };
             }
         }
         catch (error) {
-            this.logger.error(`Error fetching PBX CDR records: ${error.message}`);
+            this.logger.error(`❌ [Loicansua] Error fetching PBX CDR records: ${error.message}`);
             return { data: [], total: 0 };
         }
     }

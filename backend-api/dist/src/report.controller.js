@@ -205,7 +205,11 @@ let ReportController = ReportController_1 = class ReportController {
                     where: { branch_id: branch.id, date: { gte: start, lte: end }, service_id: { not: null } }
                 }),
                 this.prisma.revenueTransaction.aggregate({
-                    where: { branch_id: branch.id, date: { gte: start, lte: end } },
+                    where: {
+                        branch_id: branch.id,
+                        date: { gte: start, lte: end },
+                        type: 1
+                    },
                     _sum: { amount: true, paid: true }
                 })
             ]);

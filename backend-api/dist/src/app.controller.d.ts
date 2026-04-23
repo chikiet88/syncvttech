@@ -14,6 +14,10 @@ export declare class AppController {
         success: boolean;
         message: string;
         accounts: number;
+        details: {
+            username: string;
+            success: boolean;
+        }[];
     }>;
     getHello(): string;
     triggerSync(from?: string, to?: string, date?: string, forceMaster?: string, syncPbx?: string, syncDetails?: string): Promise<{
@@ -42,18 +46,18 @@ export declare class AppController {
         error_message: string | null;
         created_at: Date;
         id: number;
-        task_id: string | null;
         branch_id: number | null;
+        records_count: number | null;
+        appointments_count: number;
+        customers_count: number;
+        revenue_total: number;
+        sales_total: number;
+        services_count: number;
+        treatments_count: number;
+        task_id: string | null;
         crawl_date: Date | null;
         crawl_type: string | null;
         message: string | null;
-        records_count: number | null;
-        customers_count: number;
-        services_count: number;
-        treatments_count: number;
-        appointments_count: number;
-        sales_total: number;
-        revenue_total: number;
         duration_seconds: number | null;
         total_branches: number | null;
         total_services: number | null;

@@ -214,6 +214,22 @@ export class SyncService implements OnModuleInit {
     await this.syncByRange(dateStr, dateStr);
   }
 
+  @Cron('0 */5 * * * *')
+  async handleHeartbeat() {
+    this.logger.log('💓 [HEARTBEAT] Đang duy trì nhịp đập Session cho các tài khoản...');
+    try {
+      const result = await this.vttechApi.checkLoginStatus();
+      if (result.success) {
+        this.logger.log(`✅ [HEARTBEAT] Session ổn định (${result.accounts} tài khoản)`);
+      } else {
+        this.logger.warn(`⚠️ [HEARTBEAT] Phát hiện Session yếu: ${result.message}`);
+        // Tự động kích hoạt re-login nếu cần thiết thông qua checkLoginStatus nội bộ
+      }
+    } catch (e) {
+      this.logger.error(`🔥 [HEARTBEAT ERROR] ${e.message}`);
+    }
+  }
+
   @Cron('0 */20 * * * *')
   async handleFrequentSync() {
     const today = new Date().toISOString().split('T')[0];
@@ -237,7 +253,7 @@ export class SyncService implements OnModuleInit {
     // Kiểm tra tải hệ thống qua hàng đợi BullMQ
     try {
       const counts = await this.syncQueue.getJobCounts();
-      if (counts.waiting > 50 || counts.active > 15) {
+      if (counts.waiting > 150 || counts.active > 20) {
         this.logger.log(`⏩ Tạm hoãn đồng bộ lịch sử do Queue đang bận (Waiting: ${counts.waiting}, Active: ${counts.active})`);
         return;
       }
@@ -255,7 +271,7 @@ export class SyncService implements OnModuleInit {
           { date: 'asc' }, // Ưu tiên cày từ quá khứ (2019) trở lên theo yêu cầu
           { id: 'asc' }
         ],
-        take: 10 // Lấy ít hơn mỗi lần để đảm bảo hệ thống ổn định khi cày dải ngày dài
+        take: 100 // Tăng tốc độ cày backlog lên 100 task mỗi 30 phút
       });
 
       if (pendingTasks.length === 0) {
@@ -480,6 +496,18 @@ export class SyncService implements OnModuleInit {
 
       // 1. Đồng bộ Master Data (Danh mục)
       await this.syncMasterData(forceMaster);
+
+      const branches = await this.prisma.branch.findMany();
+      const days: string[] = [];
+      let curr = new Date(dateFrom);
+      const end = new Date(dateTo);
+      while (curr <= end) {
+        days.push(curr.toISOString().split('T')[0]);
+        curr.setDate(curr.getDate() + 1);
+      }
+
+      let currentStep = 0;
+      const totalSteps = days.length * branches.length;
       for (const dateStr of days) {
         this.addLog(`📅 --- Bắt đầu đồng bộ ngày: ${dateStr} ---`);
         
@@ -512,9 +540,9 @@ export class SyncService implements OnModuleInit {
           let dayRevenue = 0;
           try {
             const [revData, payData, depData] = await Promise.all([
-              this.vttechApi.getRevenueByBranch(dateStr, dateStr, branch.id).then(r => this.ensureArray(r)),
-              this.vttechApi.getPaymentByBranch(dateStr, dateStr, branch.id).then(r => this.ensureArray(r)),
-              this.vttechApi.getDepositByBranch(dateStr, dateStr, branch.id).then(r => this.ensureArray(r)),
+              this.vttechApi.getRevenueByBranch(dateStr, dateStr, branch.id).then((r: any) => this.ensureArray(r)),
+              this.vttechApi.getPaymentByBranch(dateStr, dateStr, branch.id).then((r: any) => this.ensureArray(r)),
+              this.vttechApi.getDepositByBranch(dateStr, dateStr, branch.id).then((r: any) => this.ensureArray(r)),
             ]);
 
             // 1. Khử trùng dữ liệu thô THÔNG MINH (Invoice + Amount)
@@ -1769,12 +1797,14 @@ export class SyncService implements OnModuleInit {
   }
 
   private mapRevenueItem(item: any, branchId: number, fallbackDate?: string) {
-    const rawAmount = item.PriceDiscounted || item.Price_Treat || item.Price || item.Price_Root || 0;
-    const rawPaid = item.Paid || item.PaidAmount || item.TotalPaid || item.AmountPaid || item.PaymentDeposit || item.Amount || 0;
-    
-    const amount = this.parseNumber(rawAmount);
-    const paid = this.parseNumber(rawPaid);
-    
+    // Logic khớp Dashboard 100%:
+    // amount -> Lưu trường Amount (Tiền mặt thực thu - Doanh thu)
+    // paid -> Lưu trường Paid (Tổng tiền đóng cho item - Bao gồm cọc)
+    // is_new -> Tạm dùng để lưu PriceDiscounted (Tổng giá trị item - Doanh số)
+    const amount = this.parseNumber(item.Amount || 0);
+    const paid = this.parseNumber(item.Paid || 0);
+    const price = this.parseNumber(item.PriceDiscounted || 0);
+
     const syncDateValue = item.Date_Payment || item.PaymentDate || item.ChooseDate || item.Date || item.Created || item.DateCreated || fallbackDate;
 
     return {
@@ -1790,10 +1820,10 @@ export class SyncService implements OnModuleInit {
       category_name: String(item.ServiceCatName || item.CatName || ""),
       amount: amount,
       paid: paid,
-      is_new: parseInt(String(item.IsNew)) || 0,
-      doc_code: String(item.DocCode || ""),
+      is_new: price, // Lưu Doanh số vào đây tạm
+      doc_code: String(item.TabID || item.DocCode || ""),
       source_id: parseInt(String(item.Source || item.SourceID)) || 0,
-      type: parseInt(String(item.Type || item.TypeID)) || 0,
+      type: parseInt(String(item.Type || item.TypeID)) || 1, // Mặc định 1 nếu thiếu
       payment_method: parseInt(String(item.PaymentMethod || item.MethodID)) || 0,
       date: this.parseDate(syncDateValue) || new Date(),
       created_at: this.parseDate(item.Created || item.DateCreated || item.Date || new Date()) || new Date(),
@@ -1807,40 +1837,50 @@ export class SyncService implements OnModuleInit {
       await this.vttechApi.getXsrfToken();
       
       const res = await this.vttechApi.getRevenueByBranch(date, date, branchId);
-      const items = this.ensureArray(res);
-      const uniqueItemsMap = new Map<number, any>();
-      for (const item of items) {
-        const tId = parseInt(item.ID || item.id || item.PaymentID || item.OrderID || item.TabID);
-        if (tId && !uniqueItemsMap.has(tId)) {
-          uniqueItemsMap.set(tId, item);
-        }
-      }
-      
-      for (const [tId, item] of uniqueItemsMap.entries()) {
+      const table = this.ensureArray(res);
+      // Sử dụng Map với key kết hợp để tránh mất dữ liệu khi 1 Tab có nhiều dịch vụ
+      const uniqueItemsMap = new Map<string, any>();
+      table.forEach((item: any, idx: number) => {
+        const baseId = parseInt(item.ID || item.id || item.PaymentID || item.OrderID || item.TabID) || 0;
+        const sId = parseInt(item.ServiceID || item.Service || item.Service_ID) || 0;
+        // Key kết hợp: BaseID + ServiceID + Index (để tuyệt đối không trùng)
+        const key = `${baseId}_${sId}_${idx}`;
+        uniqueItemsMap.set(key, item);
+      });
+
+      for (const [key, item] of uniqueItemsMap.entries()) {
         const currentHash = this.generateHash(item);
-        const existing = await this.prisma.revenueTransaction.findUnique({
-          where: { id: tId }
-        });
-
-        if (existing && existing.last_hash === currentHash) {
-          continue;
+        
+        // Tạo một ID số duy nhất cho DB (Int)
+        // Nếu baseId quá lớn, chúng ta sẽ để DB tự sinh ID và quản lý qua hash
+        const baseId = parseInt(key.split('_')[0]);
+        const idx = parseInt(key.split('_')[2]);
+        
+        // Cố gắng tạo tId ổn định để upsert, nếu không dùng hash check
+        let tId: number | undefined = undefined;
+        if (baseId > 0 && baseId < 2000000) {
+            tId = baseId * 100 + (idx % 100); 
         }
 
-        const mapped = this.mapRevenueItem(item, branchId);
+        const mapped = this.mapRevenueItem(item, branchId, date);
 
-        await this.prisma.revenueTransaction.upsert({
-          where: { id: tId },
-          update: {
-            ...mapped,
-            last_hash: currentHash,
-          },
-          create: {
-            ...mapped,
-            id: tId,
-            created_at: new Date(), 
-            last_hash: currentHash,
-          }
-        });
+        if (tId) {
+            await this.prisma.revenueTransaction.upsert({
+                where: { id: tId },
+                update: { ...mapped, last_hash: currentHash },
+                create: { ...mapped, id: tId, last_hash: currentHash }
+            });
+        } else {
+            // Fallback: Tìm theo hash hoặc tạo mới
+            const existing = await this.prisma.revenueTransaction.findFirst({
+                where: { branch_id: branchId, customer_id: mapped.customer_id, last_hash: currentHash }
+            });
+            if (!existing) {
+                await this.prisma.revenueTransaction.create({
+                    data: { ...mapped, last_hash: currentHash, created_at: new Date() }
+                });
+            }
+        }
       }
     } catch (error) {
       const errorMsg = error.message || (typeof error === 'string' ? error : JSON.stringify(error));
@@ -1977,21 +2017,36 @@ export class SyncService implements OnModuleInit {
         try {
           const res = await this.vttechApi.getRevenueByBranch(dateStr, dateStr, task.branch_id);
           const revItems = this.ensureArray(res);
-          for (const item of revItems) {
-            const mapped = this.mapRevenueItem(item, task.branch_id);
+          revItems.forEach(async (item: any, idx: number) => {
+            const mapped = this.mapRevenueItem(item, task.branch_id, dateStr);
             daySales += mapped.amount;
             dayRevenue += mapped.paid;
             
-            const tId = parseInt(item.ID || item.id || item.PaymentID || item.OrderID || item.TabID);
+            const baseId = parseInt(item.ID || item.id || item.PaymentID || item.OrderID || item.TabID) || 0;
+            const currentHash = this.generateHash(item);
+            
+            let tId: number | undefined = undefined;
+            if (baseId > 0 && baseId < 2000000) {
+                tId = baseId * 100 + (idx % 100); 
+            }
+
             if (tId) {
-               const currentHash = this.generateHash(item);
                await this.prisma.revenueTransaction.upsert({
                  where: { id: tId },
                  update: { ...mapped, last_hash: currentHash },
                  create: { ...mapped, id: tId, last_hash: currentHash }
                });
+            } else {
+               const existing = await this.prisma.revenueTransaction.findFirst({
+                 where: { branch_id: task.branch_id, last_hash: currentHash }
+               });
+               if (!existing) {
+                 await this.prisma.revenueTransaction.create({
+                   data: { ...mapped, last_hash: currentHash, created_at: new Date() }
+                 });
+               }
             }
-          }
+          });
           totalRecords += revItems.length;
         } catch (e) {
           this.logger.error(`[TASK ${taskId}] Error syncing revenue: ${e.message}`);

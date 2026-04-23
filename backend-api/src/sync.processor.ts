@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { SyncService } from './sync.service';
 
-@Processor('sync-queue', { concurrency: 5 })
+@Processor('sync-queue', { concurrency: 10 })
 export class SyncProcessor extends WorkerHost {
   private readonly logger = new Logger(SyncProcessor.name);
 
@@ -18,7 +18,7 @@ export class SyncProcessor extends WorkerHost {
     try {
       switch (type) {
         case 'sync-customer-detail':
-          return await this.syncService.processQueuedCustomerDetail(data.customerId, data.parentTaskId, data.syncDate);
+          return await this.syncService.processQueuedCustomerDetail(data.customerId, data.parentTaskId);
         
         case 'sync-revenue-day':
           return await this.syncService.processQueuedRevenueDay(data.date, data.branchId);

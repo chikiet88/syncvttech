@@ -195,40 +195,32 @@ export class ReportController {
       orderBy: { id: 'asc' }
     });
 
+    // 1. Fetch live summary from VTTech for 100% accuracy on Sales/Revenue
+    // Sử dụng handler Loadata và branchID: 0 để lấy tổng hợp tất cả chi nhánh
+    const vttechSummary = await this.vttechApi.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'Loadata', {
+      branchID: 0,
+      dateFrom: dateFrom,
+      dateTo: dateTo
+    });
+
     const summaries = await Promise.all(branches.map(async (branch) => {
-      // Aggregate directly from data tables for accuracy
+      // Find matching branch in VTTech summary
+      const vtBranch = vttechSummary.Table?.find((t: any) => t.BranchID === branch.id);
+      
       const [
         customersCountResult,
         appointmentsCount,
         treatmentsCount,
-        servicesCount,
-        revenueData
+        servicesCount
       ] = await Promise.all([
         // Count unique customer IDs across multiple tables for this branch and date range
-        this.prisma.$queryRaw<{ count: bigint }[]>`
+        (this.prisma as any).$queryRaw<{ count: bigint }[]>`
           SELECT count(DISTINCT customer_id) as "count" 
-          FROM (
-            SELECT customer_id FROM daily_customers 
-            WHERE branch_id = ${branch.id} 
+          FROM revenue_transactions 
+          WHERE branch_id = ${branch.id} 
               AND date >= ${start} 
               AND date <= ${end}
-            UNION
-            SELECT customer_id FROM appointments 
-            WHERE branch_id = ${branch.id} 
-              AND appointment_date >= ${start} 
-              AND appointment_date <= ${end}
-            UNION
-            SELECT customer_id FROM treatments 
-            WHERE branch_id = ${branch.id} 
-              AND treatment_date >= ${start} 
-              AND treatment_date <= ${end}
-            UNION
-            SELECT customer_id FROM revenue_transactions 
-            WHERE branch_id = ${branch.id} 
-              AND date >= ${start} 
-              AND date <= ${end}
-          ) AS active_customers
-        `,
+          `,
         this.prisma.appointment.count({
           where: { branch_id: branch.id, appointment_date: { gte: start, lte: end } }
         }),
@@ -238,10 +230,6 @@ export class ReportController {
         (this.prisma as any).revenueTransaction.count({
           where: { branch_id: branch.id, date: { gte: start, lte: end }, service_id: { not: null } }
         }),
-        (this.prisma as any).revenueTransaction.aggregate({
-          where: { branch_id: branch.id, date: { gte: start, lte: end } },
-          _sum: { amount: true, paid: true }
-        })
       ]);
 
       const customerCount = Number(customersCountResult[0]?.count || 0);
@@ -253,8 +241,8 @@ export class ReportController {
         serviceCount: servicesCount || 0,
         treatmentCount: treatmentsCount || 0,
         appointmentCount: appointmentsCount || 0,
-        totalSales: revenueData._sum?.amount || 0,
-        totalRevenue: revenueData._sum?.paid || 0,
+        totalSales: vtBranch ? (vtBranch.TotalPriceDiscounted || 0) : 0,
+        totalRevenue: vtBranch ? (vtBranch.Amount || 0) : 0,
       };
     }));
 
