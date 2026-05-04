@@ -3,7 +3,12 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { SyncService } from './sync.service';
 
-@Processor('sync-queue', { concurrency: 10 })
+@Processor('sync-queue', { 
+  concurrency: 4,
+  lockDuration: 3600000, // 1 hour
+  stalledInterval: 60000, // 1 minute
+  maxStalledCount: 3
+})
 export class SyncProcessor extends WorkerHost {
   private readonly logger = new Logger(SyncProcessor.name);
 
