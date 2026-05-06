@@ -4,10 +4,10 @@ import { Job } from 'bullmq';
 import { SyncService } from './sync.service';
 
 @Processor('sync-queue', { 
-  concurrency: 3, 
-  lockDuration: 900000, // 15 minutes to allow for long API calls
-  stalledInterval: 300000, // 5 minutes check
-  maxStalledCount: 2
+  concurrency: 4,
+  lockDuration: 3600000, // 1 hour
+  stalledInterval: 60000, // 1 minute
+  maxStalledCount: 3
 })
 export class SyncProcessor extends WorkerHost {
   private readonly logger = new Logger(SyncProcessor.name);

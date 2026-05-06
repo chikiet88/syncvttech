@@ -15,6 +15,7 @@ interface VttechSession {
   errorCount: number;
   lastErrorAt: number;
   loginByUsernamePromise: Promise<boolean> | null;
+  lock: Promise<void> | null;
 }
 
 @Injectable()
@@ -23,6 +24,8 @@ export class VttechApiService {
   private axiosInstance: AxiosInstance;
   private sessions: VttechSession[] = [];
   private currentSessionIndex = 0;
+  private globalLastUsedAt = 0;
+  private readonly GLOBAL_MIN_DELAY = 1000; // 1s giữa bất kỳ call nào
   private baseUrl: string;
   private logCallback: ((msg: string) => void) | null = null;
 
@@ -114,7 +117,7 @@ export class VttechApiService {
     return {
       username: u, password: p,
       token: null, secretKey: null, cookies: [], xsrfToken: null,
-      lastUsedAt: 0, errorCount: 0, lastErrorAt: 0, loginByUsernamePromise: null
+      lastUsedAt: 0, errorCount: 0, lastErrorAt: 0, loginByUsernamePromise: null, lock: null
     };
   }
 
@@ -147,34 +150,56 @@ export class VttechApiService {
   }
 
   private getBestSession(): VttechSession {
-    const now = Date.now();
-    // Ưu tiên session ít lỗi nhất và được dùng lâu nhất
-    const sorted = [...this.sessions].sort((a, b) => {
-      // Nếu một session có quá nhiều lỗi gần đây (trong 15p qua), đẩy nó xuống cuối
-      const aIsUnhealthy = a.errorCount > 3 && (now - a.lastErrorAt < 15 * 60000);
-      const bIsUnhealthy = b.errorCount > 3 && (now - b.lastErrorAt < 15 * 60000);
-      
-      if (aIsUnhealthy && !bIsUnhealthy) return 1;
-      if (!aIsUnhealthy && bIsUnhealthy) return -1;
-      
-      return a.lastUsedAt - b.lastUsedAt;
-    });
-    return sorted[0];
+    if (this.sessions.length === 0) throw new Error('No sessions available');
+    
+    // Tìm session rảnh (không bị lock) và dùng lâu nhất
+    const idleSessions = this.sessions.filter(s => !s.lock).sort((a, b) => a.lastUsedAt - b.lastUsedAt);
+    if (idleSessions.length > 0) return idleSessions[0];
+
+    // Nếu tất cả đều bận, dùng round robin để xếp hàng
+    const session = this.sessions[this.currentSessionIndex];
+    this.currentSessionIndex = (this.currentSessionIndex + 1) % this.sessions.length;
+    return session;
   }
 
   private async delayForSession(session: VttechSession) {
     const now = Date.now();
-    const elapsed = now - session.lastUsedAt;
-    // Ngưỡng an toàn Default là 2 calls / 3 seconds (~1.5s per call)
-    // Cấp độ High là 1 call / 3 seconds. Ở đây ta chọn 1.5s làm mặc định.
-    const minDelay = 1000; 
     
-    if (elapsed < minDelay) {
-      const wait = minDelay - elapsed;
-      // this.log(`⏳ [${session.username}] Chờ ${wait}ms để đảm bảo Rate Limit...`);
+    // 1. Per-session delay
+    const sessionElapsed = now - session.lastUsedAt;
+    const sessionMinDelay = 2000; 
+    if (sessionElapsed < sessionMinDelay) {
+      await new Promise(r => setTimeout(r, sessionMinDelay - sessionElapsed));
+    }
+    
+    // 2. Global delay (Shared IP)
+    const globalNow = Date.now();
+    const globalElapsed = globalNow - this.globalLastUsedAt;
+    if (globalElapsed < this.GLOBAL_MIN_DELAY) {
+      const wait = this.GLOBAL_MIN_DELAY - globalElapsed;
       await new Promise(r => setTimeout(r, wait));
     }
+    
+    this.globalLastUsedAt = Date.now();
     session.lastUsedAt = Date.now();
+  }
+
+  private async withSessionLock<T>(session: VttechSession, fn: () => Promise<T>): Promise<T> {
+    while (session.lock) {
+      await session.lock;
+    }
+    
+    let unlock: () => void;
+    session.lock = new Promise<void>(resolve => {
+      unlock = resolve;
+    });
+
+    try {
+      return await fn();
+    } finally {
+      session.lock = null;
+      unlock!();
+    }
   }
 
   private log(msg: string) {
@@ -406,16 +431,25 @@ export class VttechApiService {
   async callHandler(page: string, handler: string, data: any, username?: string) {
     const session = username ? (this.sessions.find(s => s.username === username) || this.getBestSession()) : this.getBestSession();
     
-    let retryCount = 0;
-    const maxRetries = 2;
-    let lastError: any = null;
+    return this.withSessionLock(session, async () => {
+      let retryCount = 0;
+      const maxRetries = 2;
+      let lastError: any = null;
 
-    while (retryCount <= maxRetries) {
-      try {
-        await this.login(session, retryCount > 0);
+      while (retryCount <= maxRetries) {
+        try {
+        const loginOk = await this.login(session, retryCount > 0);
+        if (!loginOk && retryCount > 0) {
+           this.log(`⚠️ [Loicansua] [${session.username}] Re-login failed during retry ${retryCount}. Waiting 5s...`);
+           await new Promise(r => setTimeout(r, 5000));
+        }
+
         await this.delayForSession(session);
         
-        if (!session.xsrfToken) await this.getXsrfToken(session, page, false);
+        // Force refresh XSRF if we are retrying due to session issue
+        if (!session.xsrfToken || retryCount > 0) {
+          await this.getXsrfToken(session, page, retryCount > 0);
+        }
 
         const url = `${page}?handler=${handler}`;
         const formBody = this.buildFormBody(data, session);
@@ -430,17 +464,25 @@ export class VttechApiService {
 
         // Check for 302 or 401/400 that indicates session issues
         const isSessionIssue = response.status === 302 || response.status === 401 || response.status === 400 || 
-                              (typeof response.data === 'string' && response.data.trim().startsWith('<'));
+                               (typeof response.data === 'string' && 
+                                (response.data.includes('<!DOCTYPE html>') || 
+                                 response.data.includes('<title>VTTech Solution</title>') ||
+                                 response.data.includes('sys_SecretKey')));
 
         if (isSessionIssue) {
           const reason = response.status === 302 ? 'Redirect' : 
                          response.status === 400 ? 'Bad Request/Token' : 
-                         typeof response.data === 'string' && response.data.trim().startsWith('<') ? 'HTML Response' : 'Session Expired';
+                         typeof response.data === 'string' && response.data.includes('<title>') ? 'Login Page Redirect' : 'Session Expired';
           
           this.log(`⚠️ [Loicansua] [${session.username}] ${reason} detected. Retrying ${retryCount + 1}/${maxRetries}...`);
           
           if (typeof response.data === 'string' && response.data.trim().startsWith('<') && retryCount === maxRetries) {
             this.log(`❌ [Loicansua] [${session.username}] Final attempt failed. HTML snippet: ${response.data.trim().slice(0, 200)}`);
+          }
+
+          // If it's an HTML response, wait longer
+          if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
+            await new Promise(r => setTimeout(r, 10000 * (retryCount + 1)));
           }
           
           retryCount++;
@@ -456,12 +498,15 @@ export class VttechApiService {
         session.errorCount++;
         session.lastErrorAt = Date.now();
         this.log(`❌ [Loicansua] [${session.username}] Exception in callHandler: ${e.message}. Retry ${retryCount + 1}...`);
+        
+        await new Promise(r => setTimeout(r, 2000));
         retryCount++;
       }
     }
 
-    this.log(`🔥 [Loicansua] [${session.username}] All retries failed for ${handler}.`);
-    return [];
+      this.log(`🔥 [Loicansua] [${session.username}] All retries failed for ${handler}.`);
+      throw new Error(`[VTTech API] All retries failed for ${handler} after ${maxRetries + 1} attempts.`);
+    });
   }
 
   async callApi(url: string, data: any) {
