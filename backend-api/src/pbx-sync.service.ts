@@ -16,6 +16,11 @@ export class PbxSyncService {
 
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async handleDailyPbxSync() {
+    const config = await this.prisma.cronConfig.findUnique({ where: { id: 'handleDailyPbxSync' } }).catch(() => null);
+    if (config && !config.enabled) {
+      this.logger.log('🚫 [CRON] handleDailyPbxSync bị vô hiệu hóa trong cấu hình.');
+      return;
+    }
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const dateStr = yesterday.toISOString().split('T')[0];

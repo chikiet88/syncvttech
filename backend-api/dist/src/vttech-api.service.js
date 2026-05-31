@@ -58,6 +58,8 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
     axiosInstance;
     sessions = [];
     currentSessionIndex = 0;
+    globalLastUsedAt = 0;
+    GLOBAL_MIN_DELAY = 1000;
     baseUrl;
     logCallback = null;
     constructor(configService) {
@@ -138,7 +140,7 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         return {
             username: u, password: p,
             token: null, secretKey: null, cookies: [], xsrfToken: null,
-            lastUsedAt: 0, errorCount: 0, lastErrorAt: 0, loginByUsernamePromise: null
+            lastUsedAt: 0, errorCount: 0, lastErrorAt: 0, loginByUsernamePromise: null, lock: null
         };
     }
     updateSessionCookies(session, newCookies) {
@@ -166,27 +168,46 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         }
     }
     getBestSession() {
-        const now = Date.now();
-        const sorted = [...this.sessions].sort((a, b) => {
-            const aIsUnhealthy = a.errorCount > 3 && (now - a.lastErrorAt < 15 * 60000);
-            const bIsUnhealthy = b.errorCount > 3 && (now - b.lastErrorAt < 15 * 60000);
-            if (aIsUnhealthy && !bIsUnhealthy)
-                return 1;
-            if (!aIsUnhealthy && bIsUnhealthy)
-                return -1;
-            return a.lastUsedAt - b.lastUsedAt;
-        });
-        return sorted[0];
+        if (this.sessions.length === 0)
+            throw new Error('No sessions available');
+        const idleSessions = this.sessions.filter(s => !s.lock).sort((a, b) => a.lastUsedAt - b.lastUsedAt);
+        if (idleSessions.length > 0)
+            return idleSessions[0];
+        const session = this.sessions[this.currentSessionIndex];
+        this.currentSessionIndex = (this.currentSessionIndex + 1) % this.sessions.length;
+        return session;
     }
     async delayForSession(session) {
         const now = Date.now();
-        const elapsed = now - session.lastUsedAt;
-        const minDelay = 1000;
-        if (elapsed < minDelay) {
-            const wait = minDelay - elapsed;
+        const sessionElapsed = now - session.lastUsedAt;
+        const sessionMinDelay = 2000;
+        if (sessionElapsed < sessionMinDelay) {
+            await new Promise(r => setTimeout(r, sessionMinDelay - sessionElapsed));
+        }
+        const globalNow = Date.now();
+        const globalElapsed = globalNow - this.globalLastUsedAt;
+        if (globalElapsed < this.GLOBAL_MIN_DELAY) {
+            const wait = this.GLOBAL_MIN_DELAY - globalElapsed;
             await new Promise(r => setTimeout(r, wait));
         }
+        this.globalLastUsedAt = Date.now();
         session.lastUsedAt = Date.now();
+    }
+    async withSessionLock(session, fn) {
+        while (session.lock) {
+            await session.lock;
+        }
+        let unlock;
+        session.lock = new Promise(resolve => {
+            unlock = resolve;
+        });
+        try {
+            return await fn();
+        }
+        finally {
+            session.lock = null;
+            unlock();
+        }
     }
     log(msg) {
         this.logger.log(msg);
@@ -397,49 +418,63 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
     }
     async callHandler(page, handler, data, username) {
         const session = username ? (this.sessions.find(s => s.username === username) || this.getBestSession()) : this.getBestSession();
-        let retryCount = 0;
-        const maxRetries = 2;
-        let lastError = null;
-        while (retryCount <= maxRetries) {
-            try {
-                await this.login(session, retryCount > 0);
-                await this.delayForSession(session);
-                if (!session.xsrfToken)
-                    await this.getXsrfToken(session, page, false);
-                const url = `${page}?handler=${handler}`;
-                const formBody = this.buildFormBody(data, session);
-                const handlerHeaders = this.handlerHeaders(session, page);
-                this.log(`📡 [Attempt ${retryCount + 1}] Calling: ${url} [${session.username}]`);
-                const response = await this.axiosInstance.post(url, formBody, {
-                    headers: handlerHeaders,
-                    session
-                });
-                const isSessionIssue = response.status === 302 || response.status === 401 || response.status === 400 ||
-                    (typeof response.data === 'string' && response.data.trim().startsWith('<'));
-                if (isSessionIssue) {
-                    const reason = response.status === 302 ? 'Redirect' :
-                        response.status === 400 ? 'Bad Request/Token' :
-                            typeof response.data === 'string' && response.data.trim().startsWith('<') ? 'HTML Response' : 'Session Expired';
-                    this.log(`⚠️ [Loicansua] [${session.username}] ${reason} detected. Retrying ${retryCount + 1}/${maxRetries}...`);
-                    if (typeof response.data === 'string' && response.data.trim().startsWith('<') && retryCount === maxRetries) {
-                        this.log(`❌ [Loicansua] [${session.username}] Final attempt failed. HTML snippet: ${response.data.trim().slice(0, 200)}`);
+        return this.withSessionLock(session, async () => {
+            let retryCount = 0;
+            const maxRetries = 2;
+            let lastError = null;
+            while (retryCount <= maxRetries) {
+                try {
+                    const loginOk = await this.login(session, retryCount > 0);
+                    if (!loginOk && retryCount > 0) {
+                        this.log(`⚠️ [Loicansua] [${session.username}] Re-login failed during retry ${retryCount}. Waiting 5s...`);
+                        await new Promise(r => setTimeout(r, 5000));
                     }
-                    retryCount++;
-                    continue;
+                    await this.delayForSession(session);
+                    if (!session.xsrfToken || retryCount > 0) {
+                        await this.getXsrfToken(session, page, retryCount > 0);
+                    }
+                    const url = `${page}?handler=${handler}`;
+                    const formBody = this.buildFormBody(data, session);
+                    const handlerHeaders = this.handlerHeaders(session, page);
+                    this.log(`📡 [Attempt ${retryCount + 1}] Calling: ${url} [${session.username}]`);
+                    const response = await this.axiosInstance.post(url, formBody, {
+                        headers: handlerHeaders,
+                        session
+                    });
+                    const isSessionIssue = response.status === 302 || response.status === 401 || response.status === 400 ||
+                        (typeof response.data === 'string' &&
+                            (response.data.includes('<!DOCTYPE html>') ||
+                                response.data.includes('<title>VTTech Solution</title>') ||
+                                response.data.includes('sys_SecretKey')));
+                    if (isSessionIssue) {
+                        const reason = response.status === 302 ? 'Redirect' :
+                            response.status === 400 ? 'Bad Request/Token' :
+                                typeof response.data === 'string' && response.data.includes('<title>') ? 'Login Page Redirect' : 'Session Expired';
+                        this.log(`⚠️ [Loicansua] [${session.username}] ${reason} detected. Retrying ${retryCount + 1}/${maxRetries}...`);
+                        if (typeof response.data === 'string' && response.data.trim().startsWith('<') && retryCount === maxRetries) {
+                            this.log(`❌ [Loicansua] [${session.username}] Final attempt failed. HTML snippet: ${response.data.trim().slice(0, 200)}`);
+                        }
+                        if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
+                            await new Promise(r => setTimeout(r, 10000 * (retryCount + 1)));
+                        }
+                        retryCount++;
+                        continue;
+                    }
+                    session.errorCount = 0;
+                    return this.decompress(response.data);
                 }
-                session.errorCount = 0;
-                return this.decompress(response.data);
+                catch (e) {
+                    lastError = e;
+                    session.errorCount++;
+                    session.lastErrorAt = Date.now();
+                    this.log(`❌ [Loicansua] [${session.username}] Exception in callHandler: ${e.message}. Retry ${retryCount + 1}...`);
+                    await new Promise(r => setTimeout(r, 2000));
+                    retryCount++;
+                }
             }
-            catch (e) {
-                lastError = e;
-                session.errorCount++;
-                session.lastErrorAt = Date.now();
-                this.log(`❌ [Loicansua] [${session.username}] Exception in callHandler: ${e.message}. Retry ${retryCount + 1}...`);
-                retryCount++;
-            }
-        }
-        this.log(`🔥 [Loicansua] [${session.username}] All retries failed for ${handler}.`);
-        return [];
+            this.log(`🔥 [Loicansua] [${session.username}] All retries failed for ${handler}.`);
+            throw new Error(`[VTTech API] All retries failed for ${handler} after ${maxRetries + 1} attempts.`);
+        });
     }
     async callApi(url, data) {
         const session = this.getBestSession();

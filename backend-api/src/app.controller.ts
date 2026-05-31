@@ -1,5 +1,5 @@
 
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Param, Body, Patch } from '@nestjs/common';
 import { AppService } from './app.service';
 import { SyncService } from './sync.service';
 import { PbxSyncService } from './pbx-sync.service';
@@ -205,6 +205,92 @@ export class AppController {
     return this.prisma.branch.findMany({
       where: { is_active: 1 },
       orderBy: { name: 'asc' },
+    });
+  }
+
+  @Get('cron-configs')
+  async getCronConfigs() {
+    const configs = await this.prisma.cronConfig.findMany({
+      orderBy: { id: 'asc' },
+    });
+
+    if (configs.length > 0) {
+      return configs;
+    }
+
+    // Seed default cron configs
+    const defaultConfigs = [
+      {
+        id: 'handleDailySync',
+        name: 'Đồng bộ doanh thu & khách hàng hàng ngày',
+        enabled: true,
+        description: 'Đồng bộ toàn bộ dữ liệu (doanh thu -> khách hàng -> chi tiết) của ngày hôm qua lúc 00:00.',
+      },
+      {
+        id: 'handleDailyPbxSync',
+        name: 'Đồng bộ dữ liệu tổng đài hàng ngày',
+        enabled: true,
+        description: 'Đồng bộ Extensions, Call Center Employees và Nhật ký cuộc gọi CDR kèm File ghi âm lúc 01:00.',
+      },
+      {
+        id: 'handleHeartbeat',
+        name: 'Duy trì Session VTTech (Heartbeat)',
+        enabled: true,
+        description: 'Duy trì nhịp đập session login cho các tài khoản VTTech để tránh bị logout (mỗi 5 phút).',
+      },
+      {
+        id: 'handleFrequentSync',
+        name: 'Đồng bộ nhanh định kỳ',
+        enabled: true,
+        description: 'Đồng bộ nhanh dữ liệu ngày hiện tại để phục vụ Dashboard (mỗi 20 phút).',
+      },
+      {
+        id: 'handleHistoricalSyncCron',
+        name: 'Đồng bộ dữ liệu lịch sử (Backlog)',
+        enabled: true,
+        description: 'Tự động quét và cày các tác vụ lịch sử còn tồn đọng từ năm 2019 lên (mỗi 30 phút).',
+      },
+      {
+        id: 'handleStaleTasksCron',
+        name: 'Tự chữa lành hệ thống (Self-healing)',
+        enabled: true,
+        description: 'Tự động phát hiện và giải phóng các task đồng bộ bị kẹt trong DB & BullMQ (mỗi 10 phút).',
+      },
+      {
+        id: 'handleQueueCleanupCron',
+        name: 'Dọn dẹp hàng đợi BullMQ',
+        enabled: true,
+        description: 'Dọn dẹp các job cũ đã hoàn tất hoặc thất bại trong BullMQ để tối ưu RAM Redis (mỗi 1 giờ).',
+      },
+      {
+        id: 'handleDailyReporting',
+        name: 'Báo cáo tự động hàng ngày',
+        enabled: true,
+        description: 'Tổng hợp và tạo báo cáo giám sát đồng bộ gửi về dashboard lúc 08:00 và 20:00.',
+      },
+    ];
+
+    for (const conf of defaultConfigs) {
+      await this.prisma.cronConfig.upsert({
+        where: { id: conf.id },
+        update: {},
+        create: conf,
+      });
+    }
+
+    return this.prisma.cronConfig.findMany({
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  @Patch('cron-configs/:id')
+  async updateCronConfig(
+    @Param('id') id: string,
+    @Body() body: { enabled: boolean },
+  ) {
+    return this.prisma.cronConfig.update({
+      where: { id },
+      data: { enabled: body.enabled },
     });
   }
 }

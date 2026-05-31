@@ -1,0 +1,869 @@
+{
+  "info": {
+    "_postman_id": "c60d6a74-30f2-4dee-8155-f197faecb5d6",
+    "name": "Vttech Offical",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "13024451",
+    "_collection_link": "https://go.postman.co/collection/13024451-c60d6a74-30f2-4dee-8155-f197faecb5d6?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "GetToken",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"Name\": \"Taza\",\r\n    \"Password\": \"1b9287d492b256x7taza\",\r\n    \"Type\": \"phone\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://apismsvtt.vttechsolution.com/api/Client/Autho",
+          "protocol": "https",
+          "host": [
+            "apismsvtt",
+            "vttechsolution",
+            "com"
+          ],
+          "path": [
+            "api",
+            "Client",
+            "Autho"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Chi Nhánh",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJodHRwOi8vd3d3LnczLm9yZy8yMDAxLzA0L3htbGRzaWctbW9yZSNobWFjLXNoYTI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiVGF6YSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6InBob25lIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIyNTlhYmJkYS05NDVhLTQ1NjktYWFlNy0wNDMwMWQ0M2YxZDQiLCJleHAiOjE3NDU2NjY1NjAsImlzcyI6InZ0dGVjaHNvbHV0aW9uIiwiYXVkIjoidnR0ZWNoc29sdXRpb24ifQ._3RNgH-SBg104owHFusBng_AGa659rBeLkIWy5w8VNI",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://apismsvtt.vttechsolution.com/api/Branch/GetList",
+          "protocol": "https",
+          "host": [
+            "apismsvtt",
+            "vttechsolution",
+            "com"
+          ],
+          "path": [
+            "api",
+            "Branch",
+            "GetList"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Thông Tin Hồ Sơ",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJodHRwOi8vd3d3LnczLm9yZy8yMDAxLzA0L3htbGRzaWctbW9yZSNobWFjLXNoYTI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiVGF6YSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6InBob25lIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIxNGViMzA2Yy1iODViLTQyNzQtOTJlNy1jYmU3ZTk1ZGZjOWYiLCJleHAiOjE3MTMyNzI3NDMsImlzcyI6InZ0dGVjaHNvbHV0aW9uIiwiYXVkIjoidnR0ZWNoc29sdXRpb24ifQ.Ylmk86Bcjy_R9YqdQ3dhM93lnaZjvyD18_i6RnU_5UM",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"DateFrom\": \"2019-01-01\",\r\n    \"DateTo\": \"2019-01-31\",\r\n    \"BranchID\": \"0\",\r\n    \"DataType\": \"new\",\r\n    \"PagingNumber\": \"3\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://apismsvtt.vttechsolution.com/api/Customer/GetList",
+          "protocol": "https",
+          "host": [
+            "apismsvtt",
+            "vttechsolution",
+            "com"
+          ],
+          "path": [
+            "api",
+            "Customer",
+            "GetList"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Khach Hang",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJodHRwOi8vd3d3LnczLm9yZy8yMDAxLzA0L3htbGRzaWctbW9yZSNobWFjLXNoYTI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiVGF6YSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6InBob25lIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiI5Njk1Mjg5Yi0xZDcxLTQxMmEtYjJiZi03YmNkYmQ0ZmFhZGIiLCJleHAiOjE3NDgzOTQ1ODMsImlzcyI6InZ0dGVjaHNvbHV0aW9uIiwiYXVkIjoidnR0ZWNoc29sdXRpb24ifQ.DjzglEtkdlfZKd14ayw2o2R7GP4lkZuQ_c1nRDP1hOM",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"DateFrom\": \"2025-03-10\",\r\n    \"DateTo\": \"2025-04-25\",\r\n    \"BranchID\": \"0\",\r\n    \"DataType\": \"new\"\r\n}\r\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://apismsvtt.vttechsolution.com/api/Customer/GetList",
+          "protocol": "https",
+          "host": [
+            "apismsvtt",
+            "vttechsolution",
+            "com"
+          ],
+          "path": [
+            "api",
+            "Customer",
+            "GetList"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Dịch Vụ Khách Hàng",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJodHRwOi8vd3d3LnczLm9yZy8yMDAxLzA0L3htbGRzaWctbW9yZSNobWFjLXNoYTI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiVGF6YSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6InBob25lIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiJhMThlNTVjZS1mNGVlLTQ2ZGItYWY1MC0zNDIxNDc4ZTU3ZjciLCJleHAiOjE3NDgzOTQyNzAsImlzcyI6InZ0dGVjaHNvbHV0aW9uIiwiYXVkIjoidnR0ZWNoc29sdXRpb24ifQ.RMkEnkqxQPe7Szms_oRdLWEQilc1dI0lee7t-iImtPE",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"DateFrom\": \"2023-12-01\",\r\n    \"DateTo\": \"2023-12-31\",\r\n    \"BranchID\": \"0\",\r\n    \"DataType\": \"new\",\r\n    \"PagingNumber\": \"1\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://apismsvtt.vttechsolution.com/api/Customer/GetTab",
+          "protocol": "https",
+          "host": [
+            "apismsvtt",
+            "vttechsolution",
+            "com"
+          ],
+          "path": [
+            "api",
+            "Customer",
+            "GetTab"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Điều Trị",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJodHRwOi8vd3d3LnczLm9yZy8yMDAxLzA0L3htbGRzaWctbW9yZSNobWFjLXNoYTI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiVGF6YSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6InBob25lIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiI5Njk1Mjg5Yi0xZDcxLTQxMmEtYjJiZi03YmNkYmQ0ZmFhZGIiLCJleHAiOjE3NDgzOTQ1ODMsImlzcyI6InZ0dGVjaHNvbHV0aW9uIiwiYXVkIjoidnR0ZWNoc29sdXRpb24ifQ.DjzglEtkdlfZKd14ayw2o2R7GP4lkZuQ_c1nRDP1hOM",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"DateFrom\": \"2024-08-28\",\r\n    \"DateTo\": \"2024-08-28\",\r\n    \"BranchID\": \"0\",\r\n    \"DataType\": \"new\",\r\n    \"PagingNumber\": \"1\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://apismsvtt.vttechsolution.com/api/Customer/GetTreat",
+          "protocol": "https",
+          "host": [
+            "apismsvtt",
+            "vttechsolution",
+            "com"
+          ],
+          "path": [
+            "api",
+            "Customer",
+            "GetTreat"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Lịch Hẹn",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJodHRwOi8vd3d3LnczLm9yZy8yMDAxLzA0L3htbGRzaWctbW9yZSNobWFjLXNoYTI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiVGF6YSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6InBob25lIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiJmZDgwMDY2Zi1hOWRjLTQ4ZGMtOTZjMS0wM2U1MzU2MjNmYWQiLCJleHAiOjE3Mjc3MDUxMjQsImlzcyI6InZ0dGVjaHNvbHV0aW9uIiwiYXVkIjoidnR0ZWNoc29sdXRpb24ifQ.DUEmhMaMQWWkzHEmAexGYic2NSpVs-8WmU8HPMTcZV4",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"DateFrom\": \"2024-05-23\",\r\n    \"DateTo\": \"2024-05-23\",\r\n    \"BranchID\": \"0\",\r\n    \"DataType\": \"new\",\r\n    \"PagingNumber\": \"1\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://apismsvtt.vttechsolution.com/api/Appointment/GetList",
+          "protocol": "https",
+          "host": [
+            "apismsvtt",
+            "vttechsolution",
+            "com"
+          ],
+          "path": [
+            "api",
+            "Appointment",
+            "GetList"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Lịch sử thu chi",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJodHRwOi8vd3d3LnczLm9yZy8yMDAxLzA0L3htbGRzaWctbW9yZSNobWFjLXNoYTI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiVGF6YSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6InBob25lIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIyNTlhYmJkYS05NDVhLTQ1NjktYWFlNy0wNDMwMWQ0M2YxZDQiLCJleHAiOjE3NDU2NjY1NjAsImlzcyI6InZ0dGVjaHNvbHV0aW9uIiwiYXVkIjoidnR0ZWNoc29sdXRpb24ifQ._3RNgH-SBg104owHFusBng_AGa659rBeLkIWy5w8VNI",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"DateFrom\": \"2025-04-25\",\r\n    \"DateTo\": \"2025-04-25\",\r\n    \"BranchID\": \"2\",\r\n    \"PagingNumber\": \"1\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://apismsvtt.vttechsolution.com/api/Customer/GetTreat",
+          "protocol": "https",
+          "host": [
+            "apismsvtt",
+            "vttechsolution",
+            "com"
+          ],
+          "path": [
+            "api",
+            "Customer",
+            "GetTreat"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Thông Tin Lịch Hẹn",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJodHRwOi8vd3d3LnczLm9yZy8yMDAxLzA0L3htbGRzaWctbW9yZSNobWFjLXNoYTI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiVGF6YSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6InBob25lIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiI4MTExOTYwYy1lYjAxLTQ4ZjAtOGE0MS1iZWFjN2I5YTZmZjQiLCJleHAiOjE3Mjc4Mzg3MjYsImlzcyI6InZ0dGVjaHNvbHV0aW9uIiwiYXVkIjoidnR0ZWNoc29sdXRpb24ifQ.ZMYLKtqhMTZO1eF_2FcQxEWCQw2gnx_12ShvO04GqMw",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"DateFrom\": \"2024-10-02\",\r\n    \"DateTo\": \"2024-10-02\",\r\n    \"BranchID\": \"0\",\r\n    \"PagingNumber\": \"1\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://apismsvtt.vttechsolution.com/api/Appointment/GetList",
+          "protocol": "https",
+          "host": [
+            "apismsvtt",
+            "vttechsolution",
+            "com"
+          ],
+          "path": [
+            "api",
+            "Appointment",
+            "GetList"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Thanh Toán",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJodHRwOi8vd3d3LnczLm9yZy8yMDAxLzA0L3htbGRzaWctbW9yZSNobWFjLXNoYTI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiVGF6YSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6InBob25lIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiI4Yjc5NmFmNS1mNTg4LTRkZmEtODMwMS1lMzk3MGE4Yzk0ZGUiLCJleHAiOjE3NDg2OTA4ODcsImlzcyI6InZ0dGVjaHNvbHV0aW9uIiwiYXVkIjoidnR0ZWNoc29sdXRpb24ifQ.y0kpl7sf955NZD0VggqXIWWffjnHrZ2DXalR-BG33oQ",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"DateFrom\": \"2024-08-23\",\r\n    \"DateTo\": \"2024-08-23\",\r\n    \"BranchID\": \"0\",\r\n    \"PagingNumber\": \"1\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://apismsvtt.vttechsolution.com/api/Revenue/GetList",
+          "protocol": "https",
+          "host": [
+            "apismsvtt",
+            "vttechsolution",
+            "com"
+          ],
+          "path": [
+            "api",
+            "Revenue",
+            "GetList"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "TazaGetToken",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"Name\": \"Taza\",\r\n    \"Password\": \"1b9287d492b256x7taza\",\r\n    \"Type\": \"web\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{local}}/vttech/getToken",
+          "host": [
+            "{{local}}"
+          ],
+          "path": [
+            "vttech",
+            "getToken"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Taza Thanh Toan Get Thanh Toan",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"Name\": \"Taza\",\r\n    \"Password\": \"1b9287d492b256x7taza\",\r\n    \"Type\": \"web\",\r\n    \"DateFrom\": \"2024-08-29\",\r\n    \"DateTo\": \"2024-08-29\",\r\n    \"BranchID\": \"0\",\r\n    \"PagingNumber\": \"1\"\r\n}\r\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{server}}/vttechthanhtoan/getthanhtoan",
+          "host": [
+            "{{server}}"
+          ],
+          "path": [
+            "vttechthanhtoan",
+            "getthanhtoan"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Taza Lich Hen Get Lich hen",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"Name\": \"Taza\",\r\n    \"Password\": \"1b9287d492b256x7taza\",\r\n    \"Type\": \"web\",\r\n    \"DateFrom\": \"2024-09-30\",\r\n    \"DateTo\": \"2024-09-30\",\r\n    \"BranchID\": \"0\",\r\n    \"PagingNumber\": \"1\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{local}}/vttechlichhen/getlichhen",
+          "host": [
+            "{{local}}"
+          ],
+          "path": [
+            "vttechlichhen",
+            "getlichhen"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Taza Thanh Toan  Get ZNS Thanh Toán",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"CreatedBegin\": \"2024-08-30\",\r\n    \"CreatedEnd\": \"2024-08-30\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{server}}/znsthanhtoan/createzns",
+          "host": [
+            "{{server}}"
+          ],
+          "path": [
+            "znsthanhtoan",
+            "createzns"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Taza Thanh Toan Send ZNS",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "    {\r\n        \"KTVID\": 0,\r\n        \"TabCode\": \"SP.30056.213855\",\r\n        \"Paid\": 1000,\r\n        \"DiscountAmount\": 0,\r\n        \"DepositAmountUsing\": 0,\r\n        \"TotalPaid\": 400,\r\n        \"DebtAmount\": 2999600,\r\n        \"PosName\": \"\",\r\n        \"TransferName\": \"\",\r\n        \"VoucherName\": \"\",\r\n        \"DiscountName\": \"\",\r\n        \"TimetoUsing\": 0,\r\n        \"ID\": 190758,\r\n        \"TabID\": 213855,\r\n        \"TabCardID\": 0,\r\n        \"MedicineID\": 0,\r\n        \"DepositID\": 0,\r\n        \"Code\": \"PTVPC240417.00013\",\r\n        \"BranchID\": 7,\r\n        \"CustCode\": \"PVD0030056\",\r\n        \"CustName\": \"PHẠM CHÍ KIỆT\",\r\n        \"CustPhone\": \"0977272967\",\r\n        \"CustAddress\": \"\",\r\n        \"CustBirthday\": \"1900-01-01T00:00:00\",\r\n        \"ServiceID\": 396,\r\n        \"Quantity\": 1,\r\n        \"PriceRoot\": 3000000,\r\n        \"PriceUnit\": 3000000,\r\n        \"Price\": 3000000,\r\n        \"Amount\": 400,\r\n        \"MethodName\": \"Tiền Mặt\",\r\n        \"Content\": \"\",\r\n        \"TimeToTreatment\": 3,\r\n        \"PercentOfService\": 0,\r\n        \"TreatIndex\": 0,\r\n        \"Type\": 1,\r\n        \"TypeName\": \"Service\",\r\n        \"ConsultID1\": 147,\r\n        \"ConsultID2\": 0,\r\n        \"ConsultID3\": 0,\r\n        \"ConsultID4\": 0,\r\n        \"TechID\": 0,\r\n        \"Tele1\": 0,\r\n        \"Tele2\": 0,\r\n        \"Created\": \"2024-04-17T14:53:00\",\r\n        \"CreatedBy\": 147,\r\n        \"Modified\": \"1900-01-01T00:00:00\",\r\n        \"State\": 1\r\n    }",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{local}}/znsthanhtoan/sendzns",
+          "host": [
+            "{{local}}"
+          ],
+          "path": [
+            "znsthanhtoan",
+            "sendzns"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Taza Thanh Toan  Send ZNS Auto",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://autoapi.tazaskinclinic.com/znsthanhtoan/sendznsauto",
+          "protocol": "https",
+          "host": [
+            "autoapi",
+            "tazaskinclinic",
+            "com"
+          ],
+          "path": [
+            "znsthanhtoan",
+            "sendznsauto"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Taza Điều Trị Get Điều Trị",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"Name\": \"Taza\",\r\n    \"Password\": \"1b9287d492b256x7taza\",\r\n    \"Type\": \"web\",\r\n    \"DateFrom\": \"2024-08-28\",\r\n    \"DateTo\": \"2024-08-28\",\r\n    \"BranchID\": \"0\",\r\n    \"PagingNumber\": \"1\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{local}}/vttechdieutri/getdieutri",
+          "host": [
+            "{{local}}"
+          ],
+          "path": [
+            "vttechdieutri",
+            "getdieutri"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Taza Điều Trị  Get ZNS Điều Trị",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"CreatedBegin\": \"2024-08-29\",\r\n    \"CreatedEnd\": \"2024-08-29\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{local}}/znsdieutri/createzns",
+          "host": [
+            "{{local}}"
+          ],
+          "path": [
+            "znsdieutri",
+            "createzns"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Taza Điều Trị Send ZNS Điều Trị",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "        {\r\n            \"id\": \"e9b03ab4-919e-4b41-92d7-c548079dc062\",\r\n            \"idDieutri\": \"5e903ea6-25a0-4cd5-9367-bb0a0a6e0105\",\r\n            \"idVttech\": \"1715313600000\",\r\n            \"CustPhone\": \"0765189077\",\r\n            \"CustName\": \"NGUYỄN THỊ THÙY LINH\",\r\n            \"CustCode\": \"\",\r\n            \"BranchID\": \"17\",\r\n            \"Code\": \"\",\r\n            \"msg_id\": \"\",\r\n            \"trackingId\": \"\",\r\n            \"messageId\": \"\",\r\n            \"Paid\": \"0\",\r\n            \"Type\": \"\",\r\n            \"Ordering\": 1,\r\n            \"Dulieu\": {},\r\n            \"Status\": 0,\r\n            \"Statuscode\": 0,\r\n            \"SMSCode\": 0,\r\n            \"Created\": \"2024-05-09T17:00:00.000Z\",\r\n            \"CreateAt\": \"2024-05-10T04:31:26.989Z\",\r\n            \"UpdateAt\": \"2024-05-10T04:31:26.989Z\",\r\n            \"DeleteAt\": null,\r\n            \"idCreate\": null\r\n        }",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{local}}/znsdieutri/sendzns",
+          "host": [
+            "{{local}}"
+          ],
+          "path": [
+            "znsdieutri",
+            "sendzns"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Taza Điều Trị  Send ZNS Auto Điều Trị",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"CreatedBegin\": \"2024-08-28\",\r\n    \"CreatedEnd\": \"2024-08-28\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{server}}/znsdieutri/sendznsauto",
+          "host": [
+            "{{server}}"
+          ],
+          "path": [
+            "znsdieutri",
+            "sendznsauto"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Taza Get Khách Hàng",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"Name\": \"Taza\",\r\n    \"Password\": \"1b9287d492b256x7taza\",\r\n    \"Type\": \"web\",\r\n    \"BranchID\": \"0\",\r\n    \"PagingNumber\": \"1\",\r\n    \"DateFrom\": \"2020-02-01\",\r\n    \"DateTo\": \"2020-02-28\"\r\n\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{local}}/vttechkhachhang/getkhachhang",
+          "host": [
+            "{{local}}"
+          ],
+          "path": [
+            "vttechkhachhang",
+            "getkhachhang"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "TazaGetLichsuthuchi",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"DateFrom\": \"2024-04-09\",\r\n    \"DateTo\": \"2024-04-09\",\r\n    \"PagingNumber\": \"1\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{local}}/vttechlichsuthanhtoan/getapi",
+          "host": [
+            "{{local}}"
+          ],
+          "path": [
+            "vttechlichsuthanhtoan",
+            "getapi"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Taza Get Thanh Toán",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"DateFrom\": \"2024-04-10\",\r\n    \"DateTo\": \"2024-04-10\",\r\n    \"BranchID\":\"0\",\r\n    \"PagingNumber\": \"1\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{local}}/vttechdieutri/getapi",
+          "host": [
+            "{{local}}"
+          ],
+          "path": [
+            "vttechdieutri",
+            "getapi"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Taza Xem Điều Trị",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"Batdau\": \"2024-04-22T17:00:00.000Z\",\r\n    \"Ketthuc\": \"2024-04-30T16:59:59.999Z\",\r\n    \"pageSize\": 9999,\r\n    \"pageNumber\": 0\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{server}}/znsdieutri/search",
+          "host": [
+            "{{server}}"
+          ],
+          "path": [
+            "znsdieutri",
+            "search"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Taza Get Thanh Toan Copy",
+      "protocolProfileBehavior": {
+        "disableBodyPruning": true
+      },
+      "request": {
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"Name\": \"Taza\",\r\n    \"Password\": \"1b9287d492b256x7taza\",\r\n    \"Type\": \"web\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{local}}/setcookies",
+          "host": [
+            "{{local}}"
+          ],
+          "path": [
+            "setcookies"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get Chi Nhanh",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{local}}/chinhanh/findbyidVttech/15",
+          "host": [
+            "{{local}}"
+          ],
+          "path": [
+            "chinhanh",
+            "findbyidVttech",
+            "15"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "CustFinal",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "api.tazaskinclinic.com/custfinan/findSDT/0768668269",
+          "host": [
+            "api",
+            "tazaskinclinic",
+            "com"
+          ],
+          "path": [
+            "custfinan",
+            "findSDT",
+            "0768668269"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "New Request",
+      "request": {
+        "method": "GET",
+        "header": []
+      },
+      "response": []
+    }
+  ]
+}

@@ -69,6 +69,7 @@ const data = {
       items: [
         { title: 'Giám sát đồng bộ', url: '/monitoring/sync', icon: Activity },
         { title: 'Log hệ thống', url: '/monitoring/crawl-logs', icon: Database },
+        { title: 'Cài đặt Cron', url: '/monitoring/cron-settings', icon: Settings },
       ],
     }
   ],

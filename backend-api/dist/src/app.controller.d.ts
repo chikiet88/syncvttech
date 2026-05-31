@@ -42,32 +42,36 @@ export declare class AppController {
         message: string;
     }>;
     getCrawlLogs(limit?: string): Promise<{
-        status: string | null;
-        error_message: string | null;
-        created_at: Date;
         id: number;
+        created_at: Date;
         branch_id: number | null;
-        records_count: number | null;
-        appointments_count: number;
-        customers_count: number;
-        revenue_total: number;
-        sales_total: number;
-        services_count: number;
-        treatments_count: number;
+        status: string | null;
         task_id: string | null;
         crawl_date: Date | null;
         crawl_type: string | null;
         message: string | null;
+        records_count: number | null;
+        customers_count: number;
+        services_count: number;
+        treatments_count: number;
+        appointments_count: number;
+        sales_total: number;
+        revenue_total: number;
         duration_seconds: number | null;
         total_branches: number | null;
         total_services: number | null;
         total_customers: number | null;
         total_payments: number | null;
         total_treatments: number | null;
+        error_message: string | null;
     }[]>;
     getPbxLogs(limit?: string): Promise<{
-        sync_type: string;
+        id: number;
+        created_at: Date;
+        updated_at: Date;
         status: string;
+        error_message: string | null;
+        sync_type: string;
         start_time: Date;
         end_time: Date | null;
         date_from: Date;
@@ -76,11 +80,7 @@ export declare class AppController {
         success_count: number;
         failed_count: number;
         retry_count: number;
-        error_message: string | null;
         failed_items: import("@prisma/client/runtime/library").JsonValue | null;
-        created_at: Date;
-        updated_at: Date;
-        id: number;
     }[]>;
     getSyncStatus(): Promise<{
         isSyncing: boolean;
@@ -127,16 +127,32 @@ export declare class AppController {
         };
     }>;
     getBranches(): Promise<{
-        name: string;
-        created_at: Date;
-        updated_at: Date;
         id: number;
-        is_active: number;
         code: string | null;
-        email: string | null;
-        phone: string | null;
+        name: string;
         address: string | null;
+        phone: string | null;
+        email: string | null;
         city_id: number | null;
         district_id: number | null;
+        is_active: number;
+        created_at: Date;
+        updated_at: Date;
     }[]>;
+    getCronConfigs(): Promise<{
+        id: string;
+        name: string;
+        updated_at: Date;
+        enabled: boolean;
+        description: string | null;
+    }[]>;
+    updateCronConfig(id: string, body: {
+        enabled: boolean;
+    }): Promise<{
+        id: string;
+        name: string;
+        updated_at: Date;
+        enabled: boolean;
+        description: string | null;
+    }>;
 }

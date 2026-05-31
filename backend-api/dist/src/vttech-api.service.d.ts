@@ -10,6 +10,7 @@ interface VttechSession {
     errorCount: number;
     lastErrorAt: number;
     loginByUsernamePromise: Promise<boolean> | null;
+    lock: Promise<void> | null;
 }
 export declare class VttechApiService {
     private configService;
@@ -17,6 +18,8 @@ export declare class VttechApiService {
     private axiosInstance;
     private sessions;
     private currentSessionIndex;
+    private globalLastUsedAt;
+    private readonly GLOBAL_MIN_DELAY;
     private baseUrl;
     private logCallback;
     constructor(configService: ConfigService);
@@ -25,6 +28,7 @@ export declare class VttechApiService {
     private ensureSessionCookie;
     private getBestSession;
     private delayForSession;
+    private withSessionLock;
     private log;
     setLogCallback(cb: (msg: string) => void): void;
     private followRedirects;

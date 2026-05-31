@@ -169,32 +169,21 @@ let ReportController = ReportController_1 = class ReportController {
             where: { is_active: 1 },
             orderBy: { id: 'asc' }
         });
+        const vttechSummary = await this.vttechApi.callHandler('/Report/Revenue/Branch/AllBranchGrid/', 'Loadata', {
+            branchID: 0,
+            dateFrom: dateFrom,
+            dateTo: dateTo
+        });
         const summaries = await Promise.all(branches.map(async (branch) => {
-            const [customersCountResult, appointmentsCount, treatmentsCount, servicesCount, revenueData] = await Promise.all([
+            const vtBranch = vttechSummary.Table?.find((t) => t.BranchID === branch.id);
+            const [customersCountResult, appointmentsCount, treatmentsCount, servicesCount] = await Promise.all([
                 this.prisma.$queryRaw `
           SELECT count(DISTINCT customer_id) as "count" 
-          FROM (
-            SELECT customer_id FROM daily_customers 
-            WHERE branch_id = ${branch.id} 
+          FROM revenue_transactions 
+          WHERE branch_id = ${branch.id} 
               AND date >= ${start} 
               AND date <= ${end}
-            UNION
-            SELECT customer_id FROM appointments 
-            WHERE branch_id = ${branch.id} 
-              AND appointment_date >= ${start} 
-              AND appointment_date <= ${end}
-            UNION
-            SELECT customer_id FROM treatments 
-            WHERE branch_id = ${branch.id} 
-              AND treatment_date >= ${start} 
-              AND treatment_date <= ${end}
-            UNION
-            SELECT customer_id FROM revenue_transactions 
-            WHERE branch_id = ${branch.id} 
-              AND date >= ${start} 
-              AND date <= ${end}
-          ) AS active_customers
-        `,
+          `,
                 this.prisma.appointment.count({
                     where: { branch_id: branch.id, appointment_date: { gte: start, lte: end } }
                 }),
@@ -204,14 +193,6 @@ let ReportController = ReportController_1 = class ReportController {
                 this.prisma.revenueTransaction.count({
                     where: { branch_id: branch.id, date: { gte: start, lte: end }, service_id: { not: null } }
                 }),
-                this.prisma.revenueTransaction.aggregate({
-                    where: {
-                        branch_id: branch.id,
-                        date: { gte: start, lte: end },
-                        type: 1
-                    },
-                    _sum: { amount: true, paid: true }
-                })
             ]);
             const customerCount = Number(customersCountResult[0]?.count || 0);
             return {
@@ -221,8 +202,8 @@ let ReportController = ReportController_1 = class ReportController {
                 serviceCount: servicesCount || 0,
                 treatmentCount: treatmentsCount || 0,
                 appointmentCount: appointmentsCount || 0,
-                totalSales: revenueData._sum?.amount || 0,
-                totalRevenue: revenueData._sum?.paid || 0,
+                totalSales: vtBranch ? (vtBranch.TotalPriceDiscounted || 0) : 0,
+                totalRevenue: vtBranch ? (vtBranch.Amount || 0) : 0,
             };
         }));
         return summaries;

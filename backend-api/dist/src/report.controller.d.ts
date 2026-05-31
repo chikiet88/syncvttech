@@ -35,20 +35,20 @@ export declare class ReportController {
     }>;
     getTreatmentsDetails(branchId: string, from: string, to: string, page?: string, limit?: string): Promise<{
         data: {
-            status: number;
-            created_at: Date;
             id: number;
-            branch_id: number | null;
-            branch_name: string | null;
+            created_at: Date;
             customer_id: number | null;
             customer_name: string | null;
+            branch_id: number | null;
+            branch_name: string | null;
             service_id: number | null;
             service_name: string | null;
-            amount: number;
-            paid: number;
             employee_id: number | null;
             employee_name: string | null;
+            status: number;
             note: string | null;
+            amount: number;
+            paid: number;
             treatment_date: Date | null;
         }[];
         pagination: {
@@ -60,20 +60,20 @@ export declare class ReportController {
     }>;
     getAppointmentsDetails(branchId: string, from: string, to: string, page?: string, limit?: string): Promise<{
         data: {
-            status: number;
-            created_at: Date;
-            updated_at: Date;
             id: number;
             phone: string | null;
-            branch_id: number | null;
-            branch_name: string | null;
+            created_at: Date;
+            updated_at: Date;
             customer_id: number | null;
             customer_name: string | null;
+            branch_id: number | null;
+            branch_name: string | null;
             service_id: number | null;
             service_name: string | null;
             employee_id: number | null;
             employee_name: string | null;
             appointment_date: Date | null;
+            status: number;
             note: string | null;
         }[];
         pagination: {

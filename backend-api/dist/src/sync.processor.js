@@ -45,7 +45,12 @@ let SyncProcessor = SyncProcessor_1 = class SyncProcessor extends bullmq_1.Worke
 };
 exports.SyncProcessor = SyncProcessor;
 exports.SyncProcessor = SyncProcessor = SyncProcessor_1 = __decorate([
-    (0, bullmq_1.Processor)('sync-queue', { concurrency: 10 }),
+    (0, bullmq_1.Processor)('sync-queue', {
+        concurrency: 4,
+        lockDuration: 3600000,
+        stalledInterval: 60000,
+        maxStalledCount: 3
+    }),
     __metadata("design:paramtypes", [sync_service_1.SyncService])
 ], SyncProcessor);
 //# sourceMappingURL=sync.processor.js.map

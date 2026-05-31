@@ -210,6 +210,11 @@ export class SyncService implements OnModuleInit {
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleDailySync() {
+    const config = await this.prisma.cronConfig.findUnique({ where: { id: 'handleDailySync' } }).catch(() => null);
+    if (config && !config.enabled) {
+      this.logger.log('🚫 [CRON] handleDailySync bị vô hiệu hóa trong cấu hình.');
+      return;
+    }
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const dateStr = yesterday.toISOString().split('T')[0];
@@ -218,6 +223,10 @@ export class SyncService implements OnModuleInit {
 
   @Cron('0 */5 * * * *')
   async handleHeartbeat() {
+    const config = await this.prisma.cronConfig.findUnique({ where: { id: 'handleHeartbeat' } }).catch(() => null);
+    if (config && !config.enabled) {
+      return;
+    }
     this.logger.log('💓 [HEARTBEAT] Đang duy trì nhịp đập Session cho các tài khoản...');
     try {
       const result = await this.vttechApi.checkLoginStatus();
@@ -234,6 +243,11 @@ export class SyncService implements OnModuleInit {
 
   @Cron('0 */20 * * * *')
   async handleFrequentSync() {
+    const config = await this.prisma.cronConfig.findUnique({ where: { id: 'handleFrequentSync' } }).catch(() => null);
+    if (config && !config.enabled) {
+      this.logger.log('🚫 [CRON] handleFrequentSync bị vô hiệu hóa trong cấu hình.');
+      return;
+    }
     const today = new Date().toISOString().split('T')[0];
     this.logger.log(`[CRON] Bắt đầu đồng bộ định kỳ 20p cho ngày ${today}`);
     // Sync current day without PBX but with detail workers
@@ -250,6 +264,11 @@ export class SyncService implements OnModuleInit {
 
   @Cron('0 */30 * * * *') // Mỗi 30 phút kiểm tra và giải quyết 1 phần dữ liệu cũ
   async handleHistoricalSyncCron() {
+    const config = await this.prisma.cronConfig.findUnique({ where: { id: 'handleHistoricalSyncCron' } }).catch(() => null);
+    if (config && !config.enabled) {
+      this.logger.log('🚫 [CRON] handleHistoricalSyncCron bị vô hiệu hóa trong cấu hình.');
+      return;
+    }
     this.logger.log('[CRON] Đang kiểm tra tác vụ đồng bộ lịch sử (Backlog)...');
     
     // Kiểm tra tải hệ thống qua hàng đợi BullMQ
@@ -306,6 +325,10 @@ export class SyncService implements OnModuleInit {
 
   @Cron('0 */10 * * * *') // Chạy mỗi 10 phút để tự chữa lành nhanh hơn
   async handleStaleTasksCron() {
+    const config = await this.prisma.cronConfig.findUnique({ where: { id: 'handleStaleTasksCron' } }).catch(() => null);
+    if (config && !config.enabled) {
+      return;
+    }
     this.logger.log('🕵️ Đang kiểm tra và tự sửa lỗi các task bị kẹt (Self-healing)...');
     try {
       // 1. Giải phóng các task bị kẹt trong DB (PROCESSING quá lâu)
@@ -394,6 +417,10 @@ export class SyncService implements OnModuleInit {
 
   @Cron(CronExpression.EVERY_HOUR)
   async handleQueueCleanupCron() {
+    const config = await this.prisma.cronConfig.findUnique({ where: { id: 'handleQueueCleanupCron' } }).catch(() => null);
+    if (config && !config.enabled) {
+      return;
+    }
     this.logger.log('🧹 Đang dọn dẹp hàng đợi BullMQ...');
     try {
       // Dọn dẹp các job đã hoàn thành quá 1 tiếng
@@ -411,6 +438,10 @@ export class SyncService implements OnModuleInit {
 
   @Cron('0 0 8,20 * * *') // Báo cáo định kỳ lúc 08:00 và 20:00
   async handleDailyReporting() {
+    const config = await this.prisma.cronConfig.findUnique({ where: { id: 'handleDailyReporting' } }).catch(() => null);
+    if (config && !config.enabled) {
+      return;
+    }
     this.logger.log('[CRON] Đang tổng hợp báo cáo giám sát đồng bộ hàng ngày...');
     try {
       const today = new Date();
@@ -934,7 +965,7 @@ export class SyncService implements OnModuleInit {
               service_name: String(a.ServiceName || a.TypeName || a.Service || ''),
               employee_id: parseInt(a.DoctorID || a.EmployeeID || a.Doctor) || 0,
               employee_name: a.DoctorName || a.EmployeeName || a.Doctor || '',
-              status: parseInt(a.TypeStatusID || a.Status || a.StatusID || a.State) || 0,
+              status: (parseInt(a.IsCancel) > 0 || parseInt(a.ReasonCancel) > 0 || parseInt(a.State) === 0) ? 3 : 1,
               appointment_date: this.parseDate(a.DateFrom || a.Date || a.AppointmentDate || a.CreatedDate || a.Created) || new Date(),
               note: a.Note || a.Content || '',
             },
@@ -949,7 +980,7 @@ export class SyncService implements OnModuleInit {
               service_name: String(a.ServiceName || a.TypeName || a.Service || ''),
               employee_id: parseInt(a.DoctorID || a.EmployeeID || a.Doctor) || 0,
               employee_name: a.DoctorName || a.EmployeeName || a.Doctor || '',
-              status: parseInt(a.TypeStatusID || a.Status || a.StatusID || a.State) || 0,
+              status: (parseInt(a.IsCancel) > 0 || parseInt(a.ReasonCancel) > 0 || parseInt(a.State) === 0) ? 3 : 1,
               appointment_date: this.parseDate(a.DateFrom || a.Date || a.AppointmentDate || a.CreatedDate || a.Created) || new Date(),
               note: a.Note || a.Content || '',
             },
@@ -1528,7 +1559,11 @@ export class SyncService implements OnModuleInit {
             customer_id: customerId,
             appointment_date: this.parseDate(item.Date_From),
             note: item.Content || '',
-            status: item.IsCancel === 0 ? 1 : 2,
+            status: (parseInt(item.IsCancel) > 0)
+              ? 3
+              : (String(item.StatusName || '').trim() === 'Ra Về' || String(item.StatusName || '').trim() === 'Đã Đến' || String(item.StatusName || '').trim() === 'Đang Điều Trị')
+                ? 2
+                : 1,
             branch_id: branchId || parseInt(item.BranchID) || null,
             branch_name: item.Branch || '',
             employee_name: item.DoctorName || '',
@@ -1538,7 +1573,11 @@ export class SyncService implements OnModuleInit {
             customer_id: customerId,
             appointment_date: this.parseDate(item.Date_From),
             note: item.Content || '',
-            status: item.IsCancel === 0 ? 1 : 2,
+            status: (parseInt(item.IsCancel) > 0)
+              ? 3
+              : (String(item.StatusName || '').trim() === 'Ra Về' || String(item.StatusName || '').trim() === 'Đã Đến' || String(item.StatusName || '').trim() === 'Đang Điều Trị')
+                ? 2
+                : 1,
             branch_id: branchId || parseInt(item.BranchID) || null,
             branch_name: item.Branch || '',
             employee_name: item.DoctorName || '',

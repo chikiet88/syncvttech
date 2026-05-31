@@ -742,3 +742,14 @@ model SyncTask {
   @@unique([date, branch_id, type])
   @@map("sync_tasks")
 }
+
+model CronConfig {
+  id          String   @id
+  name        String
+  enabled     Boolean  @default(true)
+  description String?
+  updated_at  DateTime @default(now()) @updatedAt
+
+  @@map("cron_configs")
+}
+

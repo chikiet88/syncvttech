@@ -13,6 +13,7 @@ export declare class SyncService implements OnModuleInit {
     private knownSourceIds;
     private knownBranchIds;
     private knownMembershipIds;
+    private recentlySyncedCustomers;
     constructor(vttechApi: VttechApiService, prisma: PrismaService, pbxSync: PbxSyncService, syncQueue: Queue);
     onModuleInit(): Promise<void>;
     getSyncStatus(): {
@@ -39,6 +40,8 @@ export declare class SyncService implements OnModuleInit {
     handleHeartbeat(): Promise<void>;
     handleFrequentSync(): Promise<void>;
     handleHistoricalSyncCron(): Promise<void>;
+    handleStaleTasksCron(): Promise<void>;
+    handleQueueCleanupCron(): Promise<void>;
     handleDailyReporting(): Promise<void>;
     syncRevenue(dateFrom: string, dateTo: string): Promise<void>;
     private executeRevenueSync;
@@ -61,28 +64,28 @@ export declare class SyncService implements OnModuleInit {
     private syncCustomerTickets;
     private syncCustomerSms;
     getLogs(limit?: number): Promise<{
-        status: string | null;
-        error_message: string | null;
-        created_at: Date;
         id: number;
+        created_at: Date;
         branch_id: number | null;
-        records_count: number | null;
-        appointments_count: number;
-        customers_count: number;
-        revenue_total: number;
-        sales_total: number;
-        services_count: number;
-        treatments_count: number;
+        status: string | null;
         task_id: string | null;
         crawl_date: Date | null;
         crawl_type: string | null;
         message: string | null;
+        records_count: number | null;
+        customers_count: number;
+        services_count: number;
+        treatments_count: number;
+        appointments_count: number;
+        sales_total: number;
+        revenue_total: number;
         duration_seconds: number | null;
         total_branches: number | null;
         total_services: number | null;
         total_customers: number | null;
         total_payments: number | null;
         total_treatments: number | null;
+        error_message: string | null;
     }[]>;
     private generateHash;
     processQueuedCustomerDetail(customerId: number, parentTaskId?: number): Promise<{
