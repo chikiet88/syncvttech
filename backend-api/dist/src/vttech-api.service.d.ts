@@ -1,4 +1,6 @@
+import { OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Queue } from 'bullmq';
 interface VttechSession {
     username: string;
     password: string;
@@ -12,17 +14,22 @@ interface VttechSession {
     loginByUsernamePromise: Promise<boolean> | null;
     lock: Promise<void> | null;
 }
-export declare class VttechApiService {
+export declare class VttechApiService implements OnModuleInit {
     private configService;
+    private syncQueue;
     private readonly logger;
     private axiosInstance;
     private sessions;
     private currentSessionIndex;
     private globalLastUsedAt;
     private readonly GLOBAL_MIN_DELAY;
+    private readonly LOGIN_TIMEOUT;
     private baseUrl;
     private logCallback;
-    constructor(configService: ConfigService);
+    constructor(configService: ConfigService, syncQueue: Queue);
+    onModuleInit(): Promise<void>;
+    private loadSessionsFromRedis;
+    private saveSessionToRedis;
     private createNewSession;
     private updateSessionCookies;
     private ensureSessionCookie;

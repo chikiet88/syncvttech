@@ -41,6 +41,9 @@ var __importStar = (this && this.__importStar) || (function () {
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -52,18 +55,23 @@ const config_1 = require("@nestjs/config");
 const axios_1 = __importDefault(require("axios"));
 const cheerio = __importStar(require("cheerio"));
 const zlib = __importStar(require("zlib"));
+const bullmq_1 = require("@nestjs/bullmq");
+const bullmq_2 = require("bullmq");
 let VttechApiService = VttechApiService_1 = class VttechApiService {
     configService;
+    syncQueue;
     logger = new common_1.Logger(VttechApiService_1.name);
     axiosInstance;
     sessions = [];
     currentSessionIndex = 0;
     globalLastUsedAt = 0;
     GLOBAL_MIN_DELAY = 1000;
+    LOGIN_TIMEOUT = 45000;
     baseUrl;
     logCallback = null;
-    constructor(configService) {
+    constructor(configService, syncQueue) {
         this.configService = configService;
+        this.syncQueue = syncQueue;
         this.baseUrl = this.configService.get('VTTECH_BASE_URL', 'https://tmtaza.vttechsolution.com');
         const accountStr = this.configService.get('VTTECH_ACCOUNTS');
         if (accountStr) {
@@ -136,6 +144,55 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
             return response;
         });
     }
+    async onModuleInit() {
+        await this.loadSessionsFromRedis();
+    }
+    async loadSessionsFromRedis() {
+        try {
+            const redis = await this.syncQueue.client;
+            if (!redis)
+                return;
+            this.logger.log('⏳ Đang khôi phục các session VTTech từ Redis...');
+            for (const s of this.sessions) {
+                const cached = await redis.get(`vttech:session:${s.username}`);
+                if (cached) {
+                    try {
+                        const data = JSON.parse(cached);
+                        s.token = data.token || null;
+                        s.secretKey = data.secretKey || null;
+                        s.cookies = data.cookies || [];
+                        s.xsrfToken = data.xsrfToken || null;
+                        s.lastUsedAt = data.lastUsedAt || 0;
+                        this.logger.log(`🔑 Đã khôi phục session cho: ${s.username} (Token: ${s.token ? 'OK' : 'NULL'})`);
+                    }
+                    catch (pe) {
+                        this.logger.warn(`⚠️ Lỗi parse session JSON cho ${s.username}: ${pe.message}`);
+                    }
+                }
+            }
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ Lỗi khôi phục session từ Redis: ${e.message}`);
+        }
+    }
+    async saveSessionToRedis(session) {
+        try {
+            const redis = await this.syncQueue.client;
+            if (!redis)
+                return;
+            const data = {
+                token: session.token,
+                secretKey: session.secretKey,
+                cookies: session.cookies,
+                xsrfToken: session.xsrfToken,
+                lastUsedAt: session.lastUsedAt
+            };
+            await redis.set(`vttech:session:${session.username}`, JSON.stringify(data), 'EX', 86400 * 7);
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ Lỗi lưu session vào Redis cho ${session.username}: ${e.message}`);
+        }
+    }
     createNewSession(u, p) {
         return {
             username: u, password: p,
@@ -146,6 +203,7 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
     updateSessionCookies(session, newCookies) {
         if (!newCookies || !Array.isArray(newCookies))
             return;
+        let changed = false;
         for (const raw of newCookies) {
             const firstPart = raw.split(';')[0];
             const [name] = firstPart.split('=');
@@ -153,13 +211,18 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                 continue;
             const index = session.cookies.findIndex(c => c.startsWith(name + '='));
             if (index !== -1) {
-                session.cookies[index] = firstPart;
+                if (session.cookies[index] !== firstPart) {
+                    session.cookies[index] = firstPart;
+                    changed = true;
+                }
             }
             else {
                 session.cookies.push(firstPart);
+                changed = true;
             }
-            if (name.includes('Antiforgery') || name.includes('XSRF-TOKEN')) {
-            }
+        }
+        if (changed) {
+            this.saveSessionToRedis(session).catch(() => { });
         }
     }
     ensureSessionCookie(session, name, value) {
@@ -170,11 +233,14 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
     getBestSession() {
         if (this.sessions.length === 0)
             throw new Error('No sessions available');
-        const idleSessions = this.sessions.filter(s => !s.lock).sort((a, b) => a.lastUsedAt - b.lastUsedAt);
+        const now = Date.now();
+        const activeSessions = this.sessions.filter(s => s.errorCount <= 5 || (now - s.lastErrorAt > 900000));
+        const sessionsToUse = activeSessions.length > 0 ? activeSessions : this.sessions;
+        const idleSessions = sessionsToUse.filter(s => !s.lock).sort((a, b) => a.lastUsedAt - b.lastUsedAt);
         if (idleSessions.length > 0)
             return idleSessions[0];
-        const session = this.sessions[this.currentSessionIndex];
-        this.currentSessionIndex = (this.currentSessionIndex + 1) % this.sessions.length;
+        const session = sessionsToUse[this.currentSessionIndex % sessionsToUse.length];
+        this.currentSessionIndex = (this.currentSessionIndex + 1) % sessionsToUse.length;
         return session;
     }
     async delayForSession(session) {
@@ -245,6 +311,17 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
     }
     async login(session, force = false) {
         const s = session || this.getBestSession();
+        try {
+            const redis = await this.syncQueue.client;
+            if (redis) {
+                const isLocked = await redis.get(`vttech:circuit_breaker:${s.username}`);
+                if (isLocked) {
+                    this.log(`🔌 [Circuit Breaker] Bỏ qua login cho ${s.username} do đang trong trạng thái ngắt mạch (lock).`);
+                    return false;
+                }
+            }
+        }
+        catch (e) { }
         const hasSession = !!s.token;
         if (hasSession && !force)
             return true;
@@ -260,7 +337,8 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                 }
                 this.log(`🚀 [START LOGIN] User: ${s.username}`);
                 const loginPageRes = await this.followRedirects(s, 'get', '/Login/Login?ver=' + Date.now(), {
-                    headers: { 'Accept': 'text/html' }
+                    headers: { 'Accept': 'text/html' },
+                    timeout: this.LOGIN_TIMEOUT
                 });
                 if (typeof loginPageRes.data === 'string') {
                     const $ = cheerio.load(loginPageRes.data);
@@ -281,7 +359,8 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                 };
                 const loginRes = await this.axiosInstance.post('/api/Author/Login', loginPayload, {
                     headers: { 'Content-Type': 'application/json; charset=UTF-8', 'Referer': this.baseUrl + '/Login/Login/' },
-                    session: s
+                    session: s,
+                    timeout: this.LOGIN_TIMEOUT
                 });
                 const data = loginRes.data;
                 if (data && data.Session) {
@@ -292,20 +371,42 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                         s.xsrfToken = data.XSRFToken;
                         this.log(`💡 [${s.username}] Found XSRF in login response: ${s.xsrfToken?.slice(0, 10)}...`);
                     }
-                    await this.followRedirects(s, 'get', '/', { headers: { 'Accept': 'text/html' } });
-                    await this.axiosInstance.get('/api/Home/Language/?ver=' + Date.now(), { session: s });
+                    await this.followRedirects(s, 'get', '/', { headers: { 'Accept': 'text/html' }, timeout: this.LOGIN_TIMEOUT });
+                    await this.axiosInstance.get('/api/Home/Language/?ver=' + Date.now(), { session: s, timeout: this.LOGIN_TIMEOUT });
                     await this.axiosInstance.post('/api/Home/SessionData', {}, {
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.token}` },
-                        session: s
+                        session: s,
+                        timeout: this.LOGIN_TIMEOUT
                     });
-                    await this.followRedirects(s, 'get', '/Main/Dashboard/', { headers: { 'Accept': 'text/html' } });
+                    await this.followRedirects(s, 'get', '/Main/Dashboard/', { headers: { 'Accept': 'text/html' }, timeout: this.LOGIN_TIMEOUT });
                     await this.getXsrfToken(s, '/Customer/ListCustomer/', true);
+                    s.errorCount = 0;
+                    try {
+                        const redis = await this.syncQueue.client;
+                        if (redis) {
+                            await redis.del(`vttech:circuit_breaker:${s.username}`);
+                        }
+                    }
+                    catch (e) { }
+                    await this.saveSessionToRedis(s);
                     return true;
                 }
                 return false;
             }
             catch (error) {
                 this.log(`❌ Lỗi LOGIN [${s.username}]: ${error.message}`);
+                s.errorCount++;
+                s.lastErrorAt = Date.now();
+                if (s.errorCount >= 3) {
+                    try {
+                        const redis = await this.syncQueue.client;
+                        if (redis) {
+                            await redis.set(`vttech:circuit_breaker:${s.username}`, 'true', 'EX', 300);
+                            this.log(`🔌 [Circuit Breaker] Đã kích hoạt ngắt mạch cho ${s.username} (Khóa login 5 phút) do thất bại liên tiếp.`);
+                        }
+                    }
+                    catch (re) { }
+                }
                 return false;
             }
             finally {
@@ -325,7 +426,8 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
         for (const targetPage of uniquePages) {
             try {
                 const resp = await this.followRedirects(s, 'get', targetPage, {
-                    headers: { 'Referer': this.baseUrl + '/', 'Accept': 'text/html' }
+                    headers: { 'Referer': this.baseUrl + '/', 'Accept': 'text/html' },
+                    timeout: this.LOGIN_TIMEOUT
                 });
                 if (typeof resp.data === 'string') {
                     const $ = cheerio.load(resp.data);
@@ -336,6 +438,7 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                     if (token) {
                         s.xsrfToken = token;
                         this.log(`✅ [${s.username}] Extracted XSRF from ${targetPage}: ${s.xsrfToken.slice(0, 10)}...`);
+                        await this.saveSessionToRedis(s).catch(() => { });
                         return s.xsrfToken;
                     }
                     if (targetPage === '/') {
@@ -351,6 +454,7 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                     if (scriptMatches && scriptMatches[1]) {
                         s.xsrfToken = scriptMatches[1];
                         this.log(`✅ [${s.username}] Extracted XSRF from ${targetPage} script: ${s.xsrfToken.slice(0, 10)}...`);
+                        await this.saveSessionToRedis(s).catch(() => { });
                         return s.xsrfToken;
                     }
                 }
@@ -424,10 +528,20 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
             let lastError = null;
             while (retryCount <= maxRetries) {
                 try {
+                    const redis = await this.syncQueue.client;
+                    if (redis) {
+                        const isLocked = await redis.get(`vttech:circuit_breaker:${session.username}`);
+                        if (isLocked) {
+                            throw new Error(`[Circuit Breaker] Chặn đăng nhập tài khoản ${session.username}`);
+                        }
+                    }
                     const loginOk = await this.login(session, retryCount > 0);
-                    if (!loginOk && retryCount > 0) {
-                        this.log(`⚠️ [Loicansua] [${session.username}] Re-login failed during retry ${retryCount}. Waiting 5s...`);
-                        await new Promise(r => setTimeout(r, 5000));
+                    if (!loginOk) {
+                        if (retryCount > 0) {
+                            this.log(`⚠️ [Loicansua] [${session.username}] Re-login failed during retry ${retryCount}. Waiting 5s...`);
+                            await new Promise(r => setTimeout(r, 5000));
+                        }
+                        throw new Error(`Đăng nhập thất bại cho tài khoản ${session.username}`);
                     }
                     await this.delayForSession(session);
                     if (!session.xsrfToken || retryCount > 0) {
@@ -465,6 +579,9 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                 }
                 catch (e) {
                     lastError = e;
+                    if (e.message.includes('[Circuit Breaker]')) {
+                        break;
+                    }
                     session.errorCount++;
                     session.lastErrorAt = Date.now();
                     this.log(`❌ [Loicansua] [${session.username}] Exception in callHandler: ${e.message}. Retry ${retryCount + 1}...`);
@@ -473,7 +590,7 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                 }
             }
             this.log(`🔥 [Loicansua] [${session.username}] All retries failed for ${handler}.`);
-            throw new Error(`[VTTech API] All retries failed for ${handler} after ${maxRetries + 1} attempts.`);
+            throw new Error(`[VTTech API] All retries failed for ${handler} after ${maxRetries + 1} attempts. Lỗi cuối: ${lastError?.message}`);
         });
     }
     async callApi(url, data) {
@@ -514,6 +631,8 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
 exports.VttechApiService = VttechApiService;
 exports.VttechApiService = VttechApiService = VttechApiService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [config_1.ConfigService])
+    __param(1, (0, bullmq_1.InjectQueue)('sync-queue')),
+    __metadata("design:paramtypes", [config_1.ConfigService,
+        bullmq_2.Queue])
 ], VttechApiService);
 //# sourceMappingURL=vttech-api.service.js.map

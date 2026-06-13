@@ -340,7 +340,14 @@ export class ReportController {
     const customerIds = [...new Set(data.map((t: any) => t.customer_id).filter(Boolean))];
     const customers = await this.prisma.customer.findMany({
       where: { id: { in: customerIds as number[] } },
-      select: { id: true, name: true, code: true, phone: true }
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        phone: true,
+        created_at: true,
+        source: { select: { name: true } }
+      }
     });
     const customerMap = new Map(customers.map(c => [c.id, c]));
 
@@ -354,6 +361,8 @@ export class ReportController {
         customerCode: c?.code || '',
         phone: c?.phone || item.phone || '',
         branchId: item.branch_id,
+        sourceName: c?.source?.name || 'Khách Giới Thiệu',
+        createdAt: c?.created_at || item.created_at || null,
       };
     });
 
@@ -417,6 +426,7 @@ export class ReportController {
     @Query('to') to: string,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '20',
+    @Query('q') q?: string,
   ) {
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
@@ -438,21 +448,551 @@ export class ReportController {
     const end = parseDate(to || '');
     end.setHours(23, 59, 59, 999);
 
-    const where: any = { appointment_date: { gte: start, lte: end } };
-    if (branchId && branchId !== '0') where.branch_id = parseInt(branchId);
+    const where: any = {};
+    const whereAndConditions: any[] = [];
 
-    const [data, total] = await Promise.all([
+    if (!q) {
+      whereAndConditions.push({ appointment_date: { gte: start, lte: end } });
+    }
+
+    if (branchId === 'taza') {
+      whereAndConditions.push({
+        branch: {
+          name: { contains: 'Taza', mode: 'insensitive' },
+        },
+      });
+    } else if (branchId === 'timona') {
+      whereAndConditions.push({
+        branch: {
+          name: { contains: 'Timona', mode: 'insensitive' },
+        },
+      });
+    } else if (branchId && branchId !== '0') {
+      whereAndConditions.push({ branch_id: parseInt(branchId) });
+    } else {
+      whereAndConditions.push({
+        branch: {
+          OR: [
+            { name: { contains: 'Taza', mode: 'insensitive' } },
+            { name: { contains: 'Timona', mode: 'insensitive' } },
+          ],
+        },
+      });
+    }
+
+    if (q) {
+      whereAndConditions.push({
+        OR: [
+          { customer_name: { contains: q, mode: 'insensitive' } },
+          { phone: { contains: q, mode: 'insensitive' } },
+          { note: { contains: q, mode: 'insensitive' } },
+          { vttech_code: { contains: q, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    // Status "Ra Về" filter
+    whereAndConditions.push({
+      OR: [
+        { status_name: { contains: 'Ra Về', mode: 'insensitive' } },
+        {
+          AND: [
+            { OR: [{ status_name: null }, { status_name: '' }] },
+            { OR: [{ status: 2 }, { status: 4 }] }
+          ]
+        }
+      ]
+    });
+
+    // Type "Tư vấn" filter
+    whereAndConditions.push({
+      OR: [
+        { type_name: { contains: 'tư vấn', mode: 'insensitive' } },
+        {
+          AND: [
+            { OR: [{ type_name: null }, { type_name: '' }] },
+            { service_name: { contains: 'tư vấn', mode: 'insensitive' } }
+          ]
+        }
+      ]
+    });
+
+    where.AND = whereAndConditions;
+
+    const [appointments, total, services, groups] = await Promise.all([
       this.prisma.appointment.findMany({
         where,
         skip,
         take: limitNum,
+        include: {
+          customer: {
+            include: {
+              source: true,
+            },
+          },
+          branch: true,
+        },
         orderBy: { appointment_date: 'desc' },
       }),
       this.prisma.appointment.count({ where }),
+      this.prisma.service.findMany({ select: { id: true, name: true, group_id: true } }),
+      this.prisma.serviceGroup.findMany({ select: { id: true, name: true } }),
     ]);
+
+    const serviceMap = new Map(services.map(s => [s.id, s]));
+    const groupMap = new Map(groups.map(g => [g.id, g.name]));
+
+    // Fetch employee & user names for creators (CreatedID maps to User ID on VTTech)
+    const creatorIds = [...new Set(appointments.map(a => a.created_by_id).filter(Boolean))] as number[];
+    const employeeMap = new Map<number, string>();
+    if (creatorIds.length > 0) {
+      // 1. Fetch from users table (which has full_name mapped to VTTech EmployeeName)
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: creatorIds } },
+        select: { id: true, full_name: true },
+      });
+      users.forEach(u => {
+        if (u.full_name) employeeMap.set(u.id, u.full_name);
+      });
+
+      // 2. Fallback to employees table for any IDs that are not in users mapping
+      const missingIds = creatorIds.filter(id => !employeeMap.has(id));
+      if (missingIds.length > 0) {
+        const employees = await this.prisma.employee.findMany({
+          where: { id: { in: missingIds } },
+          select: { id: true, name: true },
+        });
+        employees.forEach(e => {
+          if (e.name) employeeMap.set(e.id, e.name);
+        });
+      }
+    }
+
+    const data = appointments.map(a => {
+      const customer = a.customer;
+      const custCode = customer?.code || '';
+      const custName = customer?.name || a.customer_name || '';
+      const mlhKh = `${custCode}${custName}`;
+
+      const creatorName = a.created_by_id ? (employeeMap.get(a.created_by_id) || '') : '';
+      let saleTimeDate = creatorName;
+      const createdDate = a.vttech_created_at || a.appointment_date;
+      if (createdDate) {
+        const hh = String(createdDate.getHours()).padStart(2, '0');
+        const mm = String(createdDate.getMinutes()).padStart(2, '0');
+        const dd = String(createdDate.getDate()).padStart(2, '0');
+        const mMonth = String(createdDate.getMonth() + 1).padStart(2, '0');
+        const yyyy = createdDate.getFullYear();
+        saleTimeDate = `${creatorName}${hh}:${mm} ${dd}-${mMonth}-${yyyy}`;
+      }
+
+      const sourceName = customer?.source?.name || 'Khách Giới Thiệu';
+
+      // Find funnel name
+      const service = a.service_id ? serviceMap.get(a.service_id) : null;
+      const funnelName = service?.group_id ? groupMap.get(service.group_id) : '';
+      const noteWithFunnel = funnelName ? `[${funnelName}] ${a.note || ''}`.trim() : (a.note || '');
+
+      return {
+        id: a.id,
+        vttech_code: a.vttech_code || '',
+        mlh_kh: mlhKh,
+        appointment_date: a.appointment_date,
+        phone: a.phone || '',
+        note: noteWithFunnel,
+        status_name: a.status_name || ((a.status === 2 || a.status === 4) ? 'Ra Về' : a.status === 3 ? 'Đã Hủy' : 'Đặt Hẹn'),
+        branch_name: a.branch?.name || a.branch_name || '',
+        type_name: a.type_name || (a.service_name?.toLowerCase().includes('tư vấn') ? 'Tư vấn' : 'Điều trị'),
+        sale_time_date: saleTimeDate,
+        source_name: sourceName,
+        // include legacy/original fields
+        customer_name: custName,
+        service_name: a.service_name || '',
+        employee_name: a.employee_name || '',
+        status: a.status,
+      };
+    });
 
     return {
       data,
+      pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
+    };
+  }
+
+  @Get('anamnesis/details')
+  async getAnamnesisDetails(
+    @Query('branchId') branchId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+  ) {
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const parseDate = (dStr: string) => {
+      if (!dStr) return new Date();
+      const separator = dStr.includes('/') ? '/' : '-';
+      const parts = dStr.split(separator);
+      if (parts.length === 3) {
+          if (parts[0].length === 4) return new Date(dStr);
+          const [d, m, y] = parts;
+          return new Date(`${y}-${m}-${d}`);
+      }
+      return new Date(dStr);
+    };
+
+    const start = parseDate(from || '');
+    const end = parseDate(to || '');
+    end.setHours(23, 59, 59, 999);
+
+    const where: any = {
+      created_at: { gte: start, lte: end }
+    };
+    if (branchId && branchId !== '0') {
+      where.customer = { branch_id: parseInt(branchId) };
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.customerAnamnesis.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { created_at: 'desc' },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              phone: true,
+              branch_id: true,
+              branch: { select: { name: true } }
+            }
+          }
+        }
+      }),
+      this.prisma.customerAnamnesis.count({ where }),
+    ]);
+
+    const mappedData = data.map((item) => ({
+      id: item.id,
+      date: item.created_at,
+      customerId: item.customer_id,
+      customerName: item.customer?.name || 'N/A',
+      customerCode: item.customer?.code || '',
+      phone: item.customer?.phone || '',
+      content: item.content || '',
+      note: item.note || '',
+      branchName: item.customer?.branch?.name || `CN #${item.customer?.branch_id || ''}`,
+    }));
+
+    return {
+      data: mappedData,
+      pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
+    };
+  }
+
+  @Get('images/details')
+  async getImagesDetails(
+    @Query('branchId') branchId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+  ) {
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const parseDate = (dStr: string) => {
+      if (!dStr) return new Date();
+      const separator = dStr.includes('/') ? '/' : '-';
+      const parts = dStr.split(separator);
+      if (parts.length === 3) {
+          if (parts[0].length === 4) return new Date(dStr);
+          const [d, m, y] = parts;
+          return new Date(`${y}-${m}-${d}`);
+      }
+      return new Date(dStr);
+    };
+
+    const start = parseDate(from || '');
+    const end = parseDate(to || '');
+    end.setHours(23, 59, 59, 999);
+
+    const where: any = {
+      created_at: { gte: start, lte: end }
+    };
+    if (branchId && branchId !== '0') {
+      where.customer = { branch_id: parseInt(branchId) };
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.customerImageFolder.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { created_at: 'desc' },
+        include: {
+          images: { select: { id: true } },
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              phone: true,
+              branch_id: true,
+              branch: { select: { name: true } }
+            }
+          }
+        }
+      }),
+      this.prisma.customerImageFolder.count({ where }),
+    ]);
+
+    const mappedData = data.map((item) => ({
+      id: item.id,
+      date: item.created_at,
+      customerId: item.customer_id,
+      customerName: item.customer?.name || 'N/A',
+      customerCode: item.customer?.code || '',
+      phone: item.customer?.phone || '',
+      folderName: item.folder_name || '',
+      imagesCount: item.images.length,
+      branchName: item.customer?.branch?.name || `CN #${item.customer?.branch_id || ''}`,
+    }));
+
+    return {
+      data: mappedData,
+      pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
+    };
+  }
+
+  @Get('care-history/details')
+  async getCareHistoryDetails(
+    @Query('branchId') branchId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+  ) {
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const parseDate = (dStr: string) => {
+      if (!dStr) return new Date();
+      const separator = dStr.includes('/') ? '/' : '-';
+      const parts = dStr.split(separator);
+      if (parts.length === 3) {
+          if (parts[0].length === 4) return new Date(dStr);
+          const [d, m, y] = parts;
+          return new Date(`${y}-${m}-${d}`);
+      }
+      return new Date(dStr);
+    };
+
+    const start = parseDate(from || '');
+    const end = parseDate(to || '');
+    end.setHours(23, 59, 59, 999);
+
+    const where: any = {
+      action_date: { gte: start, lte: end }
+    };
+    if (branchId && branchId !== '0') {
+      where.customer = { branch_id: parseInt(branchId) };
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.customerCareHistory.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { action_date: 'desc' },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              phone: true,
+              branch_id: true,
+              branch: { select: { name: true } }
+            }
+          }
+        }
+      }),
+      this.prisma.customerCareHistory.count({ where }),
+    ]);
+
+    const mappedData = data.map((item) => ({
+      id: item.id,
+      date: item.action_date,
+      customerId: item.customer_id,
+      customerName: item.customer?.name || 'N/A',
+      customerCode: item.customer?.code || '',
+      phone: item.customer?.phone || '',
+      actionType: item.action_type || '',
+      note: item.note || '',
+      employeeName: item.employee_name || '',
+      branchName: item.customer?.branch?.name || `CN #${item.customer?.branch_id || ''}`,
+    }));
+
+    return {
+      data: mappedData,
+      pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
+    };
+  }
+
+  @Get('complaints/details')
+  async getComplaintsDetails(
+    @Query('branchId') branchId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+  ) {
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const parseDate = (dStr: string) => {
+      if (!dStr) return new Date();
+      const separator = dStr.includes('/') ? '/' : '-';
+      const parts = dStr.split(separator);
+      if (parts.length === 3) {
+          if (parts[0].length === 4) return new Date(dStr);
+          const [d, m, y] = parts;
+          return new Date(`${y}-${m}-${d}`);
+      }
+      return new Date(dStr);
+    };
+
+    const start = parseDate(from || '');
+    const end = parseDate(to || '');
+    end.setHours(23, 59, 59, 999);
+
+    const where: any = {
+      created_at: { gte: start, lte: end }
+    };
+    if (branchId && branchId !== '0') {
+      where.customer = { branch_id: parseInt(branchId) };
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.customerComplaint.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { created_at: 'desc' },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              phone: true,
+              branch_id: true,
+              branch: { select: { name: true } }
+            }
+          }
+        }
+      }),
+      this.prisma.customerComplaint.count({ where }),
+    ]);
+
+    const mappedData = data.map((item) => ({
+      id: item.id,
+      date: item.created_at,
+      customerId: item.customer_id,
+      customerName: item.customer?.name || 'N/A',
+      customerCode: item.customer?.code || '',
+      phone: item.customer?.phone || '',
+      content: item.content || '',
+      statusName: item.status_name || '',
+      branchName: item.customer?.branch?.name || `CN #${item.customer?.branch_id || ''}`,
+    }));
+
+    return {
+      data: mappedData,
+      pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
+    };
+  }
+
+  @Get('treatment-plans/details')
+  async getTreatmentPlansDetails(
+    @Query('branchId') branchId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+  ) {
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const parseDate = (dStr: string) => {
+      if (!dStr) return new Date();
+      const separator = dStr.includes('/') ? '/' : '-';
+      const parts = dStr.split(separator);
+      if (parts.length === 3) {
+          if (parts[0].length === 4) return new Date(dStr);
+          const [d, m, y] = parts;
+          return new Date(`${y}-${m}-${d}`);
+      }
+      return new Date(dStr);
+    };
+
+    const start = parseDate(from || '');
+    const end = parseDate(to || '');
+    end.setHours(23, 59, 59, 999);
+
+    const where: any = {
+      created_at: { gte: start, lte: end }
+    };
+    if (branchId && branchId !== '0') {
+      where.customer = { branch_id: parseInt(branchId) };
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.customerTreatmentPlan.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { created_at: 'desc' },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              phone: true,
+              branch_id: true,
+              branch: { select: { name: true } }
+            }
+          }
+        }
+      }),
+      this.prisma.customerTreatmentPlan.count({ where }),
+    ]);
+
+    const mappedData = data.map((item) => ({
+      id: item.id,
+      date: item.created_at,
+      customerId: item.customer_id,
+      customerName: item.customer?.name || 'N/A',
+      customerCode: item.customer?.code || '',
+      phone: item.customer?.phone || '',
+      serviceName: item.service_name || '',
+      doctorName: item.doctor_name || '',
+      note: item.note || '',
+      branchName: item.customer?.branch?.name || `CN #${item.customer?.branch_id || ''}`,
+    }));
+
+    return {
+      data: mappedData,
       pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
     };
   }

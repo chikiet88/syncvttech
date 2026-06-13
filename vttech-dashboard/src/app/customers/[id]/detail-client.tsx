@@ -32,6 +32,58 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 
 // --- Column Definitions ---
 
+const anamnesisColumns: ColumnDef<any>[] = [
+    {
+        accessorKey: "created_at",
+        header: "Ngày khai báo",
+        cell: ({ row }) => row.original.created_at ? new Date(row.original.created_at).toLocaleDateString("vi-VN") : "N/A"
+    },
+    {
+        accessorKey: "content",
+        header: "Khảo sát sức khỏe / Câu hỏi",
+        cell: ({ row }) => <span className="font-bold text-slate-800">{row.getValue("content") || "N/A"}</span>
+    },
+    {
+        accessorKey: "note",
+        header: "Trả lời / Trạng thái",
+        cell: ({ row }) => {
+            const noteVal = row.getValue("note")
+            const isPositive = String(noteVal).toLowerCase() === 'có' || String(noteVal).toLowerCase() === 'yes';
+            return (
+                <Badge variant="outline" className={`rounded-full border-none font-bold text-[10px] ${
+                    isPositive ? "bg-amber-500/10 text-amber-600" : "bg-slate-100 text-slate-600"
+                }`}>
+                    {String(noteVal) || 'Không'}
+                </Badge>
+            )
+        }
+    }
+]
+
+const complaintColumns: ColumnDef<any>[] = [
+    {
+        accessorKey: "created_at",
+        header: "Ngày khiếu nại",
+        cell: ({ row }) => row.original.created_at ? new Date(row.original.created_at).toLocaleDateString("vi-VN") : "N/A"
+    },
+    {
+        accessorKey: "content",
+        header: "Nội dung khiếu nại / Phàn nàn",
+        cell: ({ row }) => <span className="font-bold text-red-650">{row.getValue("content") || "N/A"}</span>
+    },
+    {
+        accessorKey: "status_name",
+        header: "Trạng thái",
+        cell: ({ row }) => (
+            <Badge variant="outline" className={`rounded-full border-none font-bold text-[10px] uppercase tracking-wider ${
+                String(row.getValue("status_name") || "").includes("Giải quyết") ? "bg-emerald-500/10 text-emerald-600" : "bg-red-500/10 text-red-600"
+            }`}>
+                {row.getValue("status_name") || "Đang xử lý"}
+            </Badge>
+        )
+    }
+]
+
 const treatmentColumns: ColumnDef<any>[] = [
     {
         accessorKey: "treatment_date",
@@ -443,6 +495,24 @@ export function CustomerDetailContent({ customer }: { customer: any }) {
                 </CardContent>
             </Card>
 
+            {/* Tiền sử Sức Khỏe Table Stack */}
+            <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                <CardHeader className="p-6 pb-3 bg-slate-50/50">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-teal-600 text-white shadow-md shadow-teal-600/20">
+                            <Activity className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <CardTitle className="text-lg font-black tracking-tight">Tiền sử Sức khỏe & Bệnh lý</CardTitle>
+                            <CardDescription className="text-xs font-medium">Bản khai báo thông tin y khoa của khách hàng</CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-6 pt-3">
+                    <DataTable columns={anamnesisColumns} data={customer.anamnesis || []} searchKey="content" />
+                </CardContent>
+            </Card>
+
             {/* 5. Financial Sections */}
             <div className="grid grid-cols-1 gap-6">
                 {/* Payments */}
@@ -653,6 +723,24 @@ export function CustomerDetailContent({ customer }: { customer: any }) {
                             <div className="col-span-full text-center py-6 text-muted-foreground italic font-medium text-xs">Không có phác đồ nào.</div>
                         )}
                     </div>
+                </CardContent>
+            </Card>
+
+            {/* Complaints Table Stack */}
+            <Card className="glass border border-black/5 shadow-xl rounded-xl overflow-hidden bg-white/70">
+                <CardHeader className="p-6 pb-3 bg-red-50/10">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-red-500 text-white shadow-md shadow-red-500/20">
+                            <MessageSquareWarning className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <CardTitle className="text-lg font-black tracking-tight">Lịch sử Khiếu nại / Phàn nàn</CardTitle>
+                            <CardDescription className="text-xs font-medium">Danh sách các phàn nàn, góp ý từ khách hàng</CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-6 pt-3">
+                    <DataTable columns={complaintColumns} data={customer.complaints || []} searchKey="content" />
                 </CardContent>
             </Card>
         </div>

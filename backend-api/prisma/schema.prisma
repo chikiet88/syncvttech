@@ -293,6 +293,7 @@ model DailyCustomer {
 
 model Appointment {
   id               Int       @id
+  vttech_code      String?
   customer_id      Int?
   customer_name    String?
   phone            String?
@@ -303,7 +304,11 @@ model Appointment {
   employee_id      Int?
   employee_name    String?
   appointment_date DateTime?
+  created_by_id    Int?
+  vttech_created_at DateTime?
   status           Int       @default(0)
+  status_name      String?
+  type_name        String?
   note             String?
   created_at       DateTime  @default(now())
   updated_at       DateTime  @default(now()) @updatedAt

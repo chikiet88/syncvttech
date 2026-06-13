@@ -16,7 +16,14 @@ export declare class SyncService implements OnModuleInit {
     private recentlySyncedCustomers;
     constructor(vttechApi: VttechApiService, prisma: PrismaService, pbxSync: PbxSyncService, syncQueue: Queue);
     onModuleInit(): Promise<void>;
-    getSyncStatus(): {
+    getSyncStatus(): Promise<{
+        queueCounts: any;
+        taskSummary: {
+            pending: number;
+            processing: number;
+            success: number;
+            failed: number;
+        };
         isSyncing: boolean;
         progress: number;
         total: number;
@@ -27,7 +34,7 @@ export declare class SyncService implements OnModuleInit {
         endTime: number | null;
         error: string | null;
         shouldStop: boolean;
-    };
+    }>;
     stopSync(): void;
     resetQueue(): Promise<{
         success: boolean;
@@ -60,32 +67,35 @@ export declare class SyncService implements OnModuleInit {
     private syncCustomerSchedules;
     private syncSingleCustomerDetail;
     private syncCustomerAnamnesis;
+    private syncCustomerCareHistory;
+    private syncCustomerComplaints;
+    private syncCustomerTreatmentPlans;
     private syncCustomerVttechCalls;
     private syncCustomerTickets;
     private syncCustomerSms;
     getLogs(limit?: number): Promise<{
         id: number;
+        status: string | null;
+        error_message: string | null;
         created_at: Date;
         branch_id: number | null;
-        status: string | null;
+        records_count: number | null;
+        appointments_count: number;
+        customers_count: number;
+        revenue_total: number;
+        sales_total: number;
+        services_count: number;
+        treatments_count: number;
         task_id: string | null;
         crawl_date: Date | null;
         crawl_type: string | null;
         message: string | null;
-        records_count: number | null;
-        customers_count: number;
-        services_count: number;
-        treatments_count: number;
-        appointments_count: number;
-        sales_total: number;
-        revenue_total: number;
         duration_seconds: number | null;
         total_branches: number | null;
         total_services: number | null;
         total_customers: number | null;
         total_payments: number | null;
         total_treatments: number | null;
-        error_message: string | null;
     }[]>;
     private generateHash;
     processQueuedCustomerDetail(customerId: number, parentTaskId?: number): Promise<{

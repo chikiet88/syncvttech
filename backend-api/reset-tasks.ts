@@ -8,8 +8,7 @@ async function resetTasks() {
   
   const result = await prisma.syncTask.updateMany({
     where: {
-      date: { gte: new Date('2026-04-01') },
-      status: { not: 'SUCCESS' }
+      date: new Date('2026-06-01T00:00:00.000Z')
     },
     data: {
       status: 'PENDING',

@@ -20,6 +20,9 @@ const sync_service_1 = require("./sync.service");
 const sync_processor_1 = require("./sync.processor");
 const pbx_api_service_1 = require("./pbx-api.service");
 const pbx_sync_service_1 = require("./pbx-sync.service");
+const mcp_controller_1 = require("./mcp/mcp.controller");
+const mcp_service_1 = require("./mcp/mcp.service");
+const excel_export_service_1 = require("./excel-export.service");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -54,7 +57,7 @@ exports.AppModule = AppModule = __decorate([
                 name: 'sync-queue',
             }),
         ],
-        controllers: [app_controller_1.AppController, report_controller_1.ReportController],
+        controllers: [app_controller_1.AppController, report_controller_1.ReportController, mcp_controller_1.McpController],
         providers: [
             app_service_1.AppService,
             prisma_service_1.PrismaService,
@@ -63,6 +66,8 @@ exports.AppModule = AppModule = __decorate([
             sync_processor_1.SyncProcessor,
             pbx_api_service_1.PbxApiService,
             pbx_sync_service_1.PbxSyncService,
+            mcp_service_1.McpService,
+            excel_export_service_1.ExcelExportService,
         ],
     })
 ], AppModule);

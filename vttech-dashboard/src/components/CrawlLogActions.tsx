@@ -31,7 +31,13 @@ interface SyncStatus {
     shouldStop: boolean
 }
 
-export function CrawlLogActions({ hideSyncButtons = false }: { hideSyncButtons?: boolean }) {
+export function CrawlLogActions({ 
+    hideSyncButtons = false,
+    size = "default"
+}: { 
+    hideSyncButtons?: boolean
+    size?: "default" | "sm"
+}) {
     const [isOpen, setIsOpen] = useState(false)
     const [status, setStatus] = useState<SyncStatus | null>(null)
     const [isStarting, setIsStarting] = useState(false)
@@ -193,39 +199,51 @@ export function CrawlLogActions({ hideSyncButtons = false }: { hideSyncButtons?:
 
     return (
         <>
-            <div className="flex items-center gap-3">
+            <div className={cn("flex items-center", size === "sm" ? "gap-1.5" : "gap-3")}>
                 <Button
                     variant="outline"
-                    className="rounded-xl gap-2 glass border-none"
+                    className={cn(
+                        "glass border-none",
+                        size === "sm" ? "h-7 px-3 text-[11px] rounded-lg gap-1.5" : "rounded-xl gap-2 h-10"
+                    )}
                     onClick={() => router.refresh()}
                 >
-                    <RefreshCw className="w-4 h-4" />
+                    <RefreshCw className={cn(size === "sm" ? "w-3 h-3" : "w-4 h-4")} />
                     Làm mới
                 </Button>
                 <Button
                     variant="outline"
-                    className="rounded-xl gap-2 glass border-none hover:bg-indigo-50 hover:text-indigo-600"
+                    className={cn(
+                        "glass border-none hover:bg-indigo-50 hover:text-indigo-600",
+                        size === "sm" ? "h-7 px-3 text-[11px] rounded-lg gap-1.5" : "rounded-xl gap-2 h-10"
+                    )}
                     onClick={() => setLoginDialogOpen(true)}
                 >
-                    <ShieldCheck className="w-4 h-4 text-indigo-500" />
+                    <ShieldCheck className={cn(size === "sm" ? "w-3 h-3 text-indigo-500" : "w-4 h-4 text-indigo-500")} />
                     Check Login
                 </Button>
                 {!hideSyncButtons && (
                     <>
                         <Button
-                            className="rounded-xl gap-2 font-bold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20"
+                            className={cn(
+                                "font-bold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20",
+                                size === "sm" ? "h-7 px-3 text-[11px] rounded-lg gap-1.5" : "rounded-xl gap-2 h-10"
+                            )}
                             onClick={handleOpenDialog}
                             disabled={isStarting}
                         >
-                            {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                            {isStarting ? <Loader2 className={cn(size === "sm" ? "w-3 h-3" : "w-4 h-4 animate-spin")} /> : <Activity className={cn(size === "sm" ? "w-3 h-3" : "w-4 h-4")} />}
                             {status?.isSyncing ? "Đang Đồng bộ..." : "Đồng bộ Doanh thu"}
                         </Button>
                         <Button
-                            className="rounded-xl gap-2 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20"
+                            className={cn(
+                                "font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20",
+                                size === "sm" ? "h-7 px-3 text-[11px] rounded-lg gap-1.5" : "rounded-xl gap-2 h-10"
+                            )}
                             onClick={handleOpenDialog}
                             disabled={isStarting}
                         >
-                            {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                            {isStarting ? <Loader2 className={cn(size === "sm" ? "w-3 h-3" : "w-4 h-4 animate-spin")} /> : <Play className={cn(size === "sm" ? "w-3 h-3" : "w-4 h-4")} />}
                             {status?.isSyncing ? "Đang Đồng bộ..." : "Đồng bộ Ngay"}
                         </Button>
                     </>

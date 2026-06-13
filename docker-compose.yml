@@ -6,7 +6,7 @@ services:
     container_name: apivttech-backend
     restart: always
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@shared-db:5432/db_tazagroup_vttech_sync
+      - DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:12003/db_tazagroup_vttech_sync
       - REDIS_HOST=shared-redis
       - REDIS_PORT=6379
       - PORT=5001
@@ -20,6 +20,8 @@ services:
       - kata-cells-network
       - rausach-network
       - taza-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   apivttech-dashboard:
     build:
@@ -28,12 +30,24 @@ services:
     container_name: apivttech-dashboard
     restart: always
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@shared-db:5432/db_tazagroup_vttech_sync
+      - DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:12003/db_tazagroup_vttech_sync
       - NODE_ENV=production
       - TZ=Asia/Ho_Chi_Minh
       - PORT=5000
     ports:
       - "21100:5000"
+    networks:
+      - kata-cells-network
+      - rausach-network
+      - taza-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  shared-redis:
+    image: redis:alpine
+    restart: always
+    ports:
+      - "26380:6379"
     networks:
       - kata-cells-network
       - rausach-network

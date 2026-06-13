@@ -6,7 +6,18 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AdvancedTable } from "@/components/ui/advanced-table/AdvancedTable"
-import { columns, BranchSummary } from "./columns"
+import { columns as branchColumns, BranchSummary } from "./columns"
+import { columns as customerColumns } from "./customers/columns"
+import { columns as serviceColumns } from "./services/columns"
+import { columns as treatmentColumns } from "./treatments/columns"
+import { columns as appointmentColumns } from "./appointments/columns"
+import { columns as salesColumns } from "./sales/columns"
+import { columns as revenueColumns } from "./revenue/columns"
+import { columns as anamnesisColumns } from "./anamnesis/columns"
+import { columns as imagesColumns } from "./images/columns"
+import { columns as careHistoryColumns } from "./care-history/columns"
+import { columns as complaintsColumns } from "./complaints/columns"
+import { columns as treatmentPlansColumns } from "./treatment-plans/columns"
 import { 
   Calendar as CalendarIcon, 
   Loader2, 
@@ -14,7 +25,13 @@ import {
   LayoutGrid,
   Download,
   Search,
-  Filter
+  Filter,
+  HelpCircle,
+  FolderOpen,
+  ClipboardList,
+  MessageSquare,
+  AlertTriangle,
+  BookOpen
 } from "lucide-react"
 import { CrawlLogActions } from "@/components/CrawlLogActions"
 import { toast } from "sonner"
@@ -40,7 +57,8 @@ import {
 
 function BranchReportContent() {
   const [loading, setLoading] = useState(false)
-  const [data, setData] = useState<BranchSummary[]>([])
+  const [overviewData, setOverviewData] = useState<BranchSummary[]>([])
+  const [tableData, setTableData] = useState<any[]>([])
   
   // Cache dates in localStorage
   const [dateFrom, setDateFrom] = useState(() => {
@@ -57,6 +75,31 @@ function BranchReportContent() {
   })
   const [selectedBranchId, setSelectedBranchId] = useState<string>("all")
   const [selectedMonth, setSelectedMonth] = useState<string>("none")
+  const [activeTab, setActiveTab] = useState<"all" | "customers" | "services" | "treatments" | "appointments" | "sales" | "revenue" | "anamnesis" | "images" | "care-history" | "complaints" | "treatment-plans">("all")
+
+  const getFilteredColumns = () => {
+    if (activeTab === "all") return branchColumns;
+    if (activeTab === "customers") return customerColumns;
+    if (activeTab === "services") return serviceColumns;
+    if (activeTab === "treatments") return treatmentColumns;
+    if (activeTab === "appointments") return appointmentColumns;
+    if (activeTab === "sales") return salesColumns;
+    if (activeTab === "revenue") return revenueColumns;
+    if (activeTab === "anamnesis") return anamnesisColumns;
+    if (activeTab === "images") return imagesColumns;
+    if (activeTab === "care-history") return careHistoryColumns;
+    if (activeTab === "complaints") return complaintsColumns;
+    if (activeTab === "treatment-plans") return treatmentPlansColumns;
+    return branchColumns;
+  }
+
+  const getSortedData = () => {
+    if (activeTab === "all") {
+      const filtered = selectedBranchId === "all" ? overviewData : overviewData.filter(b => String(b.id) === selectedBranchId);
+      return [...filtered].sort((a, b) => a.id - b.id);
+    }
+    return tableData;
+  }
 
   // Sync state to localStorage on change
   useEffect(() => {
@@ -105,23 +148,205 @@ function BranchReportContent() {
       
       const targetFrom = overrideFrom || dateFrom;
       const targetTo = overrideTo || dateTo;
+      const formattedFrom = formatDateForApi(targetFrom);
+      const formattedTo = formatDateForApi(targetTo);
+      const mappedBranchId = selectedBranchId === "all" ? "0" : selectedBranchId;
 
-      const url = new URL(`${apiHost}/reports/branches`)
-      url.searchParams.set("dateFrom", formatDateForApi(targetFrom))
-      url.searchParams.set("dateTo", formatDateForApi(targetTo))
-
-      const res = await fetch(url.toString())
-      if (res.ok) {
-        const result = await res.json()
-        const enhancedResult = result.map((item: any) => ({
+      // 1. ALWAYS fetch overview data to populate card counts
+      const overviewUrl = new URL(`${apiHost}/reports/branches`)
+      overviewUrl.searchParams.set("dateFrom", formattedFrom)
+      overviewUrl.searchParams.set("dateTo", formattedTo)
+      
+      const overviewRes = await fetch(overviewUrl.toString())
+      let fetchedOverview: BranchSummary[] = []
+      if (overviewRes.ok) {
+        const result = await overviewRes.json()
+        fetchedOverview = result.map((item: any) => ({
           ...item,
-          queryDateFrom: formatDateForApi(targetFrom),
-          queryDateTo: formatDateForApi(targetTo)
+          queryDateFrom: formattedFrom,
+          queryDateTo: formattedTo
         }))
-        setData(enhancedResult)
-        toast.success("Đã cập nhật dữ liệu báo cáo")
-      } else {
-        toast.error("Lỗi khi tải dữ liệu từ máy chủ")
+        setOverviewData(fetchedOverview)
+      }
+
+      // 2. Fetch active table data based on selected tab
+      if (activeTab === "all") {
+        setTableData(fetchedOverview)
+      } else if (activeTab === "customers") {
+        const url = new URL(`${apiHost}/reports/customers/details`)
+        url.searchParams.set("branchId", mappedBranchId)
+        url.searchParams.set("from", formattedFrom)
+        url.searchParams.set("to", formattedTo)
+        url.searchParams.set("page", "1")
+        url.searchParams.set("limit", "1000")
+        const res = await fetch(url.toString())
+        if (res.ok) {
+          const result = await res.json()
+          setTableData(result.data || [])
+        }
+      } else if (activeTab === "services") {
+        const url = new URL(`${apiHost}/reports/revenue`)
+        url.searchParams.set("branchID", mappedBranchId)
+        url.searchParams.set("dateFrom", formattedFrom)
+        url.searchParams.set("dateTo", formattedTo)
+        url.searchParams.set("service_only", "true")
+        url.searchParams.set("page", "1")
+        url.searchParams.set("limit", "1000")
+        const res = await fetch(url.toString())
+        if (res.ok) {
+          const result = await res.json()
+          const table = result.Table || []
+          const formatted = table.map((item: any, index: number) => ({
+            id: String(item.id || index),
+            CustomerName: item.CustomerName || "N/A",
+            CustomerCode: item.CustomerCode || "",
+            Phone: item.Phone || "",
+            ServiceName: item.ServiceName || "N/A",
+            CategoryName: item.CategoryName || "",
+            Amount: parseFloat(String(item.amount || item.Amount || 0).replace(/,/g, '')) || 0,
+            Paid: parseFloat(String(item.paid || item.Paid || 0).replace(/,/g, '')) || 0,
+            IsNew: item.is_new === 1 || item.IsNew === 1,
+            Created: item.Created || item.created_at || new Date().toISOString(),
+            BranchName: item.BranchName || item.branch_name || "Chi nhánh gốc",
+          }))
+          setTableData(formatted)
+        }
+      } else if (activeTab === "treatments") {
+        const url = new URL(`${apiHost}/reports/treatments/details`)
+        url.searchParams.set("branchId", mappedBranchId)
+        url.searchParams.set("from", formattedFrom)
+        url.searchParams.set("to", formattedTo)
+        url.searchParams.set("page", "1")
+        url.searchParams.set("limit", "1000")
+        const res = await fetch(url.toString())
+        if (res.ok) {
+          const result = await res.json()
+          setTableData(result.data || [])
+        }
+      } else if (activeTab === "appointments") {
+        const url = new URL(`${apiHost}/reports/appointments/details`)
+        url.searchParams.set("branchId", mappedBranchId)
+        url.searchParams.set("from", formattedFrom)
+        url.searchParams.set("to", formattedTo)
+        url.searchParams.set("page", "1")
+        url.searchParams.set("limit", "1000")
+        const res = await fetch(url.toString())
+        if (res.ok) {
+          const result = await res.json()
+          setTableData(result.data || [])
+        }
+      } else if (activeTab === "sales") {
+        const url = new URL(`${apiHost}/reports/revenue`)
+        url.searchParams.set("branchID", mappedBranchId)
+        url.searchParams.set("dateFrom", formattedFrom)
+        url.searchParams.set("dateTo", formattedTo)
+        url.searchParams.set("page", "1")
+        url.searchParams.set("limit", "1000")
+        const res = await fetch(url.toString())
+        if (res.ok) {
+          const result = await res.json()
+          const table = result.Table || []
+          const formatted = table.map((item: any, index: number) => ({
+            id: String(item.id || index),
+            customer_name: item.CustomerName || "N/A",
+            customer_code: item.CustomerCode || "",
+            phone: item.Phone || "",
+            service_name: item.ServiceName || "N/A",
+            category_name: item.CategoryName || "",
+            amount: parseFloat(String(item.amount || item.Amount || 0).replace(/,/g, '')) || 0,
+            paid: parseFloat(String(item.paid || item.Paid || 0).replace(/,/g, '')) || 0,
+            is_new: item.is_new === 1 || item.IsNew === 1,
+            created_at: item.Created || item.created_at || new Date().toISOString(),
+            branch_name: item.BranchName || item.branch_name || "Chi nhánh gốc",
+          }))
+          setTableData(formatted)
+        }
+      } else if (activeTab === "revenue") {
+        const url = new URL(`${apiHost}/reports/revenue`)
+        url.searchParams.set("branchID", mappedBranchId)
+        url.searchParams.set("dateFrom", formattedFrom)
+        url.searchParams.set("dateTo", formattedTo)
+        url.searchParams.set("page", "1")
+        url.searchParams.set("limit", "1000")
+        const res = await fetch(url.toString())
+        if (res.ok) {
+          const result = await res.json()
+          const table = result.Table || []
+          const formatted = table.map((item: any, index: number) => ({
+            id: String(item.id || index),
+            customer_name: item.CustomerName || "N/A",
+            customer_code: item.CustomerCode || "",
+            phone: item.Phone || "",
+            service_name: item.ServiceName || "N/A",
+            category_name: item.CategoryName || "",
+            amount: parseFloat(String(item.amount || item.Amount || 0).replace(/,/g, '')) || 0,
+            paid: parseFloat(String(item.paid || item.Paid || 0).replace(/,/g, '')) || 0,
+            is_new: item.is_new === 1 || item.IsNew === 1,
+            created_at: item.Created || item.created_at || new Date().toISOString(),
+            branch_name: item.BranchName || item.branch_name || "Chi nhánh gốc",
+          }))
+          setTableData(formatted)
+        }
+      } else if (activeTab === "anamnesis") {
+        const url = new URL(`${apiHost}/reports/anamnesis/details`)
+        url.searchParams.set("branchId", mappedBranchId)
+        url.searchParams.set("from", formattedFrom)
+        url.searchParams.set("to", formattedTo)
+        url.searchParams.set("page", "1")
+        url.searchParams.set("limit", "1000")
+        const res = await fetch(url.toString())
+        if (res.ok) {
+          const result = await res.json()
+          setTableData(result.data || [])
+        }
+      } else if (activeTab === "images") {
+        const url = new URL(`${apiHost}/reports/images/details`)
+        url.searchParams.set("branchId", mappedBranchId)
+        url.searchParams.set("from", formattedFrom)
+        url.searchParams.set("to", formattedTo)
+        url.searchParams.set("page", "1")
+        url.searchParams.set("limit", "1000")
+        const res = await fetch(url.toString())
+        if (res.ok) {
+          const result = await res.json()
+          setTableData(result.data || [])
+        }
+      } else if (activeTab === "care-history") {
+        const url = new URL(`${apiHost}/reports/care-history/details`)
+        url.searchParams.set("branchId", mappedBranchId)
+        url.searchParams.set("from", formattedFrom)
+        url.searchParams.set("to", formattedTo)
+        url.searchParams.set("page", "1")
+        url.searchParams.set("limit", "1000")
+        const res = await fetch(url.toString())
+        if (res.ok) {
+          const result = await res.json()
+          setTableData(result.data || [])
+        }
+      } else if (activeTab === "complaints") {
+        const url = new URL(`${apiHost}/reports/complaints/details`)
+        url.searchParams.set("branchId", mappedBranchId)
+        url.searchParams.set("from", formattedFrom)
+        url.searchParams.set("to", formattedTo)
+        url.searchParams.set("page", "1")
+        url.searchParams.set("limit", "1000")
+        const res = await fetch(url.toString())
+        if (res.ok) {
+          const result = await res.json()
+          setTableData(result.data || [])
+        }
+      } else if (activeTab === "treatment-plans") {
+        const url = new URL(`${apiHost}/reports/treatment-plans/details`)
+        url.searchParams.set("branchId", mappedBranchId)
+        url.searchParams.set("from", formattedFrom)
+        url.searchParams.set("to", formattedTo)
+        url.searchParams.set("page", "1")
+        url.searchParams.set("limit", "1000")
+        const res = await fetch(url.toString())
+        if (res.ok) {
+          const result = await res.json()
+          setTableData(result.data || [])
+        }
       }
     } catch (error) {
       console.error("Search failed", error)
@@ -131,20 +356,21 @@ function BranchReportContent() {
     }
   }
 
+  // Trigger search on tab/branch/date changes
   useEffect(() => {
     handleSearch()
-  }, [])
+  }, [activeTab])
 
   return (
-    <div className="flex flex-col gap-4 p-4 lg:p-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
+    <div className="flex flex-col gap-2.5 p-3 lg:p-4 max-w-[1600px] mx-auto animate-in fade-in duration-500">
       {/* Page Header */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-1.5 text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
-            <TrendingUp className="w-3 h-3 text-zinc-900" />
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-zinc-100 pb-2">
+        <div className="flex flex-col gap-0">
+          <div className="flex items-center gap-1 text-zinc-400 font-bold uppercase tracking-wider text-[9px]">
+            <TrendingUp className="w-2.5 h-2.5 text-zinc-900" />
             Báo cáo quản trị
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-zinc-900">Tổng hợp chi nhánh <span className="text-zinc-400 font-medium whitespace-nowrap">Hệ thống VTTech</span></h1>
+          <h1 className="text-lg font-extrabold tracking-tight text-zinc-900">Tổng hợp chi nhánh <span className="text-zinc-400 font-normal whitespace-nowrap">Hệ thống VTTech</span></h1>
         </div>
         
         <div className="flex items-center gap-2">
@@ -152,177 +378,238 @@ function BranchReportContent() {
       </header>
 
       {/* Summary Cards - Compact Row */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-1">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-1.5">
         {[
-          { label: "Khách hàng", value: data.reduce((acc, curr) => acc + curr.customerCount, 0), icon: UsersIcon, color: "text-emerald-600", bg: "bg-emerald-50/50" },
-          { label: "Dịch vụ", value: data.reduce((acc, curr) => acc + curr.serviceCount, 0), icon: ScissorsIcon, color: "text-blue-600", bg: "bg-blue-50/50" },
-          { label: "Điều trị", value: data.reduce((acc, curr) => acc + curr.treatmentCount, 0), icon: ActivityIcon, color: "text-amber-600", bg: "bg-amber-50/50" },
-          { label: "Lịch hẹn", value: data.reduce((acc, curr) => acc + curr.appointmentCount, 0), icon: CalendarCheckIcon, color: "text-purple-600", bg: "bg-purple-50/50" },
-          { label: "Doanh số", value: data.reduce((acc, curr) => acc + curr.totalSales, 0), icon: DollarSignIcon, color: "text-slate-600", bg: "bg-slate-50/50", type: "currency" },
-          { label: "Doanh thu", value: data.reduce((acc, curr) => acc + curr.totalRevenue, 0), icon: WalletIcon, color: "text-white", bg: "bg-indigo-600 shadow-indigo-200", type: "currency" },
-        ].map((stat, i) => (
-          <div key={i} className={cn("border border-zinc-100 rounded-xl overflow-hidden p-2.5 flex flex-col gap-0.5 group hover:shadow-sm transition-all", stat.bg)}>
-            <div className="flex items-center justify-between opacity-70">
-              <span className={cn("text-[9px] font-bold uppercase tracking-wider", stat.color, stat.type === "currency" ? "opacity-100" : "text-zinc-500")}>{stat.label}</span>
-              <stat.icon className={cn("w-3 h-3 transition-transform group-hover:scale-110", stat.color)} />
-            </div>
-            <div className={cn("text-[13px] font-black tabular-nums tracking-tight", stat.color)}>
-              {stat.type === "currency" 
-                ? new Intl.NumberFormat('vi-VN').format(stat.value) + 'đ'
-                : stat.value.toLocaleString()}
-            </div>
-          </div>
-        ))}
+          { id: "customers", label: "Khách hàng", value: overviewData.reduce((acc, curr) => acc + curr.customerCount, 0), icon: UsersIcon, color: "text-emerald-600", bg: "bg-emerald-50/50 border-emerald-100/50", activeBg: "bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-500/10" },
+          { id: "services", label: "Dịch vụ", value: overviewData.reduce((acc, curr) => acc + curr.serviceCount, 0), icon: ScissorsIcon, color: "text-blue-600", bg: "bg-blue-50/50 border-blue-100/50", activeBg: "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/10" },
+          { id: "treatments", label: "Điều trị", value: overviewData.reduce((acc, curr) => acc + curr.treatmentCount, 0), icon: ActivityIcon, color: "text-amber-600", bg: "bg-amber-50/50 border-amber-100/50", activeBg: "bg-amber-600 border-amber-600 text-white shadow-md shadow-amber-500/10" },
+          { id: "appointments", label: "Lịch hẹn", value: overviewData.reduce((acc, curr) => acc + curr.appointmentCount, 0), icon: CalendarCheckIcon, color: "text-purple-600", bg: "bg-purple-50/50 border-purple-100/50", activeBg: "bg-purple-600 border-purple-600 text-white shadow-md shadow-purple-500/10" },
+          { id: "sales", label: "Doanh số", value: overviewData.reduce((acc, curr) => acc + curr.totalSales, 0), icon: DollarSignIcon, color: "text-slate-600", bg: "bg-slate-50/50 border-slate-100/50", type: "currency", activeBg: "bg-slate-700 border-slate-700 text-white shadow-md shadow-slate-500/10" },
+          { id: "revenue", label: "Doanh thu", value: overviewData.reduce((acc, curr) => acc + curr.totalRevenue, 0), icon: WalletIcon, color: "text-indigo-650", bg: "bg-indigo-50/50 border-indigo-100/50", type: "currency", activeBg: "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-500/10" },
+        ].map((stat, i) => {
+          const isActive = activeTab === stat.id;
+          return (
+            <button 
+              key={i} 
+              type="button"
+              onClick={() => setActiveTab(isActive ? "all" : stat.id as any)}
+              className={cn(
+                "border rounded-lg overflow-hidden px-2.5 py-1.5 flex flex-col gap-0.5 group hover:shadow-sm transition-all text-left w-full active:scale-[0.98]", 
+                isActive ? stat.activeBg : stat.bg
+              )}
+            >
+              <div className="flex items-center justify-between opacity-90">
+                <span className={cn(
+                  "text-[9px] font-bold uppercase tracking-wider", 
+                  isActive ? "text-white/90" : "text-zinc-500"
+                )}>{stat.label}</span>
+                <stat.icon className={cn("w-3 h-3 transition-transform group-hover:scale-115", isActive ? "text-white" : stat.color)} />
+              </div>
+              <div className={cn("text-[13px] font-extrabold tabular-nums tracking-tight", isActive ? "text-white" : stat.color)}>
+                {stat.type === "currency" 
+                  ? new Intl.NumberFormat('vi-VN').format(stat.value) + 'đ'
+                  : stat.value.toLocaleString()}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Filter Section - Advanced Style */}
-      <Card className="border border-zinc-100 bg-white shadow-sm rounded-xl overflow-hidden">
-        <CardContent className="p-4 flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-zinc-50">
-             <span className="text-[10px] font-bold uppercase text-zinc-400 mr-2">Chọn nhanh:</span>
-             <Badge 
-              variant="outline" 
-              className={cn("cursor-pointer h-7 px-3 rounded-md border-zinc-200 text-xs font-bold hover:bg-zinc-100", (dateFrom === new Date().toISOString().split('T')[0]) && "bg-zinc-900 text-white hover:bg-black border-zinc-900")}
-              onClick={() => setQuickRange(1)}
-             >Hôm nay</Badge>
-             <Badge 
-              variant="outline" 
-              className="cursor-pointer h-7 px-3 rounded-md border-zinc-200 text-xs font-bold hover:bg-zinc-100"
-              onClick={() => {
-                const y = new Date()
-                y.setDate(y.getDate() - 1)
-                const yStr = y.toISOString().split('T')[0]
-                setDateFrom(yStr)
-                setDateTo(yStr)
-                setSelectedMonth("none")
-              }}
-             >Hôm qua</Badge>
-             <Badge 
-              variant="outline" 
-              className="cursor-pointer h-7 px-3 rounded-md border-zinc-200 text-xs font-bold hover:bg-zinc-100"
-              onClick={() => setQuickRange(7)}
-             >7 Ngày qua</Badge>
-             <Badge 
-              variant="outline" 
-              className="cursor-pointer h-7 px-3 rounded-md border-zinc-200 text-xs font-bold hover:bg-zinc-100"
-              onClick={() => setQuickRange(30)}
-             >30 Ngày qua</Badge>
-             <div className="w-px h-4 bg-zinc-200 mx-1"></div>
-             <Badge 
-              variant="outline" 
-              className="cursor-pointer h-7 px-3 rounded-md border-zinc-200 text-xs font-bold hover:bg-zinc-100"
-              onClick={() => {
-                const parts = dateFrom.split('-');
-                if (parts.length === 3) {
-                  const currentFrom = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-                  currentFrom.setDate(currentFrom.getDate() - 1);
-                  const prev = `${currentFrom.getFullYear()}-${String(currentFrom.getMonth() + 1).padStart(2, '0')}-${String(currentFrom.getDate()).padStart(2, '0')}`;
-                  setDateFrom(prev);
-                  setDateTo(prev);
-                  setSelectedMonth("none");
-                  handleSearch(prev, prev);
-                }
-              }}
-             >Trước</Badge>
-             <Badge 
-              variant="outline" 
-              className="cursor-pointer h-7 px-3 rounded-md border-zinc-200 text-xs font-bold hover:bg-zinc-100"
-              onClick={() => {
-                const parts = dateFrom.split('-');
-                if (parts.length === 3) {
-                  const currentFrom = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-                  currentFrom.setDate(currentFrom.getDate() + 1);
-                  const next = `${currentFrom.getFullYear()}-${String(currentFrom.getMonth() + 1).padStart(2, '0')}-${String(currentFrom.getDate()).padStart(2, '0')}`;
-                  setDateFrom(next);
-                  setDateTo(next);
-                  setSelectedMonth("none");
-                  handleSearch(next, next);
-                }
-              }}
-             >Tiếp</Badge>
-             
-             <div className="ml-auto flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase text-zinc-400">Chọn chi nhánh:</span>
-                <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-                  <SelectTrigger className="h-8 w-[200px] text-[11px] font-bold border-zinc-200 rounded-lg">
-                    <SelectValue placeholder="Tất cả chi nhánh" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all" className="text-[11px] font-bold">💎 Tất cả chi nhánh</SelectItem>
-                    {data.sort((a,b) => a.id - b.id).map(b => (
-                      <SelectItem key={b.id} value={String(b.id)} className="text-[11px] font-bold">{b.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-             </div>
+      {/* Filter Section - Super Compact & Premium Inline Style */}
+      <div className="border border-zinc-100/80 bg-white shadow-sm rounded-xl p-2 flex flex-col gap-2 animate-in fade-in duration-300">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* Left: Quick range select & manual date pickers */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Quick Ranges Button Group */}
+            <div className="flex items-center gap-1 bg-zinc-50 p-1 rounded-lg border border-zinc-150">
+              <span className="text-[9px] font-extrabold uppercase text-zinc-400 px-1.5 whitespace-nowrap">Nhanh</span>
+              <button
+                type="button"
+                className={cn(
+                  "h-6 px-2.5 rounded-md text-[11px] font-bold transition-all",
+                  (dateFrom === new Date().toISOString().split('T')[0] && dateTo === new Date().toISOString().split('T')[0] && selectedMonth === "none")
+                    ? "bg-zinc-950 text-white shadow-sm"
+                    : "text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900"
+                )}
+                onClick={() => setQuickRange(1)}
+              >Hôm nay</button>
+              <button
+                type="button"
+                className={cn(
+                  "h-6 px-2.5 rounded-md text-[11px] font-bold transition-all",
+                  (dateFrom === (() => { const y = new Date(); y.setDate(y.getDate() - 1); return y.toISOString().split('T')[0]; })() && dateTo === dateFrom && selectedMonth === "none")
+                    ? "bg-zinc-950 text-white shadow-sm"
+                    : "text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900"
+                )}
+                onClick={() => {
+                  const y = new Date()
+                  y.setDate(y.getDate() - 1)
+                  const yStr = y.toISOString().split('T')[0]
+                  setDateFrom(yStr)
+                  setDateTo(yStr)
+                  setSelectedMonth("none")
+                }}
+              >Hôm qua</button>
+              <button
+                type="button"
+                className="h-6 px-2.5 rounded-md text-[11px] font-bold text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900 transition-all"
+                onClick={() => setQuickRange(7)}
+              >7 Ngày</button>
+              <button
+                type="button"
+                className="h-6 px-2.5 rounded-md text-[11px] font-bold text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900 transition-all"
+                onClick={() => setQuickRange(30)}
+              >30 Ngày</button>
+              <div className="w-[1px] h-3 bg-zinc-200 mx-0.5"></div>
+              <button
+                type="button"
+                className="h-6 px-2 rounded-md text-[11px] font-bold text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900 transition-all"
+                onClick={() => {
+                  const parts = dateFrom.split('-');
+                  if (parts.length === 3) {
+                    const currentFrom = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                    currentFrom.setDate(currentFrom.getDate() - 1);
+                    const prev = `${currentFrom.getFullYear()}-${String(currentFrom.getMonth() + 1).padStart(2, '0')}-${String(currentFrom.getDate()).padStart(2, '0')}`;
+                    setDateFrom(prev);
+                    setDateTo(prev);
+                    setSelectedMonth("none");
+                    handleSearch(prev, prev);
+                  }
+                }}
+              >Trước</button>
+              <button
+                type="button"
+                className="h-6 px-2 rounded-md text-[11px] font-bold text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900 transition-all"
+                onClick={() => {
+                  const parts = dateFrom.split('-');
+                  if (parts.length === 3) {
+                    const currentFrom = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                    currentFrom.setDate(currentFrom.getDate() + 1);
+                    const next = `${currentFrom.getFullYear()}-${String(currentFrom.getMonth() + 1).padStart(2, '0')}-${String(currentFrom.getDate()).padStart(2, '0')}`;
+                    setDateFrom(next);
+                    setDateTo(next);
+                    setSelectedMonth("none");
+                    handleSearch(next, next);
+                  }
+                }}
+              >Tiếp</button>
+            </div>
+
+            {/* Manual Date Input Group */}
+            <div className="flex items-center gap-1.5 bg-zinc-50/50 p-1 rounded-lg border border-zinc-150">
+              <span className="text-[9px] font-extrabold uppercase text-zinc-400 px-1 whitespace-nowrap">Thời gian</span>
+              
+              <Select value={selectedMonth} onValueChange={setMonthRange}>
+                <SelectTrigger className="h-7 w-[105px] rounded-md border-zinc-200 bg-white text-[11px] font-bold shadow-none px-2 py-0">
+                  <SelectValue placeholder="Tháng" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none" className="text-[11px]">-- Tháng --</SelectItem>
+                  {Array.from({ length: 12 }, (_, i) => {
+                     const d = new Date()
+                     d.setMonth(d.getMonth() - i)
+                     const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                     const label = `Tháng ${d.getMonth() + 1}/${d.getFullYear()}`
+                     return <SelectItem key={val} value={val} className="text-[11px]">{label}</SelectItem>
+                  })}
+                </SelectContent>
+              </Select>
+
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setSelectedMonth("none"); }}
+                className="h-7 px-1.5 rounded-md border border-zinc-200 bg-white text-[11px] font-bold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-950 w-[112px]"
+              />
+              <span className="text-[9px] text-zinc-400 font-extrabold">→</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setSelectedMonth("none"); }}
+                className="h-7 px-1.5 rounded-md border border-zinc-200 bg-white text-[11px] font-bold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-950 w-[112px]"
+              />
+            </div>
           </div>
 
-          <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 flex-1">
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold uppercase text-zinc-400 ml-1">Chọn Tháng</Label>
-                <Select value={selectedMonth} onValueChange={setMonthRange}>
-                  <SelectTrigger className="rounded-lg border-zinc-200 h-9 text-xs font-bold bg-zinc-50/30">
-                    <SelectValue placeholder="Chọn tháng..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">-- Chọn tháng --</SelectItem>
-                    {Array.from({ length: 12 }, (_, i) => {
-                       const d = new Date()
-                       d.setMonth(d.getMonth() - i)
-                       const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-                       const label = `Tháng ${d.getMonth() + 1} / ${d.getFullYear()}`
-                       return <SelectItem key={val} value={val}>{label}</SelectItem>
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold uppercase text-zinc-400 ml-1">Từ ngày</Label>
-                <div className="relative">
-                  <Input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => { setDateFrom(e.target.value); setSelectedMonth("none"); }}
-                    className="rounded-lg border-zinc-200 h-9 text-xs font-bold bg-zinc-50/30 focus-visible:ring-zinc-900"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold uppercase text-zinc-400 ml-1">Đến ngày</Label>
-                <div className="relative">
-                  <Input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => { setDateTo(e.target.value); setSelectedMonth("none"); }}
-                    className="rounded-lg border-zinc-200 h-9 text-xs font-bold bg-zinc-50/30 focus-visible:ring-zinc-900"
-                  />
-                </div>
-              </div>
+          {/* Right: Branch select & actions */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-zinc-50/50 p-1 rounded-lg border border-zinc-150">
+              <span className="text-[9px] font-extrabold uppercase text-zinc-400 px-1 whitespace-nowrap">Chi nhánh</span>
+              <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+                <SelectTrigger className="h-7 w-[160px] text-[11px] font-bold border-zinc-200 bg-white rounded-md shadow-none px-2">
+                  <SelectValue placeholder="Tất cả chi nhánh" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-[11px] font-bold">💎 Tất cả chi nhánh</SelectItem>
+                  {[...overviewData].sort((a,b) => a.id - b.id).map(b => (
+                    <SelectItem key={b.id} value={String(b.id)} className="text-[11px] font-bold">{b.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            
-            <div className="flex items-center gap-2">
+
+            <div className="flex items-center gap-1.5">
               <Button 
                 onClick={() => handleSearch()}
                 disabled={loading}
-                className="bg-zinc-900 hover:bg-black text-white rounded-lg h-9 px-6 font-bold transition-all text-xs active:scale-95 flex-1 md:flex-none"
+                className="bg-zinc-950 hover:bg-black text-white rounded-lg h-7 px-3.5 font-bold transition-all text-[11px] active:scale-95 flex items-center shadow-sm"
               >
-                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : <Filter className="w-3.5 h-3.5 mr-2" />}
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Filter className="w-3.5 h-3.5 mr-1.5" />}
                 Lọc dữ liệu
               </Button>
-              <CrawlLogActions hideSyncButtons={true} />
+              <CrawlLogActions hideSyncButtons={true} size="sm" />
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Data Table Section */}
       <div className="space-y-2 translate-y-0 opacity-100 transition-all duration-700">
-        <div className="flex items-center justify-between px-1">
-           <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-             <LayoutGrid className="w-3 h-3 text-zinc-400" />
-             Chi tiết hiệu suất chi nhánh
-           </h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 pb-1.5 px-1">
+           <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-zinc-400 flex items-center gap-1.5 mr-2">
+                <LayoutGrid className="w-3 h-3 text-zinc-400" />
+                Chi tiết hiệu suất
+              </h3>
+              
+              {/* Premium Tabs Selector */}
+              <div className="flex flex-wrap items-center gap-0.5 bg-zinc-100/70 p-0.5 rounded-lg border border-zinc-200/40">
+                {[
+                  { id: "all", label: "Tất cả", icon: LayoutGrid },
+                  { id: "customers", label: "Khách hàng", icon: UsersIcon, activeColor: "text-emerald-600" },
+                  { id: "services", label: "Dịch vụ", icon: ScissorsIcon, activeColor: "text-blue-600" },
+                  { id: "treatments", label: "Điều trị", icon: ActivityIcon, activeColor: "text-amber-600" },
+                  { id: "appointments", label: "Lịch hẹn", icon: CalendarCheckIcon, activeColor: "text-purple-600" },
+                  { id: "sales", label: "Doanh số", icon: DollarSignIcon, activeColor: "text-slate-700" },
+                  { id: "revenue", label: "Doanh thu", icon: WalletIcon, activeColor: "text-indigo-600" },
+                  { id: "anamnesis", label: "Tiền sử", icon: HelpCircle, activeColor: "text-cyan-655" },
+                  { id: "images", label: "Hình ảnh", icon: FolderOpen, activeColor: "text-teal-600" },
+                  { id: "care-history", label: "Tư vấn", icon: ClipboardList, activeColor: "text-pink-600" },
+                  { id: "complaints", label: "Complaint", icon: AlertTriangle, activeColor: "text-red-600" },
+                  { id: "treatment-plans", label: "Chẩn đoán", icon: BookOpen, activeColor: "text-orange-600" },
+                ].map(tab => {
+                  const TabIcon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveTab(tab.id as any)}
+                      className={cn(
+                        "flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold transition-all active:scale-95",
+                        isActive
+                          ? "bg-white text-zinc-950 shadow-sm"
+                          : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50/50"
+                      )}
+                    >
+                      <TabIcon className={cn("w-3 h-3", isActive ? tab.activeColor : "text-zinc-400")} />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+           </div>
+
            <div className="text-[10px] font-medium text-zinc-500 tabular-nums">
              Cập nhật: {mounted ? new Date().toLocaleTimeString('vi-VN') : "--:--"}
            </div>
@@ -339,10 +626,10 @@ function BranchReportContent() {
           ) : (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-700">
               <AdvancedTable 
-                columns={columns} 
-                data={selectedBranchId === "all" ? data : data.filter(b => String(b.id) === selectedBranchId)} 
+                columns={getFilteredColumns()} 
+                data={getSortedData()} 
                 onRefresh={handleSearch}
-                height="calc(100vh - 430px)"
+                height="calc(100vh - 280px)"
               />
             </div>
           )}

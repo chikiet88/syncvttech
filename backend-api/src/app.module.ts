@@ -12,6 +12,9 @@ import { SyncService } from './sync.service';
 import { SyncProcessor } from './sync.processor';
 import { PbxApiService } from './pbx-api.service';
 import { PbxSyncService } from './pbx-sync.service';
+import { McpController } from './mcp/mcp.controller';
+import { McpService } from './mcp/mcp.service';
+import { ExcelExportService } from './excel-export.service';
 
 @Module({
   imports: [
@@ -48,7 +51,7 @@ import { PbxSyncService } from './pbx-sync.service';
       name: 'sync-queue',
     }),
   ],
-  controllers: [AppController, ReportController],
+  controllers: [AppController, ReportController, McpController],
   providers: [
     AppService,
     PrismaService,
@@ -57,6 +60,8 @@ import { PbxSyncService } from './pbx-sync.service';
     SyncProcessor,
     PbxApiService,
     PbxSyncService,
+    McpService,
+    ExcelExportService,
   ],
 })
 export class AppModule {}

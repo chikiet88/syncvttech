@@ -1,62 +1,83 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { User, Phone, Calendar, Tag, Building2 } from "lucide-react"
+import { User, Phone, Tag, Building2, Globe, Clock } from "lucide-react"
 
 export type CustomerColumn = {
-  id: number
+  id: number | string
   date: string
   customerId: number
   customerName: string
   customerCode: string
   phone: string
   branchId: number
+  sourceName?: string
+  createdAt?: string
 }
 
 export const columns: ColumnDef<CustomerColumn>[] = [
   {
-    accessorKey: "date",
-    header: "Ngày ghi nhận",
+    accessorKey: "customerCode",
+    header: "Mã Khách Hàng",
+    cell: ({ row }) => (
+      <span className="font-bold flex items-center gap-1.5 text-zinc-900 text-[11px] tabular-nums">
+        <Tag className="w-3 h-3 text-zinc-400" />
+        {row.getValue("customerCode") || `C-${row.original.customerId}`}
+      </span>
+    )
+  },
+  {
+    accessorKey: "customerName",
+    header: "Tên Khách Hàng",
+    cell: ({ row }) => (
+      <span className="font-extrabold flex items-center gap-1.5 text-zinc-900 text-[11px]">
+        <User className="w-3 h-3 text-emerald-500" />
+        {row.getValue("customerName")}
+      </span>
+    )
+  },
+  {
+    accessorKey: "phone",
+    header: "Số Điện Thoại",
+    cell: ({ row }) => (
+      <span className="font-bold flex items-center gap-1.5 text-zinc-600 text-[11px] tabular-nums">
+        <Phone className="w-3 h-3 text-zinc-400" />
+        {row.getValue("phone") || "N/A"}
+      </span>
+    )
+  },
+  {
+    accessorKey: "sourceName",
+    header: "Nguồn Khách Hàng",
+    cell: ({ row }) => (
+      <span className="font-bold flex items-center gap-1.5 text-zinc-600 text-[11px]">
+        <Globe className="w-3 h-3 text-zinc-400" />
+        {row.getValue("sourceName") || "Khách Giới Thiệu"}
+      </span>
+    )
+  },
+  {
+    accessorKey: "createdAt",
+    header: "Giờ Tạo",
     cell: ({ row }) => {
-      const date = new Date(row.getValue("date"))
+      const dateVal = row.getValue("createdAt")
+      if (!dateVal) return <span className="text-[11px] font-bold text-zinc-400">N/A</span>
+      const d = new Date(String(dateVal))
+      const timeStr = d.toLocaleTimeString('vi-VN', { hour12: false })
       return (
-        <div className="flex flex-col">
-          <span className="font-bold flex items-center gap-2 text-slate-700">
-            <Calendar className="w-3.5 h-3.5 text-emerald-500" />
-            {date.toLocaleDateString('vi-VN')}
-          </span>
-        </div>
+        <span className="font-bold flex items-center gap-1.5 text-zinc-600 text-[11px] tabular-nums">
+          <Clock className="w-3 h-3 text-zinc-400" />
+          {timeStr}
+        </span>
       )
     }
   },
   {
-    accessorKey: "customerName",
-    header: "Khách hàng",
-    cell: ({ row }) => (
-      <div className="flex flex-col">
-        <span className="font-bold flex items-center gap-2 text-slate-900">
-          <User className="w-3.5 h-3.5 text-emerald-500" />
-          {row.getValue("customerName")}
-        </span>
-        <div className="flex flex-col ml-5 mt-1 gap-0.5">
-            <span className="text-[10px] font-medium text-slate-500 flex items-center gap-1.5">
-                <Tag className="w-2.5 h-2.5" />
-                {row.original.customerCode || "Không có mã"}
-            </span>
-            <span className="text-[10px] font-medium text-slate-500 flex items-center gap-1.5">
-                <Phone className="w-2.5 h-2.5" />
-                {row.original.phone || "Không có SĐT"}
-            </span>
-        </div>
-      </div>
-    )
-  },
-  {
     accessorKey: "branchId",
-    header: "ID Chi nhánh",
+    header: "Chi nhánh",
     cell: ({ row }) => (
-      <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
-        <Building2 className="w-3.5 h-3.5 text-slate-400" />
+      <span className="font-bold flex items-center gap-1.5 text-zinc-500 text-[11px]">
+        <Building2 className="w-3 h-3 text-zinc-400" />
         CN #{row.getValue("branchId")}
       </span>
     )

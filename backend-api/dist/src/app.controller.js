@@ -19,18 +19,21 @@ const sync_service_1 = require("./sync.service");
 const pbx_sync_service_1 = require("./pbx-sync.service");
 const prisma_service_1 = require("./prisma.service");
 const vttech_api_service_1 = require("./vttech-api.service");
+const excel_export_service_1 = require("./excel-export.service");
 let AppController = class AppController {
     appService;
     syncService;
     pbxSync;
     prisma;
     vttechApi;
-    constructor(appService, syncService, pbxSync, prisma, vttechApi) {
+    excelExportService;
+    constructor(appService, syncService, pbxSync, prisma, vttechApi, excelExportService) {
         this.appService = appService;
         this.syncService = syncService;
         this.pbxSync = pbxSync;
         this.prisma = prisma;
         this.vttechApi = vttechApi;
+        this.excelExportService = excelExportService;
     }
     async checkLogin(user, pass) {
         return this.vttechApi.checkLoginStatus();
@@ -223,6 +226,12 @@ let AppController = class AppController {
                 enabled: true,
                 description: 'Tổng hợp và tạo báo cáo giám sát đồng bộ gửi về dashboard lúc 08:00 và 20:00.',
             },
+            {
+                id: 'handleGoogleSheetPushCron',
+                name: 'Tự động đẩy báo cáo lịch hẹn lên Google Sheets',
+                enabled: true,
+                description: 'Tự động tổng hợp và đẩy báo cáo lịch hẹn tháng hiện tại lên Google Sheets lúc 07:00 và 19:00 hàng ngày (Giờ Việt Nam).',
+            },
         ];
         for (const conf of defaultConfigs) {
             await this.prisma.cronConfig.upsert({
@@ -240,6 +249,34 @@ let AppController = class AppController {
             where: { id },
             data: { enabled: body.enabled },
         });
+    }
+    async exportAppointments(from, to, branchId, res) {
+        try {
+            if (!from || !to) {
+                return res.status(400).json({ error: 'Both from and to dates are required (format: YYYY-MM-DD)' });
+            }
+            const buffer = await this.excelExportService.exportAppointmentsToExcel(from, to, branchId);
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename=DSKH_TAZA_2026_LICH_HEN.xlsx`);
+            return res.send(buffer);
+        }
+        catch (error) {
+            console.error('Failed to export appointments:', error);
+            return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+        }
+    }
+    async pushGoogleSheet(from, to, res) {
+        try {
+            if (!from || !to) {
+                return res.status(400).json({ error: 'Both from and to dates are required (format: YYYY-MM-DD)' });
+            }
+            const result = await this.excelExportService.pushToGoogleSheet(from, to);
+            return res.json(result);
+        }
+        catch (error) {
+            console.error('Failed to push appointments to Google Sheets:', error);
+            return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+        }
     }
 };
 exports.AppController = AppController;
@@ -366,12 +403,32 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], AppController.prototype, "updateCronConfig", null);
+__decorate([
+    (0, common_1.Get)('reports/appointments/export'),
+    __param(0, (0, common_1.Query)('from')),
+    __param(1, (0, common_1.Query)('to')),
+    __param(2, (0, common_1.Query)('branchId')),
+    __param(3, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, Object]),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "exportAppointments", null);
+__decorate([
+    (0, common_1.Post)('reports/appointments/push-google-sheet'),
+    __param(0, (0, common_1.Query)('from')),
+    __param(1, (0, common_1.Query)('to')),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "pushGoogleSheet", null);
 exports.AppController = AppController = __decorate([
     (0, common_1.Controller)(),
     __metadata("design:paramtypes", [app_service_1.AppService,
         sync_service_1.SyncService,
         pbx_sync_service_1.PbxSyncService,
         prisma_service_1.PrismaService,
-        vttech_api_service_1.VttechApiService])
+        vttech_api_service_1.VttechApiService,
+        excel_export_service_1.ExcelExportService])
 ], AppController);
 //# sourceMappingURL=app.controller.js.map

@@ -1,10 +1,12 @@
 
-import { Controller, Get, Query, Param, Body, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Query, Param, Body, Patch, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { AppService } from './app.service';
 import { SyncService } from './sync.service';
 import { PbxSyncService } from './pbx-sync.service';
 import { PrismaService } from './prisma.service';
 import { VttechApiService } from './vttech-api.service';
+import { ExcelExportService } from './excel-export.service';
 
 @Controller()
 export class AppController {
@@ -14,6 +16,7 @@ export class AppController {
     private readonly pbxSync: PbxSyncService,
     private readonly prisma: PrismaService,
     private readonly vttechApi: VttechApiService,
+    private readonly excelExportService: ExcelExportService,
   ) {}
 
   @Get('check-login')
@@ -268,6 +271,12 @@ export class AppController {
         enabled: true,
         description: 'Tổng hợp và tạo báo cáo giám sát đồng bộ gửi về dashboard lúc 08:00 và 20:00.',
       },
+      {
+        id: 'handleGoogleSheetPushCron',
+        name: 'Tự động đẩy báo cáo lịch hẹn lên Google Sheets',
+        enabled: true,
+        description: 'Tự động tổng hợp và đẩy báo cáo lịch hẹn tháng hiện tại lên Google Sheets lúc 07:00 và 19:00 hàng ngày (Giờ Việt Nam).',
+      },
     ];
 
     for (const conf of defaultConfigs) {
@@ -292,5 +301,44 @@ export class AppController {
       where: { id },
       data: { enabled: body.enabled },
     });
+  }
+
+  @Get('reports/appointments/export')
+  async exportAppointments(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('branchId') branchId: string,
+    @Res() res: any,
+  ) {
+    try {
+      if (!from || !to) {
+        return res.status(400).json({ error: 'Both from and to dates are required (format: YYYY-MM-DD)' });
+      }
+      const buffer = await this.excelExportService.exportAppointmentsToExcel(from, to, branchId);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=DSKH_TAZA_2026_LICH_HEN.xlsx`);
+      return res.send(buffer);
+    } catch (error) {
+      console.error('Failed to export appointments:', error);
+      return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+    }
+  }
+
+  @Post('reports/appointments/push-google-sheet')
+  async pushGoogleSheet(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Res() res: any,
+  ) {
+    try {
+      if (!from || !to) {
+        return res.status(400).json({ error: 'Both from and to dates are required (format: YYYY-MM-DD)' });
+      }
+      const result = await this.excelExportService.pushToGoogleSheet(from, to);
+      return res.json(result);
+    } catch (error) {
+      console.error('Failed to push appointments to Google Sheets:', error);
+      return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+    }
   }
 }

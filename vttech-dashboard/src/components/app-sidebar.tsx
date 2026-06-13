@@ -45,6 +45,7 @@ const data = {
       items: [
         { title: 'Tổng hợp', url: '/reports', icon: TrendingUp },
         { title: 'Doanh thu', url: '/reports/revenue', icon: BadgeDollarSign },
+        { title: 'Lịch hẹn Taza', url: '/reports/appointments', icon: Calendar },
       ],
     },
     {

@@ -26,6 +26,9 @@ export default async function CustomerDetailPage(props: {
     include: {
       branch: true,
       membership: true,
+      anamnesis: {
+        orderBy: { created_at: "desc" }
+      },
       treatments: {
         orderBy: { treatment_date: "desc" },
         take: 100

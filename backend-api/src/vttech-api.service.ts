@@ -1,8 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import * as cheerio from 'cheerio';
 import * as zlib from 'zlib';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 interface VttechSession {
   username: string;
@@ -19,17 +21,21 @@ interface VttechSession {
 }
 
 @Injectable()
-export class VttechApiService {
+export class VttechApiService implements OnModuleInit {
   private readonly logger = new Logger(VttechApiService.name);
   private axiosInstance: AxiosInstance;
   private sessions: VttechSession[] = [];
   private currentSessionIndex = 0;
   private globalLastUsedAt = 0;
   private readonly GLOBAL_MIN_DELAY = 1000; // 1s giữa bất kỳ call nào
+  private readonly LOGIN_TIMEOUT = 45000; // 45s timeout cho login
   private baseUrl: string;
   private logCallback: ((msg: string) => void) | null = null;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    @InjectQueue('sync-queue') private syncQueue: Queue
+  ) {
     this.baseUrl = this.configService.get<string>('VTTECH_BASE_URL', 'https://tmtaza.vttechsolution.com');
 
     const accountStr = this.configService.get<string>('VTTECH_ACCOUNTS');
@@ -113,6 +119,53 @@ export class VttechApiService {
 
   }
 
+  async onModuleInit() {
+    await this.loadSessionsFromRedis();
+  }
+
+  private async loadSessionsFromRedis() {
+    try {
+      const redis = await (this.syncQueue as any).client;
+      if (!redis) return;
+      this.logger.log('⏳ Đang khôi phục các session VTTech từ Redis...');
+      for (const s of this.sessions) {
+        const cached = await redis.get(`vttech:session:${s.username}`);
+        if (cached) {
+          try {
+            const data = JSON.parse(cached);
+            s.token = data.token || null;
+            s.secretKey = data.secretKey || null;
+            s.cookies = data.cookies || [];
+            s.xsrfToken = data.xsrfToken || null;
+            s.lastUsedAt = data.lastUsedAt || 0;
+            this.logger.log(`🔑 Đã khôi phục session cho: ${s.username} (Token: ${s.token ? 'OK' : 'NULL'})`);
+          } catch (pe) {
+            this.logger.warn(`⚠️ Lỗi parse session JSON cho ${s.username}: ${pe.message}`);
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`⚠️ Lỗi khôi phục session từ Redis: ${e.message}`);
+    }
+  }
+
+  private async saveSessionToRedis(session: VttechSession) {
+    try {
+      const redis = await (this.syncQueue as any).client;
+      if (!redis) return;
+      const data = {
+        token: session.token,
+        secretKey: session.secretKey,
+        cookies: session.cookies,
+        xsrfToken: session.xsrfToken,
+        lastUsedAt: session.lastUsedAt
+      };
+      await redis.set(`vttech:session:${session.username}`, JSON.stringify(data), 'EX', 86400 * 7); // Lưu 7 ngày
+    } catch (e) {
+      this.logger.warn(`⚠️ Lỗi lưu session vào Redis cho ${session.username}: ${e.message}`);
+    }
+  }
+
   private createNewSession(u: string, p: string): VttechSession {
     return {
       username: u, password: p,
@@ -123,6 +176,7 @@ export class VttechApiService {
 
   private updateSessionCookies(session: VttechSession, newCookies: string[] | undefined) {
     if (!newCookies || !Array.isArray(newCookies)) return;
+    let changed = false;
     for (const raw of newCookies) {
       const firstPart = raw.split(';')[0];
       const [name] = firstPart.split('=');
@@ -131,15 +185,18 @@ export class VttechApiService {
       // Cập nhật hoặc thêm mới cookie
       const index = session.cookies.findIndex(c => c.startsWith(name + '='));
       if (index !== -1) {
-        session.cookies[index] = firstPart;
+        if (session.cookies[index] !== firstPart) {
+          session.cookies[index] = firstPart;
+          changed = true;
+        }
       } else {
         session.cookies.push(firstPart);
+        changed = true;
       }
+    }
 
-      // Đặc biệt lưu tâm đến XSRF trong cookie nếu có
-      if (name.includes('Antiforgery') || name.includes('XSRF-TOKEN')) {
-          // Một số hệ thống gửi token qua cookie
-      }
+    if (changed) {
+      this.saveSessionToRedis(session).catch(() => {});
     }
   }
 
@@ -152,13 +209,18 @@ export class VttechApiService {
   private getBestSession(): VttechSession {
     if (this.sessions.length === 0) throw new Error('No sessions available');
     
+    const now = Date.now();
+    // Lọc bỏ những tài khoản bị lỗi quá nhiều (ví dụ > 5 lỗi liên tiếp trong vòng 15 phút qua) để tránh nghẽn
+    const activeSessions = this.sessions.filter(s => s.errorCount <= 5 || (now - s.lastErrorAt > 900000));
+    const sessionsToUse = activeSessions.length > 0 ? activeSessions : this.sessions;
+
     // Tìm session rảnh (không bị lock) và dùng lâu nhất
-    const idleSessions = this.sessions.filter(s => !s.lock).sort((a, b) => a.lastUsedAt - b.lastUsedAt);
+    const idleSessions = sessionsToUse.filter(s => !s.lock).sort((a, b) => a.lastUsedAt - b.lastUsedAt);
     if (idleSessions.length > 0) return idleSessions[0];
 
     // Nếu tất cả đều bận, dùng round robin để xếp hàng
-    const session = this.sessions[this.currentSessionIndex];
-    this.currentSessionIndex = (this.currentSessionIndex + 1) % this.sessions.length;
+    const session = sessionsToUse[this.currentSessionIndex % sessionsToUse.length];
+    this.currentSessionIndex = (this.currentSessionIndex + 1) % sessionsToUse.length;
     return session;
   }
 
@@ -250,6 +312,19 @@ export class VttechApiService {
 
   async login(session?: VttechSession, force = false): Promise<boolean> {
     const s = session || this.getBestSession();
+    
+    // Check Circuit Breaker trước khi thực hiện login thực sự
+    try {
+      const redis = await (this.syncQueue as any).client;
+      if (redis) {
+        const isLocked = await redis.get(`vttech:circuit_breaker:${s.username}`);
+        if (isLocked) {
+          this.log(`🔌 [Circuit Breaker] Bỏ qua login cho ${s.username} do đang trong trạng thái ngắt mạch (lock).`);
+          return false;
+        }
+      }
+    } catch (e) {}
+
     // Logic kiểm tra session: Có token JWT là đủ để gọi API, cookies là phụ trợ
     const hasSession = !!s.token; 
     if (hasSession && !force) return true;
@@ -261,7 +336,8 @@ export class VttechApiService {
         this.log(`🚀 [START LOGIN] User: ${s.username}`);
 
         const loginPageRes = await this.followRedirects(s, 'get', '/Login/Login?ver=' + Date.now(), {
-          headers: { 'Accept': 'text/html' }
+          headers: { 'Accept': 'text/html' },
+          timeout: this.LOGIN_TIMEOUT
         });
         
         if (typeof loginPageRes.data === 'string') {
@@ -284,7 +360,8 @@ export class VttechApiService {
         };
         const loginRes = await this.axiosInstance.post('/api/Author/Login', loginPayload, {
           headers: { 'Content-Type': 'application/json; charset=UTF-8', 'Referer': this.baseUrl + '/Login/Login/' },
-          session: s
+          session: s,
+          timeout: this.LOGIN_TIMEOUT
         } as any);
 
         const data = loginRes.data;
@@ -298,28 +375,55 @@ export class VttechApiService {
           }
           
           // 1. Chốt session JWT và các cookie API cơ bản
-          await this.followRedirects(s, 'get', '/', { headers: { 'Accept': 'text/html' } });
+          await this.followRedirects(s, 'get', '/', { headers: { 'Accept': 'text/html' }, timeout: this.LOGIN_TIMEOUT });
           
           // 2. Thiết lập ngôn ngữ và văn hóa (rất quan trọng cho Razor Pages)
-          await this.axiosInstance.get('/api/Home/Language/?ver=' + Date.now(), { session: s } as any);
+          await this.axiosInstance.get('/api/Home/Language/?ver=' + Date.now(), { session: s, timeout: this.LOGIN_TIMEOUT } as any);
           
           // 3. Gọi SessionData để server khởi tạo session ở phía backend
           await this.axiosInstance.post('/api/Home/SessionData', {}, { 
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${s.token}` },
-            session: s
+            session: s,
+            timeout: this.LOGIN_TIMEOUT
           } as any);
           
           // 4. Truy cập Dashboard chính thức để lấy các cookie Dashboard
-          await this.followRedirects(s, 'get', '/Main/Dashboard/', { headers: { 'Accept': 'text/html' } });
+          await this.followRedirects(s, 'get', '/Main/Dashboard/', { headers: { 'Accept': 'text/html' }, timeout: this.LOGIN_TIMEOUT });
 
           // 5. Cuối cùng mới lấy XSRF từ trang target
           await this.getXsrfToken(s, '/Customer/ListCustomer/', true);
+          
+          // Đăng nhập thành công: reset error count và xóa key circuit breaker
+          s.errorCount = 0;
+          try {
+            const redis = await (this.syncQueue as any).client;
+            if (redis) {
+              await redis.del(`vttech:circuit_breaker:${s.username}`);
+            }
+          } catch (e) {}
+
+          // Lưu session thành công vào Redis
+          await this.saveSessionToRedis(s);
           
           return true;
         }
         return false;
       } catch (error: any) {
         this.log(`❌ Lỗi LOGIN [${s.username}]: ${error.message}`);
+        
+        // Tăng lỗi và kích hoạt Circuit Breaker nếu lỗi 3 lần liên tục
+        s.errorCount++;
+        s.lastErrorAt = Date.now();
+        if (s.errorCount >= 3) {
+          try {
+            const redis = await (this.syncQueue as any).client;
+            if (redis) {
+              await redis.set(`vttech:circuit_breaker:${s.username}`, 'true', 'EX', 300); // Khóa 5 phút
+              this.log(`🔌 [Circuit Breaker] Đã kích hoạt ngắt mạch cho ${s.username} (Khóa login 5 phút) do thất bại liên tiếp.`);
+            }
+          } catch (re) {}
+        }
+
         return false;
       } finally { s.loginByUsernamePromise = null; }
     })();
@@ -339,7 +443,8 @@ export class VttechApiService {
     for (const targetPage of uniquePages) {
       try {
         const resp = await this.followRedirects(s, 'get', targetPage, {
-          headers: { 'Referer': this.baseUrl + '/', 'Accept': 'text/html' }
+          headers: { 'Referer': this.baseUrl + '/', 'Accept': 'text/html' },
+          timeout: this.LOGIN_TIMEOUT
         });
         
         if (typeof resp.data === 'string') {
@@ -352,6 +457,7 @@ export class VttechApiService {
           if (token) {
             s.xsrfToken = token;
             this.log(`✅ [${s.username}] Extracted XSRF from ${targetPage}: ${s.xsrfToken.slice(0, 10)}...`);
+            await this.saveSessionToRedis(s).catch(() => {});
             return s.xsrfToken;
           }
           
@@ -374,6 +480,7 @@ export class VttechApiService {
           if (scriptMatches && scriptMatches[1]) {
             s.xsrfToken = scriptMatches[1];
             this.log(`✅ [${s.username}] Extracted XSRF from ${targetPage} script: ${s.xsrfToken.slice(0, 10)}...`);
+            await this.saveSessionToRedis(s).catch(() => {});
             return s.xsrfToken;
           }
         }
@@ -438,74 +545,90 @@ export class VttechApiService {
 
       while (retryCount <= maxRetries) {
         try {
-        const loginOk = await this.login(session, retryCount > 0);
-        if (!loginOk && retryCount > 0) {
-           this.log(`⚠️ [Loicansua] [${session.username}] Re-login failed during retry ${retryCount}. Waiting 5s...`);
-           await new Promise(r => setTimeout(r, 5000));
-        }
-
-        await this.delayForSession(session);
-        
-        // Force refresh XSRF if we are retrying due to session issue
-        if (!session.xsrfToken || retryCount > 0) {
-          await this.getXsrfToken(session, page, retryCount > 0);
-        }
-
-        const url = `${page}?handler=${handler}`;
-        const formBody = this.buildFormBody(data, session);
-        const handlerHeaders = this.handlerHeaders(session, page);
-
-        this.log(`📡 [Attempt ${retryCount + 1}] Calling: ${url} [${session.username}]`);
-
-        const response = await this.axiosInstance.post(url, formBody, {
-          headers: handlerHeaders,
-          session
-        } as any);
-
-        // Check for 302 or 401/400 that indicates session issues
-        const isSessionIssue = response.status === 302 || response.status === 401 || response.status === 400 || 
-                               (typeof response.data === 'string' && 
-                                (response.data.includes('<!DOCTYPE html>') || 
-                                 response.data.includes('<title>VTTech Solution</title>') ||
-                                 response.data.includes('sys_SecretKey')));
-
-        if (isSessionIssue) {
-          const reason = response.status === 302 ? 'Redirect' : 
-                         response.status === 400 ? 'Bad Request/Token' : 
-                         typeof response.data === 'string' && response.data.includes('<title>') ? 'Login Page Redirect' : 'Session Expired';
-          
-          this.log(`⚠️ [Loicansua] [${session.username}] ${reason} detected. Retrying ${retryCount + 1}/${maxRetries}...`);
-          
-          if (typeof response.data === 'string' && response.data.trim().startsWith('<') && retryCount === maxRetries) {
-            this.log(`❌ [Loicansua] [${session.username}] Final attempt failed. HTML snippet: ${response.data.trim().slice(0, 200)}`);
+          // Check Circuit Breaker trước khi gọi bất kỳ API hoặc login
+          const redis = await (this.syncQueue as any).client;
+          if (redis) {
+            const isLocked = await redis.get(`vttech:circuit_breaker:${session.username}`);
+            if (isLocked) {
+              throw new Error(`[Circuit Breaker] Chặn đăng nhập tài khoản ${session.username}`);
+            }
           }
 
-          // If it's an HTML response, wait longer
-          if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
-            await new Promise(r => setTimeout(r, 10000 * (retryCount + 1)));
+          const loginOk = await this.login(session, retryCount > 0);
+          if (!loginOk) {
+            if (retryCount > 0) {
+               this.log(`⚠️ [Loicansua] [${session.username}] Re-login failed during retry ${retryCount}. Waiting 5s...`);
+               await new Promise(r => setTimeout(r, 5000));
+            }
+            throw new Error(`Đăng nhập thất bại cho tài khoản ${session.username}`);
           }
+
+          await this.delayForSession(session);
           
+          // Force refresh XSRF if we are retrying due to session issue
+          if (!session.xsrfToken || retryCount > 0) {
+            await this.getXsrfToken(session, page, retryCount > 0);
+          }
+
+          const url = `${page}?handler=${handler}`;
+          const formBody = this.buildFormBody(data, session);
+          const handlerHeaders = this.handlerHeaders(session, page);
+
+          this.log(`📡 [Attempt ${retryCount + 1}] Calling: ${url} [${session.username}]`);
+
+          const response = await this.axiosInstance.post(url, formBody, {
+            headers: handlerHeaders,
+            session
+          } as any);
+
+          // Check for 302 or 401/400 that indicates session issues
+          const isSessionIssue = response.status === 302 || response.status === 401 || response.status === 400 || 
+                                 (typeof response.data === 'string' && 
+                                  (response.data.includes('<!DOCTYPE html>') || 
+                                   response.data.includes('<title>VTTech Solution</title>') ||
+                                   response.data.includes('sys_SecretKey')));
+
+          if (isSessionIssue) {
+            const reason = response.status === 302 ? 'Redirect' : 
+                           response.status === 400 ? 'Bad Request/Token' : 
+                           typeof response.data === 'string' && response.data.includes('<title>') ? 'Login Page Redirect' : 'Session Expired';
+            
+            this.log(`⚠️ [Loicansua] [${session.username}] ${reason} detected. Retrying ${retryCount + 1}/${maxRetries}...`);
+            
+            if (typeof response.data === 'string' && response.data.trim().startsWith('<') && retryCount === maxRetries) {
+              this.log(`❌ [Loicansua] [${session.username}] Final attempt failed. HTML snippet: ${response.data.trim().slice(0, 200)}`);
+            }
+
+            // If it's an HTML response, wait longer
+            if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
+              await new Promise(r => setTimeout(r, 10000 * (retryCount + 1)));
+            }
+            
+            retryCount++;
+            continue;
+          }
+
+          // Success!
+          session.errorCount = 0; // Reset lỗi khi thành công
+          return this.decompress(response.data);
+
+        } catch (e: any) {
+          lastError = e;
+          if (e.message.includes('[Circuit Breaker]')) {
+            // Đang bị ngắt mạch, thoát ngay không retry nữa
+            break;
+          }
+          session.errorCount++;
+          session.lastErrorAt = Date.now();
+          this.log(`❌ [Loicansua] [${session.username}] Exception in callHandler: ${e.message}. Retry ${retryCount + 1}...`);
+          
+          await new Promise(r => setTimeout(r, 2000));
           retryCount++;
-          continue;
         }
-
-        // Success!
-        session.errorCount = 0; // Reset lỗi khi thành công
-        return this.decompress(response.data);
-
-      } catch (e) {
-        lastError = e;
-        session.errorCount++;
-        session.lastErrorAt = Date.now();
-        this.log(`❌ [Loicansua] [${session.username}] Exception in callHandler: ${e.message}. Retry ${retryCount + 1}...`);
-        
-        await new Promise(r => setTimeout(r, 2000));
-        retryCount++;
       }
-    }
 
       this.log(`🔥 [Loicansua] [${session.username}] All retries failed for ${handler}.`);
-      throw new Error(`[VTTech API] All retries failed for ${handler} after ${maxRetries + 1} attempts.`);
+      throw new Error(`[VTTech API] All retries failed for ${handler} after ${maxRetries + 1} attempts. Lỗi cuối: ${lastError?.message}`);
     });
   }
 

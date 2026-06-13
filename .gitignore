@@ -47,3 +47,7 @@ package-lock.json
 # Environment
 .env*
 prisma.config.js
+
+# Google service account
+google-service-account.json
+backend-api/google-service-account.json
