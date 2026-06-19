@@ -11,6 +11,7 @@ export type CustomerColumn = {
   customerCode: string
   phone: string
   branchId: number
+  branchName?: string
   sourceName?: string
   createdAt?: string
 }
@@ -73,12 +74,12 @@ export const columns: ColumnDef<CustomerColumn>[] = [
     }
   },
   {
-    accessorKey: "branchId",
+    accessorKey: "branchName",
     header: "Chi nhánh",
     cell: ({ row }) => (
       <span className="font-bold flex items-center gap-1.5 text-zinc-500 text-[11px]">
         <Building2 className="w-3 h-3 text-zinc-400" />
-        CN #{row.getValue("branchId")}
+        {row.getValue("branchName") || `CN #${row.original.branchId}`}
       </span>
     )
   }

@@ -29,6 +29,30 @@ export class SyncService implements OnModuleInit {
   private knownBranchIds = new Set<number>();
   private knownMembershipIds = new Set<number>();
   private recentlySyncedCustomers = new Map<number, number>(); // customerId -> timestamp
+  private isFutureSyncing = false;
+  private tabConfigCache: Map<string, boolean> | null = null;
+  private lastTabConfigFetch = 0;
+
+  private async getTabSyncConfig() {
+    const now = Date.now();
+    if (this.tabConfigCache && (now - this.lastTabConfigFetch < 30000)) {
+      return this.tabConfigCache;
+    }
+    
+    try {
+      const configs = await this.prisma.cronConfig.findMany();
+      const map = new Map<string, boolean>();
+      for (const c of configs) {
+        map.set(c.id, c.enabled);
+      }
+      this.tabConfigCache = map;
+      this.lastTabConfigFetch = now;
+      return map;
+    } catch (e) {
+      this.logger.error(`Error loading tab config cache: ${e.message}`);
+      return new Map<string, boolean>();
+    }
+  }
 
 
   constructor(
@@ -189,6 +213,91 @@ export class SyncService implements OnModuleInit {
     return [];
   }
 
+  private parseCommaId(val: any): number {
+    if (!val) return 0;
+    const match = String(val).match(/\d+/);
+    return match ? parseInt(match[0]) : 0;
+  }
+
+  private async resolveAppointmentService(
+    treatId: number,
+    careId: number,
+    rawServiceId: number,
+    typeName: string | null,
+    serviceNameInput: string | null
+  ): Promise<{ service_id: number; service_name: string }> {
+    let resolvedServiceId = 0;
+    let resolvedServiceName = '';
+
+    // 1. Nếu có dịch vụ điều trị (ServiceTreat) thì ưu tiên ánh xạ trực tiếp
+    if (treatId > 0) {
+      resolvedServiceId = treatId;
+      const s = await this.prisma.service.findUnique({ where: { id: treatId }, select: { name: true } });
+      resolvedServiceName = s?.name || serviceNameInput || 'Điều trị';
+    } 
+    // 2. Nếu có dịch vụ chăm sóc (ServiceCare)
+    else if (careId > 0) {
+      // Tìm dịch vụ bất kỳ thuộc nhóm này để liên kết group_id (phễu)
+      const groupService = await this.prisma.service.findFirst({
+        where: { group_id: careId },
+        select: { id: true }
+      });
+      if (groupService) {
+        resolvedServiceId = groupService.id;
+      } else {
+        // Không gán group_id (careId) vào service_id để tránh đụng độ với các service.id tự tăng khác
+        resolvedServiceId = 0;
+      }
+      
+      // Lấy tên nhóm dịch vụ làm service_name hiển thị (Ví dụ: "CSD cơ bản")
+      const g = await this.prisma.serviceGroup.findUnique({ where: { id: careId }, select: { name: true } });
+      resolvedServiceName = g?.name || serviceNameInput || 'CSD cơ bản';
+    } 
+    // 3. Fallback sang ServiceID thô
+    else if (rawServiceId > 0) {
+      resolvedServiceId = rawServiceId;
+      const s = await this.prisma.service.findUnique({ where: { id: rawServiceId }, select: { name: true } });
+      resolvedServiceName = s?.name || serviceNameInput || '';
+    } 
+    // 4. Mặc định
+    else {
+      resolvedServiceId = 0;
+      resolvedServiceName = serviceNameInput || typeName || '';
+    }
+
+    return {
+      service_id: resolvedServiceId,
+      service_name: resolvedServiceName
+    };
+  }
+
+  private async resolveCreatedById(createdPer: any, createdId: any): Promise<number | null> {
+    let resolvedId = parseInt(createdId) || null;
+    if (!resolvedId && createdPer) {
+      const empId = parseInt(createdPer);
+      if (empId > 0) {
+        const emp = await this.prisma.employee.findUnique({
+          where: { id: empId },
+          select: { name: true }
+        });
+        if (emp?.name) {
+          const usr = await this.prisma.user.findFirst({
+            where: { full_name: { equals: emp.name, mode: 'insensitive' } },
+            select: { id: true }
+          });
+          if (usr) {
+            resolvedId = usr.id;
+          } else {
+            resolvedId = empId;
+          }
+        } else {
+          resolvedId = empId;
+        }
+      }
+    }
+    return resolvedId;
+  }
+
   private parseDate(dateValue: any): Date | null {
     if (!dateValue) return null;
     
@@ -270,6 +379,12 @@ export class SyncService implements OnModuleInit {
     yesterday.setDate(yesterday.getDate() - 1);
     const dateStr = yesterday.toISOString().split('T')[0];
     await this.syncByRange(dateStr, dateStr);
+
+    // Đồng bộ 30 ngày lịch hẹn trước để đảm bảo 100% lịch hẹn trước
+    this.logger.log('[CRON] Khởi chạy đồng bộ sâu 30 ngày lịch hẹn trước (daily deep sync)...');
+    await this.syncFutureAppointments(30).catch(err => {
+      this.logger.error(`Lỗi đồng bộ lịch hẹn trước 30 ngày: ${err.message}`);
+    });
   }
 
   @Cron('0 */5 * * * *')
@@ -281,14 +396,33 @@ export class SyncService implements OnModuleInit {
     this.logger.log('💓 [HEARTBEAT] Đang duy trì nhịp đập Session cho các tài khoản...');
     try {
       const result = await this.vttechApi.checkLoginStatus();
+      const msg = result.success
+        ? `Session ổn định (${result.accounts} tài khoản)`
+        : `Phát hiện Session yếu: ${result.message}`;
       if (result.success) {
-        this.logger.log(`✅ [HEARTBEAT] Session ổn định (${result.accounts} tài khoản)`);
+        this.logger.log(`✅ [HEARTBEAT] ${msg}`);
       } else {
-        this.logger.warn(`⚠️ [HEARTBEAT] Phát hiện Session yếu: ${result.message}`);
-        // Tự động kích hoạt re-login nếu cần thiết thông qua checkLoginStatus nội bộ
+        this.logger.warn(`⚠️ [HEARTBEAT] ${msg}`);
       }
-    } catch (e) {
+
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: new Date(),
+          crawl_type: 'handleHeartbeat',
+          status: 'success',
+          message: msg,
+        }
+      }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
+    } catch (e: any) {
       this.logger.error(`🔥 [HEARTBEAT ERROR] ${e.message}`);
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: new Date(),
+          crawl_type: 'handleHeartbeat',
+          status: 'failed',
+          error_message: e.message,
+        }
+      }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
     }
   }
 
@@ -308,8 +442,100 @@ export class SyncService implements OnModuleInit {
         return;
       }
       await this.syncByRange(today, today, false, false, true);
-    } catch (e) {
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: new Date(),
+          crawl_type: 'handleFrequentSync',
+          status: 'success',
+          message: `Đồng bộ nhanh ngày hiện tại (${today}) thành công`,
+        }
+      }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
+    } catch (e: any) {
       this.logger.error(`Lỗi đồng bộ 20p: ${e.message}`);
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: new Date(),
+          crawl_type: 'handleFrequentSync',
+          status: 'failed',
+          error_message: e.message,
+        }
+      }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
+    }
+  }
+
+  @Cron('0 15,45 * * * *') // Chạy mỗi 30 phút (tại phút thứ 15 và 45) để tối ưu tải hệ thống
+  async handleFutureAppointmentsSyncCron() {
+    const config = await this.prisma.cronConfig.findUnique({ where: { id: 'handleFutureAppointmentsSync' } }).catch(() => null);
+    if (config && !config.enabled) {
+      return;
+    }
+    this.logger.log('[CRON] Bắt đầu đồng bộ định kỳ lịch hẹn trước cho 7 ngày tới...');
+    await this.syncFutureAppointments(7);
+  }
+
+  async syncFutureAppointments(daysAhead: number = 7) {
+    if (this.isFutureSyncing) {
+      this.logger.log('⏩ Bỏ qua đồng bộ lịch hẹn trước do một phiên đồng bộ lịch hẹn tương lai khác đang chạy.');
+      return;
+    }
+    this.isFutureSyncing = true;
+    this.logger.log(`🔮 Bắt đầu đồng bộ lịch hẹn trước cho ${daysAhead} ngày tới...`);
+    try {
+      const branches = await this.prisma.branch.findMany({
+        where: { is_active: 1 }
+      });
+      
+      const today = new Date();
+      const dates: string[] = [];
+      for (let i = 1; i <= daysAhead; i++) {
+        const nextDay = new Date(today);
+        nextDay.setDate(today.getDate() + i);
+        dates.push(nextDay.toISOString().split('T')[0]);
+      }
+
+      this.addLog(`🔮 Đồng bộ lịch hẹn trước cho các ngày: ${dates.join(', ')}`);
+
+      // Khởi tạo đăng nhập & XSRF token
+      const loggedIn = await this.vttechApi.login();
+      if (!loggedIn) throw new Error('Đăng nhập thất bại khi chuẩn bị đồng bộ lịch hẹn trước');
+      await this.vttechApi.getXsrfToken();
+
+      for (const dateStr of dates) {
+        this.addLog(`🔮 Đang quét lịch hẹn tương lai ngày: ${dateStr}`);
+        for (const branch of branches) {
+          try {
+            const appIds = await this.syncAppointments(dateStr, dateStr, branch.id);
+            if (appIds.length > 0) {
+              this.addLog(`   ✅ [${branch.name}] Đã đồng bộ ${appIds.length} lịch hẹn trước ngày ${dateStr}`);
+            }
+          } catch (err: any) {
+            this.addLog(`   ⚠️ [${branch.name}] Lỗi đồng bộ lịch hẹn trước ngày ${dateStr}: ${err.message}`);
+          }
+          // Nghỉ ngắn tránh spam API
+          await new Promise(r => setTimeout(r, 200));
+        }
+      }
+      this.addLog(`🔮 Hoàn tất đồng bộ lịch hẹn trước cho ${daysAhead} ngày tới.`);
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: new Date(),
+          crawl_type: 'handleFutureAppointmentsSync',
+          status: 'success',
+          message: `Hoàn tất đồng bộ lịch hẹn trước cho ${daysAhead} ngày tới`,
+        }
+      }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
+    } catch (e: any) {
+      this.logger.error(`Lỗi đồng bộ lịch hẹn trước: ${e.message}`);
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: new Date(),
+          crawl_type: 'handleFutureAppointmentsSync',
+          status: 'failed',
+          error_message: e.message,
+        }
+      }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
+    } finally {
+      this.isFutureSyncing = false;
     }
   }
 
@@ -399,8 +625,8 @@ export class SyncService implements OnModuleInit {
 
     try {
       // 1. Giải phóng các task bị kẹt trong DB (PROCESSING hoặc QUEUED quá lâu)
-      // Giảm thời gian xuống 45 phút cho an toàn
-      const staleTime = new Date(Date.now() - 45 * 60 * 1000); 
+      // Tăng thời gian lên 180 phút để tránh reset nhầm khi queue bận xử lý backlog
+      const staleTime = new Date(Date.now() - 180 * 60 * 1000); 
       
       const staleTasks = await this.prisma.syncTask.findMany({
         where: {
@@ -449,6 +675,10 @@ export class SyncService implements OnModuleInit {
       }
 
       // 3. Xử lý các task bị kẹt ở 99% (đã xong sub-jobs nhưng chưa chuyển trạng thái)
+      //    Bao gồm cả trường hợp "near-complete timeout": >= 90% done + idle > 30 phút
+      //    → Các detail job còn lại đã bị mất (fail hết retry hoặc bị cleanup) nên completed
+      //      counter trong Redis không bao giờ đạt total. Tự động hoàn tất để tránh kẹt vĩnh viễn.
+      const nearCompleteIdleTime = new Date(Date.now() - 30 * 60 * 1000); // 30 phút
       const almostDoneTasks = await this.prisma.syncTask.findMany({
         where: {
           status: 'PROCESSING',
@@ -458,11 +688,29 @@ export class SyncService implements OnModuleInit {
       });
 
       for (const task of almostDoneTasks) {
+        const completionRate = task.completed_details / task.total_details;
+
         if (task.completed_details >= task.total_details) {
-          this.logger.log(`✅ [TASK ${task.id}] Tự động hoàn tất (99% fix)`);
+          // Case A: 100% done nhưng status chưa chuyển (race condition)
+          this.logger.log(`✅ [TASK ${task.id}] Tự động hoàn tất (100% fix)`);
           await this.prisma.syncTask.update({
             where: { id: task.id },
             data: { status: 'SUCCESS', updated_at: new Date() }
+          });
+        } else if (completionRate >= 0.9 && task.updated_at < nearCompleteIdleTime) {
+          // Case B: >= 90% done + idle > 30 phút → detail jobs còn lại đã bị mất
+          const gap = task.total_details - task.completed_details;
+          this.logger.warn(
+            `⚠️ [TASK ${task.id}] Near-complete timeout: ${task.completed_details}/${task.total_details} ` +
+            `(${Math.round(completionRate * 100)}%), ${gap} detail jobs bị mất. Tự động hoàn tất.`
+          );
+          await this.prisma.syncTask.update({
+            where: { id: task.id },
+            data: {
+              status: 'SUCCESS',
+              updated_at: new Date(),
+              error_message: `Tự động hoàn tất (near-complete): ${task.completed_details}/${task.total_details} done, ${gap} detail jobs bị mất sau 30p idle.`
+            }
           });
         }
       }
@@ -492,8 +740,24 @@ export class SyncService implements OnModuleInit {
         }
         this.addLog(`🔄 Đã chuyển ${failedTasks.length} task FAILED về PENDING.`);
       }
-    } catch (e) {
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: new Date(),
+          crawl_type: 'handleStaleTasksCron',
+          status: 'success',
+          message: `Tự chữa lành hoàn tất (Giải phóng ${staleTasks.length} task bị kẹt, ${failedTasks.length} task failed chuyển về pending)`,
+        }
+      }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
+    } catch (e: any) {
       this.logger.error(`Lỗi trong handleStaleTasksCron: ${e.message}`);
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: new Date(),
+          crawl_type: 'handleStaleTasksCron',
+          status: 'failed',
+          error_message: e.message,
+        }
+      }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
     }
   }
 
@@ -510,11 +774,30 @@ export class SyncService implements OnModuleInit {
       // Dọn dẹp các job thất bại quá 24 tiếng
       const cleanedFailed = await this.syncQueue.clean(86400000, 1000, 'failed');
       
+      let msg = 'Không có job nào cần dọn dẹp.';
       if (cleanedCompleted.length > 0 || cleanedFailed.length > 0) {
-        this.logger.log(`🧹 Đã dọn dẹp BullMQ: ${cleanedCompleted.length} completed, ${cleanedFailed.length} failed jobs.`);
+        msg = `Đã dọn dẹp BullMQ: ${cleanedCompleted.length} completed, ${cleanedFailed.length} failed jobs.`;
+        this.logger.log(`🧹 ${msg}`);
       }
-    } catch (e) {
+      
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: new Date(),
+          crawl_type: 'handleQueueCleanupCron',
+          status: 'success',
+          message: msg,
+        }
+      }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
+    } catch (e: any) {
       this.logger.error(`Lỗi dọn dẹp Queue: ${e.message}`);
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: new Date(),
+          crawl_type: 'handleQueueCleanupCron',
+          status: 'failed',
+          error_message: e.message,
+        }
+      }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
     }
   }
 
@@ -1115,6 +1398,56 @@ export class SyncService implements OnModuleInit {
           const customerId = parseInt(a.CustomerID || a.customer_id || a.CustID);
           if (!id) continue;
           
+          const treatId = this.parseCommaId(a.ServiceTreat_ID || a.ServiceTreat);
+          const careId = this.parseCommaId(a.ServiceCare_ID || a.ServiceCare);
+          const rawServiceId = this.parseCommaId(a.ServiceID || a.Service);
+          const resolved = await this.resolveAppointmentService(
+            treatId,
+            careId,
+            rawServiceId,
+            a.TypeName || null,
+            a.ServiceName || null
+          );
+
+          if (customerId) {
+            const customerBranchId = parseInt(a.BranchID || a.branch_id || a.BranchId) || branchId || null;
+            if (customerBranchId) {
+              await this.ensureBranchExists(customerBranchId);
+            }
+            
+            // Lấy thông tin hiện tại của KH để tránh ghi đè dữ liệu tốt
+            const existing = await this.prisma.customer.findUnique({
+              where: { id: customerId },
+              select: { name: true, phone: true }
+            }).catch(() => null);
+
+            const appointmentCustName = a.CustName || a.CustomerName || a.Customer_Name || '';
+            const appointmentCustPhone = a.Phone || a.Mobile || a.CustPhone || '';
+
+            await this.prisma.customer.upsert({
+              where: { id: customerId },
+              update: {
+                // Chỉ cập nhật nếu tên trong DB trống hoặc là 'Unknown'
+                name: (!existing?.name || existing.name === 'Unknown') && appointmentCustName ? appointmentCustName : undefined,
+                // Chỉ cập nhật nếu số điện thoại trong DB trống
+                phone: (!existing?.phone) && appointmentCustPhone ? appointmentCustPhone : undefined,
+              },
+              create: {
+                id: customerId,
+                name: appointmentCustName || 'Unknown',
+                phone: appointmentCustPhone || null,
+                branch_id: customerBranchId
+              }
+            }).catch(err => {
+              this.logger.error(`   ❌ [Loicansua] Pre-creating/updating customer ID ${customerId} failed: ${err.message}`);
+            });
+          }
+
+          const isCancel = parseInt(a.IsCancel) > 0 || parseInt(a.ReasonCancel) > 0 || parseInt(a.State) === 0;
+          const isRaVe = parseInt(a.TypeStatusID) === 3;
+          const nextStatus = isCancel ? 3 : isRaVe ? 2 : 1;
+          const nextStatusName = a.StatusName || (isCancel ? 'Đã Hủy' : isRaVe ? 'Ra Về' : 'Đặt Hẹn');
+
           await this.prisma.appointment.upsert({
             where: { id },
             update: {
@@ -1124,14 +1457,14 @@ export class SyncService implements OnModuleInit {
               phone: a.Phone || a.Mobile || a.CustPhone || '',
               branch_id: branchId || parseInt(a.BranchID || a.branch_id || a.BranchId) || undefined,
               branch_name: a.BranchName || a.Branch || '',
-              service_id: parseInt(a.ServiceTreat_ID || a.ServiceID || a.Service) || 0,
-              service_name: String(a.ServiceName || a.TypeName || a.Service || ''),
+              service_id: resolved.service_id,
+              service_name: resolved.service_name,
               employee_id: parseInt(a.DoctorID || a.EmployeeID || a.Doctor) || 0,
               employee_name: a.DoctorName || a.EmployeeName || a.Doctor || '',
-              created_by_id: parseInt(a.CreatedPer || a.CreatedID) || null,
+              created_by_id: await this.resolveCreatedById(a.CreatedPer, a.CreatedID),
               vttech_created_at: this.parseDate(a.CreatedDate || a.Created),
-              status: (parseInt(a.IsCancel) > 0 || parseInt(a.ReasonCancel) > 0 || parseInt(a.State) === 0) ? 3 : 1,
-              status_name: a.StatusName || null,
+              status: nextStatus,
+              status_name: nextStatusName,
               type_name: a.TypeName || null,
               appointment_date: this.parseDate(a.DateFrom || a.Date || a.AppointmentDate || a.CreatedDate || a.Created) || new Date(),
               note: a.Note || a.Content || '',
@@ -1144,21 +1477,23 @@ export class SyncService implements OnModuleInit {
               phone: a.Phone || a.Mobile || a.CustPhone || '',
               branch_id: branchId || parseInt(a.BranchID || a.branch_id || a.BranchId) || undefined,
               branch_name: a.BranchName || a.Branch || '',
-              service_id: parseInt(a.ServiceTreat_ID || a.ServiceID || a.Service) || 0,
-              service_name: String(a.ServiceName || a.TypeName || a.Service || ''),
+              service_id: resolved.service_id,
+              service_name: resolved.service_name,
               employee_id: parseInt(a.DoctorID || a.EmployeeID || a.Doctor) || 0,
               employee_name: a.DoctorName || a.EmployeeName || a.Doctor || '',
-              created_by_id: parseInt(a.CreatedPer || a.CreatedID) || null,
+              created_by_id: await this.resolveCreatedById(a.CreatedPer, a.CreatedID),
               vttech_created_at: this.parseDate(a.CreatedDate || a.Created),
-              status: (parseInt(a.IsCancel) > 0 || parseInt(a.ReasonCancel) > 0 || parseInt(a.State) === 0) ? 3 : 1,
-              status_name: a.StatusName || null,
+              status: nextStatus,
+              status_name: nextStatusName,
               type_name: a.TypeName || null,
               appointment_date: this.parseDate(a.DateFrom || a.Date || a.AppointmentDate || a.CreatedDate || a.Created) || new Date(),
               note: a.Note || a.Content || '',
             },
           });
           if (customerId) customerIds.push(customerId);
-        } catch (e) {}
+        } catch (e) {
+          this.logger.error(`   ❌ [Loicansua] [SyncAppointments] Lỗi xử lý lịch hẹn ID ${a.ID || a.ScheduleID || a.id || a.AppID}: ${e.message}`);
+        }
       }
     }
     return customerIds;
@@ -1472,7 +1807,7 @@ export class SyncService implements OnModuleInit {
         return;
       }
 
-      const res = await this.vttechApi.callHandler('/Customer/GeneralInfo/', 'LoadData', { CustomerID: customerId });
+      const res = await this.vttechApi.callHandler('/Customer/GeneralInfo/', 'Loadata', { CustomerID: customerId });
       if (res && res.Table && res.Table[0]) {
         const info = res.Table[0];
         const name = info.CustName || info.FullName || info.Name || 'Unknown';
@@ -1485,7 +1820,7 @@ export class SyncService implements OnModuleInit {
             gender: parseInt(info.Gender_ID) || null,
             branch_id: parseInt(info.BranchID) || null,
             birthday: this.parseDate(info.Birthday),
-            phone: info.Phone,
+            phone: info.Phone1 || info.Phone || null,
             address: info.Address,
           },
           create: {
@@ -1495,7 +1830,7 @@ export class SyncService implements OnModuleInit {
             gender: parseInt(info.Gender_ID) || null,
             branch_id: parseInt(info.BranchID) || null,
             birthday: this.parseDate(info.Birthday),
-            phone: info.Phone,
+            phone: info.Phone1 || info.Phone || null,
             address: info.Address,
           }
         });
@@ -1745,17 +2080,58 @@ export class SyncService implements OnModuleInit {
   private async syncCustomerSchedules(customerId: number, branchId: number = 0): Promise<number> {
     let total = 0;
     try {
-      const res = await this.vttechApi.callHandler('/Customer/ScheduleList_Schedule/', 'Loadata', { CustomerID: customerId, IsCancel: 1 });
+      const res = await this.vttechApi.callHandler('/Customer/ScheduleList_Schedule/', 'Loadata', {
+        CustomerID: customerId,
+        TicketID: 0,
+        Limit: 100,
+        BeginID: 0,
+        BeginDate: 0,
+        IsDelete: 0,
+        IsCancel: 1,
+        IsTemp: 0
+      });
+      // Fetch customer name and phone from database to populate appointment fields
+      const customer = await this.prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { name: true, phone: true }
+      });
+      const customerName = customer?.name || '';
+      const customerPhone = customer?.phone || '';
+
       const items = this.ensureArray(res);
       for (const item of items) {
         const sId = parseInt(item.ID);
         if (!sId) continue;
+
+        const treatId = this.parseCommaId(item.ServiceTreat_ID || item.ServiceTreat);
+        const careId = this.parseCommaId(item.ServiceCare_ID || item.ServiceCare);
+        const rawServiceId = this.parseCommaId(item.ServiceID || item.Service);
+        const resolved = await this.resolveAppointmentService(
+          treatId,
+          careId,
+          rawServiceId,
+          item.TypeName || null,
+          item.ServiceName || null
+        );
+
+        let resolvedBranchId = branchId || parseInt(item.BranchID) || null;
+        if (item.Branch) {
+          const matchedBranch = await this.prisma.branch.findFirst({
+            where: { name: { equals: item.Branch.trim(), mode: 'insensitive' } },
+            select: { id: true }
+          }).catch(() => null);
+          if (matchedBranch) {
+            resolvedBranchId = matchedBranch.id;
+          }
+        }
 
         await this.prisma.appointment.upsert({
           where: { id: sId },
           update: {
             vttech_code: item.Code || null,
             customer_id: customerId,
+            customer_name: customerName || undefined,
+            phone: customerPhone || undefined,
             appointment_date: this.parseDate(item.Date_From),
             note: item.Content || '',
             status: (parseInt(item.IsCancel) > 0)
@@ -1763,18 +2139,22 @@ export class SyncService implements OnModuleInit {
               : (String(item.StatusName || '').trim() === 'Ra Về' || String(item.StatusName || '').trim() === 'Đã Đến' || String(item.StatusName || '').trim() === 'Đang Điều Trị')
                 ? 2
                 : 1,
-            branch_id: branchId || parseInt(item.BranchID) || null,
+            branch_id: resolvedBranchId,
             branch_name: item.Branch || '',
             employee_name: item.DoctorName || '',
-            created_by_id: parseInt(item.CreatedPer || item.CreatedID) || null,
+            created_by_id: await this.resolveCreatedById(item.CreatedPer, item.CreatedID),
             vttech_created_at: this.parseDate(item.CreatedDate || item.Created),
             status_name: item.StatusName || null,
             type_name: item.TypeName || null,
+            service_id: resolved.service_id,
+            service_name: resolved.service_name,
           },
           create: {
             id: sId,
             vttech_code: item.Code || null,
             customer_id: customerId,
+            customer_name: customerName,
+            phone: customerPhone,
             appointment_date: this.parseDate(item.Date_From),
             note: item.Content || '',
             status: (parseInt(item.IsCancel) > 0)
@@ -1782,13 +2162,15 @@ export class SyncService implements OnModuleInit {
               : (String(item.StatusName || '').trim() === 'Ra Về' || String(item.StatusName || '').trim() === 'Đã Đến' || String(item.StatusName || '').trim() === 'Đang Điều Trị')
                 ? 2
                 : 1,
-            branch_id: branchId || parseInt(item.BranchID) || null,
+            branch_id: resolvedBranchId,
             branch_name: item.Branch || '',
             employee_name: item.DoctorName || '',
-            created_by_id: parseInt(item.CreatedPer || item.CreatedID) || null,
+            created_by_id: await this.resolveCreatedById(item.CreatedPer, item.CreatedID),
             vttech_created_at: this.parseDate(item.CreatedDate || item.Created),
             status_name: item.StatusName || null,
             type_name: item.TypeName || null,
+            service_id: resolved.service_id,
+            service_name: resolved.service_name,
           }
         });
         total++;
@@ -1800,11 +2182,13 @@ export class SyncService implements OnModuleInit {
     return total;
   }
 
-  private async syncSingleCustomerDetail(customerId: number, parentTaskId?: number, syncDate?: string): Promise<{ payments: number, treatments: number, services: number, appointments: number }> {
+  private async syncSingleCustomerDetail(customerId: number, parentTaskId?: number, syncDate?: string, onlyTabs?: string[]): Promise<{ payments: number, treatments: number, services: number, appointments: number }> {
     // Tối ưu: Bỏ qua nếu khách hàng này vừa mới được đồng bộ chi tiết trong vòng 1 giờ qua
+    // Bỏ qua tối ưu này nếu là yêu cầu chạy thủ công tab cụ thể (onlyTabs có giá trị)
+    const isManualTabSync = onlyTabs && onlyTabs.length > 0;
     const now = Date.now();
     const lastSync = this.recentlySyncedCustomers.get(customerId);
-    if (lastSync && (now - lastSync < 3600000)) { // 1 hour
+    if (!isManualTabSync && lastSync && (now - lastSync < 3600000)) { // 1 hour
       this.logger.log(`⏩ [ID: ${customerId}] Bỏ qua Full Sync chi tiết do mới thực hiện cách đây ít lâu.`);
       
       // Vẫn cần cập nhật tiến độ cho Task cha nếu có
@@ -1817,20 +2201,32 @@ export class SyncService implements OnModuleInit {
       return { payments: 0, treatments: 0, services: 0, appointments: 0 };
     }
 
-    this.logger.log(`🔍 [ID: ${customerId}] 🚀 Bắt đầu Full Sync chi tiết. SyncDate: ${syncDate || 'NULL'}`);
-    this.recentlySyncedCustomers.set(customerId, now);
-    
-    // Giới hạn kích thước cache
-    if (this.recentlySyncedCustomers.size > 10000) {
-      const oldestKey = this.recentlySyncedCustomers.keys().next().value;
-      this.recentlySyncedCustomers.delete(oldestKey);
+    this.logger.log(`🔍 [ID: ${customerId}] 🚀 Bắt đầu Sync chi tiết khách hàng. SyncDate: ${syncDate || 'NULL'} | Manual: ${isManualTabSync}`);
+    if (!isManualTabSync) {
+      this.recentlySyncedCustomers.set(customerId, now);
+      
+      // Giới hạn kích thước cache
+      if (this.recentlySyncedCustomers.size > 10000) {
+        const oldestKey = this.recentlySyncedCustomers.keys().next().value;
+        this.recentlySyncedCustomers.delete(oldestKey);
+      }
     }
 
     const stats = { payments: 0, treatments: 0, services: 0, appointments: 0 };
 
     try {
-      // 1. Nhóm khởi tạo & cơ bản (Phải có trước)
-      await this.syncCustomerGeneralInfo(customerId);
+      const tabConfigs = await this.getTabSyncConfig();
+      const shouldSync = (tabId: string) => {
+        if (onlyTabs && onlyTabs.length > 0) {
+          return onlyTabs.includes(tabId);
+        }
+        return tabConfigs.get(tabId) !== false;
+      };
+
+      // 1. Nhóm khởi tạo & cơ bản (Thông Tin)
+      if (shouldSync('syncTabGeneralInfo')) {
+        await this.syncCustomerGeneralInfo(customerId);
+      }
       
       const customer = await this.prisma.customer.findUnique({ 
         where: { id: customerId }, 
@@ -1840,100 +2236,184 @@ export class SyncService implements OnModuleInit {
 
       // 2. Các nhóm dữ liệu (Chạy tuần tự để tránh nghẽn Event Loop và lỗi Lock BullMQ)
       
-      // Nhóm Tài chính
-      try {
-        const payInfo = await this.vttechApi.callHandler('/Customer/MainCustomer/', 'LoadPaymentInfo', { CustomerID: customerId });
-        const payInfoItems = this.ensureArray(payInfo);
-        if (payInfoItems.length > 0) {
-          const info = payInfoItems[0];
-          const paid = this.parseNumber(info.PAID || info.Paid);
-          const discounted = this.parseNumber(info.PRICE_DISCOUNTED || info.PriceDiscounted);
-          await this.prisma.customer.update({
-            where: { id: customerId },
-            data: { total_spent: paid, total_debt: discounted - paid }
-          });
-        }
-      } catch (e) { this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadPaymentInfo: ${e.message}`); }
-      stats.payments = await this.syncCustomerPayments(customerId, branchId);
+      // Nhóm Tài chính (Thanh toán)
+      if (shouldSync('syncTabPayments')) {
+        try {
+          const payInfo = await this.vttechApi.callHandler('/Customer/MainCustomer/', 'LoadPaymentInfo', { CustomerID: customerId });
+          const payInfoItems = this.ensureArray(payInfo);
+          if (payInfoItems.length > 0) {
+            const info = payInfoItems[0];
+            const paid = this.parseNumber(info.PAID || info.Paid);
+            const discounted = this.parseNumber(info.PRICE_DISCOUNTED || info.PriceDiscounted);
+            await this.prisma.customer.update({
+              where: { id: customerId },
+              data: { total_spent: paid, total_debt: discounted - paid }
+            });
+          }
+        } catch (e) { this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadPaymentInfo: ${e.message}`); }
+        stats.payments = await this.syncCustomerPayments(customerId, branchId);
+      }
       await new Promise(resolve => setImmediate(resolve));
 
       // Nhóm Dịch vụ
-      try {
-        const services = await this.vttechApi.callHandler('/Customer/Service/TabList/TabList_Service/', 'LoadataTab', { CustomerID: customerId });
-        const items = this.ensureArray(services);
-        for (const s of items) {
-          const sDate = this.parseDate(s.Created || s.Date);
-          const isToday = syncDate && sDate && sDate.toISOString().split('T')[0] === syncDate;
-          if (isToday) stats.services++;
-          const sId = parseInt(s.ID || s.id);
-          if (!sId) continue;
-          await this.prisma.customerServiceTab.upsert({
-            where: { customer_id_service_id: { customer_id: customerId, service_id: sId } },
-            update: { 
-              service_name: s.ServiceName || '', quantity: parseInt(s.Quantity) || 1, 
-              price: this.parseNumber(s.Price || s.Price_Root), total: this.parseNumber(s.Total || s.Amount), 
-              branch_id: branchId || parseInt(s.BranchID) || null, status: s.StatusName || '',
-              created_at: this.parseDate(s.Created || s.Date)
-            },
-            create: { 
-              customer_id: customerId, service_id: sId, service_name: s.ServiceName || '', 
-              quantity: parseInt(s.Quantity) || 1, price: this.parseNumber(s.Price || s.Price_Root), 
-              total: this.parseNumber(s.Total || s.Amount), branch_id: branchId || parseInt(s.BranchID) || null,
-              status: s.StatusName || '', created_at: this.parseDate(s.Created || s.Date)
-            }
-          });
-        }
-      } catch (e) { this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadataTab: ${e.message}`); }
+      if (shouldSync('syncTabServiceTab')) {
+        try {
+          const services = await this.vttechApi.callHandler('/Customer/Service/TabList/TabList_Service/', 'LoadataTab', { CustomerID: customerId });
+          const items = this.ensureArray(services);
+          for (const s of items) {
+            const sDate = this.parseDate(s.Created || s.Date);
+            const isToday = syncDate && sDate && sDate.toISOString().split('T')[0] === syncDate;
+            if (isToday) stats.services++;
+            const sId = parseInt(s.ID || s.id);
+            if (!sId) continue;
+            await this.prisma.customerServiceTab.upsert({
+              where: { customer_id_service_id: { customer_id: customerId, service_id: sId } },
+              update: { 
+                service_name: s.ServiceName || '', quantity: parseInt(s.Quantity) || 1, 
+                price: this.parseNumber(s.Price || s.Price_Root), total: this.parseNumber(s.Total || s.Amount), 
+                branch_id: branchId || parseInt(s.BranchID) || null, status: s.StatusName || '',
+                created_at: this.parseDate(s.Created || s.Date)
+              },
+              create: { 
+                customer_id: customerId, service_id: sId, service_name: s.ServiceName || '', 
+                quantity: parseInt(s.Quantity) || 1, price: this.parseNumber(s.Price || s.Price_Root), 
+                total: this.parseNumber(s.Total || s.Amount), branch_id: branchId || parseInt(s.BranchID) || null,
+                status: s.StatusName || '', created_at: this.parseDate(s.Created || s.Date)
+              }
+            });
+          }
+        } catch (e) { this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadataTab: ${e.message}`); }
+      }
       await new Promise(resolve => setImmediate(resolve));
 
       // Nhóm Điều trị
-      try {
-        const treatments = await this.vttechApi.callHandler('/Customer/Treatment/TreatmentList/TreatmentList_Service/', 'LoadataTreatment', { 
-          CustomerID: customerId, limit: 100
-        });
-        const items = this.ensureArray(treatments);
-        for (const t of items) {
-          const tDate = this.parseDate(t.Date || t.Created);
-          const tDateStr = tDate ? tDate.toISOString().split('T')[0] : null;
-          const isToday = syncDate && tDateStr === syncDate;
-          
-          if (isToday) stats.treatments++;
-          const tId = parseInt(t.ID || t.id);
-          if (!tId) continue;
-          await this.prisma.treatment.upsert({
-            where: { id: tId },
-            update: { 
-              customer_id: customerId, service_name: String(t.ServiceName || t.Service || ''), 
-              amount: this.parseNumber(t.Amount || t.TotalAmount),
-              treatment_date: this.parseDate(t.Date || t.Created) || new Date()
-            },
-            create: { 
-              id: tId, customer_id: customerId, service_name: String(t.ServiceName || t.Service || ''), 
-              amount: this.parseNumber(t.Amount || t.TotalAmount),
-              treatment_date: this.parseDate(t.Date || t.Created) || new Date()
-            }
+      if (shouldSync('syncTabTreatments')) {
+        try {
+          const treatments = await this.vttechApi.callHandler('/Customer/Treatment/TreatmentList/TreatmentList_Service/', 'LoadataTreatment', { 
+            CustomerID: customerId, limit: 100
           });
-        }
-      } catch (e) { this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadataTreatment: ${e.message}`); }
+          const items = this.ensureArray(treatments);
+          for (const t of items) {
+            const tDate = this.parseDate(t.Date || t.Created);
+            const tDateStr = tDate ? tDate.toISOString().split('T')[0] : null;
+            const isToday = syncDate && tDateStr === syncDate;
+            
+            if (isToday) stats.treatments++;
+            const tId = parseInt(t.ID || t.id);
+            if (!tId) continue;
+            await this.prisma.treatment.upsert({
+              where: { id: tId },
+              update: { 
+                customer_id: customerId, service_name: String(t.ServiceName || t.Service || ''), 
+                amount: this.parseNumber(t.Amount || t.TotalAmount),
+                treatment_date: this.parseDate(t.Date || t.Created) || new Date()
+              },
+              create: { 
+                id: tId, customer_id: customerId, service_name: String(t.ServiceName || t.Service || ''), 
+                amount: this.parseNumber(t.Amount || t.TotalAmount),
+                treatment_date: this.parseDate(t.Date || t.Created) || new Date()
+              }
+            });
+          }
+        } catch (e) { this.addLog(`   ❌ [ID: ${customerId}] Lỗi LoadataTreatment: ${e.message}`); }
+      }
       await new Promise(resolve => setImmediate(resolve));
 
-      // Nhóm Tương tác & Khác (Có thể chạy song song nhẹ)
-      stats.appointments = await this.syncCustomerSchedules(customerId, branchId);
+      // Nhóm Lịch Hẹn
+      if (shouldSync('syncTabSchedules')) {
+        stats.appointments = await this.syncCustomerSchedules(customerId, branchId);
+      }
 
-      const hasAnamnesis = await this.prisma.customerAnamnesis.count({ where: { customer_id: customerId } }).catch(() => 0);
+      const tasksToRun = [];
+      if (shouldSync('syncTabPayments')) {
+        tasksToRun.push(this.syncCustomerCards(customerId));
+      }
+      if (shouldSync('syncTabCareHistory')) {
+        tasksToRun.push(this.syncCustomerCareHistory(customerId, branchId));
+      }
+      if (shouldSync('syncTabTreatmentPlans')) {
+        tasksToRun.push(this.syncCustomerTreatmentPlans(customerId, branchId));
+      }
+      if (shouldSync('syncTabGeneralInfo')) {
+        tasksToRun.push(this.syncCustomerStatus(customerId));
+      }
 
-      await Promise.all([
-        this.syncCustomerCards(customerId),
-        hasAnamnesis > 0 ? Promise.resolve() : this.syncCustomerAnamnesis(customerId),
-        this.syncCustomerImages(customerId),
-        this.syncCustomerCareHistory(customerId, branchId),
-        this.syncCustomerComplaints(customerId, branchId),
-        this.syncCustomerTreatmentPlans(customerId, branchId),
-        this.syncCustomerStatus(customerId),
-        this.syncCustomerTickets(customerId, branchId),
-        this.syncCustomerSms(customerId, branchId),
-        customer?.phone ? this.syncCustomerVttechCalls(customerId, customer.phone) : Promise.resolve()
-      ]);
+      if (tasksToRun.length > 0) {
+        await Promise.all(tasksToRun);
+      }
+
+      // Đợt 2 (Batch 2 - Thông tin phụ/tĩnh): Chỉ đồng bộ tối đa 1 lần/24h (Bỏ qua cache nếu là manual sync)
+      try {
+        const redis = await (this.syncQueue as any).client;
+        const deepSyncCacheKey = `sync:customer:${customerId}:last_deep_sync`;
+        const cached = !isManualTabSync ? await redis.get(deepSyncCacheKey) : null;
+
+        if (cached) {
+          this.logger.log(`⏩ [ID: ${customerId}] Bỏ qua đồng bộ chi tiết tĩnh do đã thực hiện trong 24h qua.`);
+        } else {
+          const staticTasks = [];
+          
+          if (shouldSync('syncTabAnamnesis')) {
+            const hasAnamnesis = await this.prisma.customerAnamnesis.count({ where: { customer_id: customerId } }).catch(() => 0);
+            if (hasAnamnesis === 0) {
+              staticTasks.push(this.syncCustomerAnamnesis(customerId));
+            }
+          }
+          if (shouldSync('syncTabImages')) {
+            staticTasks.push(this.syncCustomerImages(customerId));
+          }
+          if (shouldSync('syncTabComplaints')) {
+            staticTasks.push(this.syncCustomerComplaints(customerId, branchId));
+          }
+          if (shouldSync('syncTabTickets')) {
+            staticTasks.push(this.syncCustomerTickets(customerId, branchId));
+          }
+          if (shouldSync('syncTabSms')) {
+            staticTasks.push(this.syncCustomerSms(customerId, branchId));
+          }
+          if (shouldSync('syncTabVttechCalls') && customer?.phone) {
+            staticTasks.push(this.syncCustomerVttechCalls(customerId, customer.phone));
+          }
+
+          if (staticTasks.length > 0) {
+            await Promise.all(staticTasks);
+          }
+
+          // Chỉ lưu cache deep sync nếu không phải chạy thủ công tab đơn lẻ
+          if (!isManualTabSync) {
+            await redis.set(deepSyncCacheKey, '1', 'EX', 86400); // 24 hours TTL
+          }
+        }
+      } catch (redisErr: any) {
+        this.logger.warn(`⚠️ [ID: ${customerId}] Lỗi truy cập Redis Cache cho deep sync: ${redisErr.message}. Tiếp tục đồng bộ không cache.`);
+        const staticTasks = [];
+        
+        if (shouldSync('syncTabAnamnesis')) {
+          const hasAnamnesis = await this.prisma.customerAnamnesis.count({ where: { customer_id: customerId } }).catch(() => 0);
+          if (hasAnamnesis === 0) {
+            staticTasks.push(this.syncCustomerAnamnesis(customerId));
+          }
+        }
+        if (shouldSync('syncTabImages')) {
+          staticTasks.push(this.syncCustomerImages(customerId));
+        }
+        if (shouldSync('syncTabComplaints')) {
+          staticTasks.push(this.syncCustomerComplaints(customerId, branchId));
+        }
+        if (shouldSync('syncTabTickets')) {
+          staticTasks.push(this.syncCustomerTickets(customerId, branchId));
+        }
+        if (shouldSync('syncTabSms')) {
+          staticTasks.push(this.syncCustomerSms(customerId, branchId));
+        }
+        if (shouldSync('syncTabVttechCalls') && customer?.phone) {
+          staticTasks.push(this.syncCustomerVttechCalls(customerId, customer.phone));
+        }
+
+        if (staticTasks.length > 0) {
+          await Promise.all(staticTasks);
+        }
+      }
 
     } catch (globalError) {
       this.logger.error(`[ID: ${customerId}] Critical error in syncSingleCustomerDetail: ${globalError.message}`);
@@ -2261,11 +2741,11 @@ export class SyncService implements OnModuleInit {
     return CryptoJS.MD5(JSON.stringify(data)).toString();
   }
 
-  async processQueuedCustomerDetail(customerId: number, parentTaskId?: number) {
-    this.logger.log(`Worker processing customer detail: ${customerId}`);
+  async processQueuedCustomerDetail(customerId: number, parentTaskId?: number, onlyTabs?: string[]) {
+    this.logger.log(`Worker processing customer detail: ${customerId}${onlyTabs ? ` (onlyTabs: ${onlyTabs.join(',')})` : ''}`);
     try {
       // syncSingleCustomerDetail now handles SyncTask update internally
-      return await this.syncSingleCustomerDetail(customerId, parentTaskId);
+      return await this.syncSingleCustomerDetail(customerId, parentTaskId, undefined, onlyTabs);
     } catch (error) {
       this.logger.error(`Error in processQueuedCustomerDetail: ${error.message}`);
       throw error;
@@ -2679,5 +3159,45 @@ export class SyncService implements OnModuleInit {
       });
       throw error;
     }
+  }
+
+  async triggerManualTabSync(tabId: string, fromDateStr: string, toDateStr: string) {
+    const fromDate = this.parseDate(fromDateStr);
+    const toDate = this.parseDate(toDateStr);
+    if (!fromDate || !toDate) throw new Error('Ngày không hợp lệ');
+
+    // Tìm tất cả khách hàng được tạo trong khung ngày crm_created_at
+    const customers = await this.prisma.customer.findMany({
+      where: {
+        crm_created_at: {
+          gte: new Date(fromDateStr + 'T00:00:00Z'),
+          lte: new Date(toDateStr + 'T23:59:59Z'),
+        }
+      },
+      select: { id: true }
+    });
+
+    this.logger.log(`[Manual Tab Sync] Tìm thấy ${customers.length} khách hàng có ngày tạo từ ${fromDateStr} đến ${toDateStr} để chạy tab ${tabId}`);
+
+    let pushed = 0;
+    // Đăng nhập VTTech trước để sẵn sàng xử lý chi tiết (BullMQ worker sẽ reuse session này)
+    await this.vttechApi.login().catch(() => {});
+    await this.vttechApi.getXsrfToken().catch(() => {});
+
+    for (const c of customers) {
+      await this.syncQueue.add('sync-job', {
+        type: 'sync-customer-detail',
+        data: { customerId: c.id, onlyTabs: [tabId] }
+      }, {
+        jobId: `manual-tab-${tabId}-cust-${c.id}-${Date.now()}`,
+        removeOnComplete: true,
+        attempts: 3,
+        priority: 15, // Ưu tiên chạy trước
+        backoff: { type: 'exponential', delay: 2000 },
+      });
+      pushed++;
+    }
+
+    return { pushed };
   }
 }

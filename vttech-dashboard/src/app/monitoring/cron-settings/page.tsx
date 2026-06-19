@@ -28,12 +28,37 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
 
+interface CronTaskLog {
+  id: number | string
+  completed_at: string
+  status: string
+  message: string
+}
+
 interface CronConfig {
   id: string
   name: string
   enabled: boolean
   description: string | null
   updated_at: string
+  last_success_at?: string | null
+  recent_tasks?: CronTaskLog[]
+}
+
+const formatDateTime = (dateStr: string) => {
+  try {
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return dateStr
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    const hours = String(d.getHours()).padStart(2, '0')
+    const minutes = String(d.getMinutes()).padStart(2, '0')
+    const seconds = String(d.getSeconds()).padStart(2, '0')
+    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`
+  } catch {
+    return dateStr
+  }
 }
 
 interface SwitchProps {
@@ -240,6 +265,22 @@ export default function CronSettingsPage() {
       case 'handleStaleTasksCron': return '0 */10 * * * * (Mỗi 10 phút)'
       case 'handleQueueCleanupCron': return '0 0 * * * * (Mỗi 1 giờ)'
       case 'handleDailyReporting': return '0 0 8,20 * * * (08:00 & 20:00 hàng ngày)'
+      case 'handleGoogleSheetPushCron': return '0 0 4,23 * * * (04:00 & 23:00 hàng ngày)'
+      
+      // Các tab cron jobs
+      case 'syncTabGeneralInfo': return 'Chạy theo Đồng bộ hàng ngày (00:00)'
+      case 'syncTabAnamnesis': return 'Chạy theo Đồng bộ hàng ngày (00:00)'
+      case 'syncTabCareHistory': return 'Chạy theo Đồng bộ hàng ngày (00:00)'
+      case 'syncTabTreatmentPlans': return 'Chạy theo Đồng bộ hàng ngày (00:00)'
+      case 'syncTabServiceTab': return 'Chạy theo Đồng bộ hàng ngày (00:00)'
+      case 'syncTabTreatments': return 'Chạy theo Đồng bộ hàng ngày (00:00)'
+      case 'syncTabPayments': return 'Chạy theo Đồng bộ hàng ngày (00:00)'
+      case 'syncTabImages': return 'Chạy theo Đồng bộ hàng ngày (00:00)'
+      case 'syncTabSchedules': return 'Chạy theo Đồng bộ hàng ngày (00:00)'
+      case 'syncTabComplaints': return 'Chạy theo Đồng bộ hàng ngày (00:00)'
+      case 'syncTabTickets': return 'Chạy theo Đồng bộ hàng ngày (00:00)'
+      case 'syncTabSms': return 'Chạy theo Đồng bộ hàng ngày (00:00)'
+      case 'syncTabVttechCalls': return 'Chạy theo Đồng bộ hàng ngày (00:00)'
       default: return '* * * * *'
     }
   }
@@ -581,10 +622,92 @@ export default function CronSettingsPage() {
                           {config.description || 'Không có mô tả.'}
                         </p>
                         
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>Tần suất chạy: {getCronExpression(config.id)}</span>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-bold text-zinc-400">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Tần suất chạy: {getCronExpression(config.id)}</span>
+                          </div>
+                          {config.last_success_at && (
+                            <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50/70 border border-emerald-100/50 px-1.5 py-0.5 rounded">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                              <span>Hoàn thành gần nhất: {formatDateTime(config.last_success_at)}</span>
+                            </div>
+                          )}
                         </div>
+
+                        {config.recent_tasks && config.recent_tasks.length > 0 && (
+                          <div className="mt-2 space-y-1 pl-3 border-l-2 border-zinc-100">
+                            <span className="text-[10px] font-bold text-zinc-400 block mb-0.5">Lịch sử chạy gần đây:</span>
+                            {config.recent_tasks.map((task) => (
+                              <div key={task.id} className="flex items-center gap-2 text-[11px] text-zinc-600 font-medium">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                <span className="text-[10px] text-zinc-400 font-bold font-mono">[{formatDateTime(task.completed_at)}]</span>
+                                <span className="truncate text-zinc-500">{task.message}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {config.id.startsWith('syncTab') && (
+                          <div className="mt-3.5 p-3 bg-zinc-50/50 border border-zinc-100 rounded-xl space-y-2.5 max-w-lg">
+                            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
+                              Đồng bộ thủ công theo ngày tạo khách hàng (crm_created_at)
+                            </span>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-zinc-400 font-bold">Từ:</span>
+                                <input 
+                                  type="date"
+                                  id={`from-${config.id}`}
+                                  className="rounded border border-zinc-200 bg-white p-1 text-[11px] font-bold focus:outline-none focus:ring-1 focus:ring-zinc-950"
+                                />
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-zinc-400 font-bold">Đến:</span>
+                                <input 
+                                  type="date"
+                                  id={`to-${config.id}`}
+                                  className="rounded border border-zinc-200 bg-white p-1 text-[11px] font-bold focus:outline-none focus:ring-1 focus:ring-zinc-950"
+                                />
+                              </div>
+                              <Button
+                                size="sm"
+                                className="h-7 px-3 bg-zinc-900 text-white rounded hover:bg-zinc-800 text-[10px] font-bold flex items-center gap-1"
+                                onClick={async () => {
+                                  const fromInput = document.getElementById(`from-${config.id}`) as HTMLInputElement;
+                                  const toInput = document.getElementById(`to-${config.id}`) as HTMLInputElement;
+                                  if (!fromInput?.value || !toInput?.value) {
+                                    toast.error('Vui lòng chọn đầy đủ từ ngày và đến ngày.');
+                                    return;
+                                  }
+                                  
+                                  try {
+                                    const res = await fetch(`${API_BASE}/sync/tab-manual`, {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                      },
+                                      body: JSON.stringify({
+                                        tabId: config.id,
+                                        fromDate: fromInput.value,
+                                        toDate: toInput.value
+                                      })
+                                    });
+                                    if (!res.ok) throw new Error('Yêu cầu thất bại');
+                                    const data = await res.json();
+                                    toast.success(data.message || 'Đã nạp thành công các tác vụ.');
+                                    fetchSyncStatus(false);
+                                  } catch (err: any) {
+                                    toast.error('Có lỗi xảy ra khi kích hoạt đồng bộ.');
+                                  }
+                                }}
+                              >
+                                <Play className="w-3 h-3 fill-white" />
+                                Bắt đầu
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-4 shrink-0 self-end md:self-auto">

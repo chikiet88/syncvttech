@@ -213,14 +213,15 @@ export class ReportController {
         treatmentsCount,
         servicesCount
       ] = await Promise.all([
-        // Count unique customer IDs across multiple tables for this branch and date range
-        (this.prisma as any).$queryRaw<{ count: bigint }[]>`
-          SELECT count(DISTINCT customer_id) as "count" 
-          FROM revenue_transactions 
-          WHERE branch_id = ${branch.id} 
-              AND date >= ${start} 
-              AND date <= ${end}
-          `,
+        this.prisma.customer.count({
+          where: {
+            branch_id: branch.id,
+            crm_created_at: {
+              gte: start,
+              lte: end,
+            },
+          },
+        }),
         this.prisma.appointment.count({
           where: { branch_id: branch.id, appointment_date: { gte: start, lte: end } }
         }),
@@ -232,7 +233,7 @@ export class ReportController {
         }),
       ]);
 
-      const customerCount = Number(customersCountResult[0]?.count || 0);
+      const customerCount = customersCountResult || 0;
 
       return {
         id: branch.id,
@@ -278,18 +279,30 @@ export class ReportController {
     const end = parseDate(to || '');
     end.setHours(23, 59, 59, 999);
 
-    const where: any = { date: { gte: start, lte: end } };
+    const where: any = { crm_created_at: { gte: start, lte: end } };
     if (branchId && branchId !== '0') where.branch_id = parseInt(branchId);
 
     let [data, total] = await Promise.all([
-      (this.prisma as any).dailyCustomer.findMany({
+      this.prisma.customer.findMany({
         where,
         skip,
         take: limitNum,
-        orderBy: { date: 'desc' },
+        orderBy: { crm_created_at: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          phone: true,
+          crm_created_at: true,
+          branch_id: true,
+          source: { select: { name: true } }
+        }
       }),
-      (this.prisma as any).dailyCustomer.count({ where }),
+      this.prisma.customer.count({ where }),
     ]);
+
+    let isLiveFetch = false;
+    let liveData: any[] = [];
 
     if (total === 0 && pageNum === 1 && branchId && branchId !== '0') {
         try {
@@ -321,50 +334,55 @@ export class ReportController {
 
             if (table.length > 0) {
                 this.logger.log(`✅ Live fetch success: Found ${table.length} customers.`);
-                data = table.map((item: any, idx: number) => ({
+                liveData = table.map((item: any, idx: number) => ({
                     id: `live-${idx}`,
-                    customer_id: parseInt(item.CustID || item.ID),
-                    customer_name: item.CustName || item.FullName,
-                    customer_code: item.CustCode || item.Code,
+                    customerId: parseInt(item.CustID || item.ID),
+                    customerName: item.CustName || item.FullName,
+                    customerCode: item.CustCode || item.Code,
                     phone: item.Phone || item.Mobile,
-                    date: start,
+                    crm_created_at: item.Created ? new Date(item.Created) : start,
                     branch_id: parseInt(branchId),
                 }));
-                total = data.length;
+                total = liveData.length;
+                isLiveFetch = true;
             }
-        } catch (e) {
+        } catch (e: any) {
             this.logger.error(`Live Fetch Registrations Error: ${e.message}`);
         }
     }
 
-    const customerIds = [...new Set(data.map((t: any) => t.customer_id).filter(Boolean))];
-    const customers = await this.prisma.customer.findMany({
-      where: { id: { in: customerIds as number[] } },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        phone: true,
-        created_at: true,
-        source: { select: { name: true } }
-      }
-    });
-    const customerMap = new Map(customers.map(c => [c.id, c]));
+    const branches = await this.prisma.branch.findMany({ select: { id: true, name: true } });
+    const branchMap = new Map(branches.map(b => [b.id, b.name]));
 
-    const mappedData = data.map((item: any) => {
-      const c = customerMap.get(item.customer_id);
-      return {
+    let mappedData: any[] = [];
+
+    if (isLiveFetch) {
+      mappedData = liveData.map((item: any) => ({
         id: item.id,
-        date: item.date,
-        customerId: item.customer_id,
-        customerName: c?.name || item.customer_name || 'N/A',
-        customerCode: c?.code || '',
-        phone: c?.phone || item.phone || '',
+        date: item.crm_created_at,
+        customerId: item.customerId,
+        customerName: item.customerName,
+        customerCode: item.customerCode,
+        phone: item.phone,
         branchId: item.branch_id,
-        sourceName: c?.source?.name || 'Khách Giới Thiệu',
-        createdAt: c?.created_at || item.created_at || null,
-      };
-    });
+        branchName: branchMap.get(item.branch_id) || `CN #${item.branch_id}`,
+        sourceName: 'Khách Giới Thiệu',
+        createdAt: item.crm_created_at,
+      }));
+    } else {
+      mappedData = data.map((item: any) => ({
+        id: item.id,
+        date: item.crm_created_at,
+        customerId: item.id,
+        customerName: item.name || 'N/A',
+        customerCode: item.code || '',
+        phone: item.phone || '',
+        branchId: item.branch_id,
+        branchName: item.branch_id ? (branchMap.get(item.branch_id) || `CN #${item.branch_id}`) : 'Khác',
+        sourceName: item.source?.name || 'Khách Giới Thiệu',
+        createdAt: item.crm_created_at || null,
+      }));
+    }
 
     return {
       data: mappedData,
@@ -589,9 +607,26 @@ export class ReportController {
       const sourceName = customer?.source?.name || 'Khách Giới Thiệu';
 
       // Find funnel name
-      const service = a.service_id ? serviceMap.get(a.service_id) : null;
-      const funnelName = service?.group_id ? groupMap.get(service.group_id) : '';
-      const noteWithFunnel = funnelName ? `[${funnelName}] ${a.note || ''}`.trim() : (a.note || '');
+      let funnelName = '';
+      const serviceNameLower = a.service_name?.toLowerCase().trim();
+      const matchedGroup = groups.find(g => g.name.toLowerCase().trim() === serviceNameLower);
+      if (matchedGroup) {
+        funnelName = matchedGroup.name;
+      } else {
+        const service = a.service_id ? serviceMap.get(a.service_id) : null;
+        if (service && service.name.toLowerCase().trim() === serviceNameLower) {
+          funnelName = service.group_id ? groupMap.get(service.group_id) || '' : '';
+        } else {
+          // Fallback check if service_id maps directly to a group name in groupMap (for legacy data)
+          const groupById = a.service_id ? groupMap.get(a.service_id) : null;
+          if (groupById) {
+            funnelName = groupById;
+          } else if (service) {
+            funnelName = service.group_id ? groupMap.get(service.group_id) || '' : '';
+          }
+        }
+      }
+      const noteWithFunnel = funnelName ? `${funnelName}\n${a.note || ''}`.trim() : (a.note || '');
 
       return {
         id: a.id,

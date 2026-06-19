@@ -82,8 +82,8 @@ export const columns: ColumnDef<AppointmentColumn>[] = [
     cell: ({ row }) => {
       const note = row.getValue("note") as string
       return (
-        <div className="max-w-[200px] truncate-2-lines" title={note}>
-          <span className="text-xs font-medium text-zinc-600">
+        <div className="max-w-[200px] line-clamp-2" title={note}>
+          <span className="text-xs font-medium text-zinc-600 whitespace-pre-line">
             {note || <span className="text-zinc-400 italic">Không có nội dung</span>}
           </span>
         </div>

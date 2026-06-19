@@ -23,8 +23,8 @@ function AppointmentsReportContent() {
   const paramDateFrom = searchParams.get("from")
   const paramDateTo = searchParams.get("to")
 
-  const parseInitDate = (dStr: string | null) => {
-    if (!dStr) return new Date().toISOString().split('T')[0]
+  const parseInitDate = (dStr: string | null, isFrom = false) => {
+    if (!dStr) return isFrom ? '2026-01-01' : new Date().toISOString().split('T')[0]
     const parts = dStr.split('-')
     if (parts.length === 3) {
       if (parts[0].length === 2) return `${parts[2]}-${parts[1]}-${parts[0]}`
@@ -36,8 +36,8 @@ function AppointmentsReportContent() {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<AppointmentColumn[]>([])
   const [branches, setBranches] = useState<{id: number, name: string}[]>([])
-  const [dateFrom, setDateFrom] = useState(parseInitDate(paramDateFrom))
-  const [dateTo, setDateTo] = useState(parseInitDate(paramDateTo))
+  const [dateFrom, setDateFrom] = useState(parseInitDate(paramDateFrom, true))
+  const [dateTo, setDateTo] = useState(parseInitDate(paramDateTo, false))
   const [branchID, setBranchID] = useState(paramBranchId || "0")
   const [pushing, setPushing] = useState(false)
 

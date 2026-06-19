@@ -1,0 +1,21 @@
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from '../src/app.module';
+import { ExcelExportService } from '../src/excel-export.service';
+
+async function main() {
+  console.log('🚀 Khởi tạo NestJS application context...');
+  const app = await NestFactory.createApplicationContext(AppModule);
+  const excelExportService = app.get(ExcelExportService);
+  
+  console.log('🔄 Bắt đầu kích hoạt handleGoogleSheetPushCron()...');
+  try {
+    await excelExportService.handleGoogleSheetPushCron();
+    console.log('✅ Chạy hoàn tất handleGoogleSheetPushCron!');
+  } catch (error: any) {
+    console.error('❌ Lỗi khi chạy cron job:', error.message, error.stack);
+  } finally {
+    await app.close();
+  }
+}
+
+main().catch(console.error);

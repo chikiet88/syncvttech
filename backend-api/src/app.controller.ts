@@ -1,5 +1,5 @@
 
-import { Controller, Get, Post, Query, Param, Body, Patch, Res } from '@nestjs/common';
+import { Controller, Get, Post, Query, Param, Body, Patch, Res, HttpException, HttpStatus } from '@nestjs/common';
 import { Response } from 'express';
 import { AppService } from './app.service';
 import { SyncService } from './sync.service';
@@ -213,14 +213,6 @@ export class AppController {
 
   @Get('cron-configs')
   async getCronConfigs() {
-    const configs = await this.prisma.cronConfig.findMany({
-      orderBy: { id: 'asc' },
-    });
-
-    if (configs.length > 0) {
-      return configs;
-    }
-
     // Seed default cron configs
     const defaultConfigs = [
       {
@@ -246,6 +238,12 @@ export class AppController {
         name: 'Đồng bộ nhanh định kỳ',
         enabled: true,
         description: 'Đồng bộ nhanh dữ liệu ngày hiện tại để phục vụ Dashboard (mỗi 20 phút).',
+      },
+      {
+        id: 'handleFutureAppointmentsSync',
+        name: 'Đồng bộ lịch hẹn trước (Future Appointments)',
+        enabled: true,
+        description: 'Tự động quét và đồng bộ lịch hẹn của 7 ngày tiếp theo để đảm bảo thông tin lịch hẹn trước luôn đầy đủ (mỗi 30 phút).',
       },
       {
         id: 'handleHistoricalSyncCron',
@@ -275,21 +273,193 @@ export class AppController {
         id: 'handleGoogleSheetPushCron',
         name: 'Tự động đẩy báo cáo lịch hẹn lên Google Sheets',
         enabled: true,
-        description: 'Tự động tổng hợp và đẩy báo cáo lịch hẹn tháng hiện tại lên Google Sheets lúc 07:00 và 19:00 hàng ngày (Giờ Việt Nam).',
+        description: 'Tự động tổng hợp và đẩy báo cáo lịch hẹn tháng hiện tại lên Google Sheets lúc 04:00 và 23:00 hàng ngày (Giờ Việt Nam).',
+      },
+      {
+        id: 'syncTabGeneralInfo',
+        name: 'Đồng bộ Tab Thông Tin',
+        enabled: true,
+        description: 'Đồng bộ thông tin cá nhân cơ bản và trạng thái khách hàng.',
+      },
+      {
+        id: 'syncTabAnamnesis',
+        name: 'Đồng bộ Tab Tiền Sử',
+        enabled: true,
+        description: 'Đồng bộ tiền sử bệnh lý của khách hàng.',
+      },
+      {
+        id: 'syncTabCareHistory',
+        name: 'Đồng bộ Tab Tư Vấn & Lịch Sử',
+        enabled: true,
+        description: 'Đồng bộ lịch sử tương tác, tư vấn chăm sóc khách hàng.',
+      },
+      {
+        id: 'syncTabTreatmentPlans',
+        name: 'Đồng bộ Tab Chẩn Đoán',
+        enabled: true,
+        description: 'Đồng bộ phác đồ điều trị của khách hàng.',
+      },
+      {
+        id: 'syncTabServiceTab',
+        name: 'Đồng bộ Tab Dịch Vụ',
+        enabled: true,
+        description: 'Đồng bộ danh sách dịch vụ khách hàng đã mua.',
+      },
+      {
+        id: 'syncTabTreatments',
+        name: 'Đồng bộ Tab Điều Trị',
+        enabled: true,
+        description: 'Đồng bộ nhật ký các buổi điều trị thực tế.',
+      },
+      {
+        id: 'syncTabPayments',
+        name: 'Đồng bộ Tab Thanh Toán',
+        enabled: true,
+        description: 'Đồng bộ các hóa đơn thanh toán, công nợ và thẻ dịch vụ.',
+      },
+      {
+        id: 'syncTabImages',
+        name: 'Đồng bộ Tab Hình Ảnh',
+        enabled: true,
+        description: 'Đồng bộ hình ảnh điều trị của khách hàng.',
+      },
+      {
+        id: 'syncTabSchedules',
+        name: 'Đồng bộ Tab Lịch Hẹn',
+        enabled: true,
+        description: 'Đồng bộ lịch hẹn chi tiết của khách hàng.',
+      },
+      {
+        id: 'syncTabComplaints',
+        name: 'Đồng bộ Tab Complaint',
+        enabled: true,
+        description: 'Đồng bộ lịch sử khiếu nại của khách hàng.',
+      },
+      {
+        id: 'syncTabTickets',
+        name: 'Đồng bộ Tickets khách hàng',
+        enabled: true,
+        description: 'Đồng bộ danh sách tickets hỗ trợ của khách hàng.',
+      },
+      {
+        id: 'syncTabSms',
+        name: 'Đồng bộ SMS khách hàng',
+        enabled: true,
+        description: 'Đồng bộ lịch sử tin nhắn SMS đã gửi cho khách hàng.',
+      },
+      {
+        id: 'syncTabVttechCalls',
+        name: 'Đồng bộ Cuộc Gọi VTTech khách hàng',
+        enabled: true,
+        description: 'Đồng bộ lịch sử cuộc gọi thoại VTTech của khách hàng.',
       },
     ];
 
     for (const conf of defaultConfigs) {
       await this.prisma.cronConfig.upsert({
         where: { id: conf.id },
-        update: {},
+        update: {
+          name: conf.name,
+          description: conf.description,
+        },
         create: conf,
       });
     }
 
-    return this.prisma.cronConfig.findMany({
+    const configs = await this.prisma.cronConfig.findMany({
       orderBy: { id: 'asc' },
     });
+
+    const result = await Promise.all(
+      configs.map(async (config) => {
+        let recentTasks: any[] = [];
+        if (config.id === 'handleDailyPbxSync') {
+          const pbxLogs = await this.prisma.pbxSyncLog.findMany({
+            where: {
+              sync_type: 'cdr',
+              status: { in: ['success', 'partial'] },
+            },
+            orderBy: { created_at: 'desc' },
+            take: 2,
+          });
+          recentTasks = pbxLogs.map(log => ({
+            id: log.id,
+            completed_at: log.end_time || log.created_at,
+            status: log.status,
+            message: `Đồng bộ cuộc gọi: Thành công ${log.success_count}, Thất bại ${log.failed_count}`,
+          }));
+        } else if (config.id === 'handleDailySync') {
+          const crawlLogs = await this.prisma.crawlLog.findMany({
+            where: {
+              crawl_type: { in: ['revenue_sync', 'handleDailySync'] },
+              status: 'success',
+            },
+            orderBy: { created_at: 'desc' },
+            take: 2,
+          });
+          recentTasks = crawlLogs.map(log => ({
+            id: log.id,
+            completed_at: log.created_at,
+            status: log.status,
+            message: log.message || `Đồng bộ doanh thu thành công (${log.records_count} bản ghi)`,
+          }));
+        } else if (config.id === 'handleDailyReporting') {
+          const crawlLogs = await this.prisma.crawlLog.findMany({
+            where: {
+              crawl_type: 'DAILY_REPORT',
+              status: 'success',
+            },
+            orderBy: { created_at: 'desc' },
+            take: 2,
+          });
+          recentTasks = crawlLogs.map(log => ({
+            id: log.id,
+            completed_at: log.created_at,
+            status: log.status,
+            message: log.message || 'Tạo báo cáo tự động thành công',
+          }));
+        } else if (config.id === 'handleHistoricalSyncCron') {
+          const crawlLogs = await this.prisma.crawlLog.findMany({
+            where: {
+              crawl_type: { startsWith: 'SYNC_TASK_' },
+              status: 'success',
+            },
+            orderBy: { created_at: 'desc' },
+            take: 2,
+          });
+          recentTasks = crawlLogs.map(log => ({
+            id: log.id,
+            completed_at: log.created_at,
+            status: log.status,
+            message: log.message || `Đồng bộ nhánh thành công (KH: ${log.customers_count}, LH: ${log.appointments_count})`,
+          }));
+        } else {
+          const crawlLogs = await this.prisma.crawlLog.findMany({
+            where: {
+              crawl_type: config.id,
+              status: 'success',
+            },
+            orderBy: { created_at: 'desc' },
+            take: 2,
+          });
+          recentTasks = crawlLogs.map(log => ({
+            id: log.id,
+            completed_at: log.created_at,
+            status: log.status,
+            message: log.message || 'Chạy thành công',
+          }));
+        }
+
+        const lastSuccessAt = recentTasks.length > 0 ? recentTasks[0].completed_at : null;
+        return {
+          ...config,
+          last_success_at: lastSuccessAt,
+          recent_tasks: recentTasks,
+        };
+      })
+    );
+
+    return result;
   }
 
   @Patch('cron-configs/:id')
@@ -340,5 +510,24 @@ export class AppController {
       console.error('Failed to push appointments to Google Sheets:', error);
       return res.status(500).json({ error: 'Internal Server Error', message: error.message });
     }
+  }
+
+  @Post('sync/tab-manual')
+  async syncTabManual(
+    @Body() body: { tabId: string; fromDate: string; toDate: string },
+  ) {
+    const { tabId, fromDate, toDate } = body;
+    if (!tabId || !fromDate || !toDate) {
+      throw new HttpException(
+        'Vui lòng cung cấp đầy đủ: tabId, fromDate, toDate',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const result = await this.syncService.triggerManualTabSync(tabId, fromDate, toDate);
+    return {
+      success: true,
+      message: `Đã nạp thành công ${result.pushed} khách hàng vào hàng đợi để đồng bộ tab này.`,
+      ...result,
+    };
   }
 }

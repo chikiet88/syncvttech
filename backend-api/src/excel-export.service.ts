@@ -12,7 +12,12 @@ export class ExcelExportService {
 
   constructor(private prisma: PrismaService) {}
 
-  async getFormattedAppointmentsData(dateFromStr: string, dateToStr: string, branchId?: string): Promise<any[]> {
+  async getFormattedAppointmentsData(
+    dateFromStr: string,
+    dateToStr: string,
+    branchId?: string,
+    sortOrder: 'asc' | 'desc' = 'asc',
+  ): Promise<any[]> {
     const parseDate = (dStr: string, isEnd: boolean) => {
       if (!dStr) return new Date();
       const separator = dStr.includes('/') ? '/' : '-';
@@ -118,7 +123,7 @@ export class ExcelExportService {
           branch: true,
         },
         orderBy: {
-          appointment_date: 'asc',
+          appointment_date: sortOrder,
         },
       }),
       this.prisma.service.findMany({ select: { id: true, name: true, group_id: true } }),
@@ -196,9 +201,26 @@ export class ExcelExportService {
       const sourceName = customer?.source?.name || 'Khách Giới Thiệu';
 
       // Find funnel name
-      const service = a.service_id ? serviceMap.get(a.service_id) : null;
-      const funnelName = service?.group_id ? groupMap.get(service.group_id) : '';
-      const noteWithFunnel = funnelName ? `[${funnelName}] ${a.note || ''}`.trim() : (a.note || '');
+      let funnelName = '';
+      const serviceNameLower = a.service_name?.toLowerCase().trim();
+      const matchedGroup = groups.find(g => g.name.toLowerCase().trim() === serviceNameLower);
+      if (matchedGroup) {
+        funnelName = matchedGroup.name;
+      } else {
+        const service = a.service_id ? serviceMap.get(a.service_id) : null;
+        if (service && service.name.toLowerCase().trim() === serviceNameLower) {
+          funnelName = service.group_id ? groupMap.get(service.group_id) || '' : '';
+        } else {
+          // Fallback check if service_id maps directly to a group name in groupMap (for legacy data)
+          const groupById = a.service_id ? groupMap.get(a.service_id) : null;
+          if (groupById) {
+            funnelName = groupById;
+          } else if (service) {
+            funnelName = service.group_id ? groupMap.get(service.group_id) || '' : '';
+          }
+        }
+      }
+      const noteWithFunnel = funnelName ? `${funnelName}\n${a.note || ''}`.trim() : (a.note || '');
 
       return {
         vttech_code: a.vttech_code || '',
@@ -216,7 +238,7 @@ export class ExcelExportService {
   }
 
   async exportAppointmentsToExcel(dateFromStr: string, dateToStr: string, branchId?: string): Promise<Buffer> {
-    const formattedData = await this.getFormattedAppointmentsData(dateFromStr, dateToStr, branchId);
+    const formattedData = await this.getFormattedAppointmentsData(dateFromStr, dateToStr, branchId, 'desc');
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('LỊCH HẸN');
@@ -312,8 +334,8 @@ export class ExcelExportService {
     const token = await this.getGoogleSheetsAccessToken(clientEmail, privateKey);
 
     // 3. Fetch data for Taza and Timona
-    const tazaRows = await this.getFormattedAppointmentsData(dateFromStr, dateToStr, 'taza');
-    const timonaRows = await this.getFormattedAppointmentsData(dateFromStr, dateToStr, 'timona');
+    const tazaRows = await this.getFormattedAppointmentsData(dateFromStr, dateToStr, 'taza', 'asc');
+    const timonaRows = await this.getFormattedAppointmentsData(dateFromStr, dateToStr, 'timona', 'asc');
 
     const spreadsheetId = '1G_R_JeKOQhvKj_F_fXmfSfsgIupYyJmgvq22s2Jk7GU';
 
@@ -422,7 +444,7 @@ export class ExcelExportService {
     return response.data.access_token;
   }
 
-  @Cron('0 0 7,19 * * *', {
+  @Cron('0 0 4,23 * * *', {
     timeZone: 'Asia/Ho_Chi_Minh',
   })
   async handleGoogleSheetPushCron() {
@@ -437,14 +459,32 @@ export class ExcelExportService {
       const now = new Date();
       // Format: YYYY-MM-DD
       const toStr = now.toISOString().split('T')[0];
-      // Ngày đầu tiên của tháng hiện tại
-      const fromStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      // Từ ngày 01/01/2026 đến nay
+      const fromStr = '2026-01-01';
 
       this.logger.log(`[CRON] Khoảng ngày tự động đẩy: ${fromStr} -> ${toStr}`);
       const result = await this.pushToGoogleSheet(fromStr, toStr);
-      this.logger.log(`[CRON] Đã tự động đẩy dữ liệu thành công! Taza: ${result.tazaCount} dòng, Timona: ${result.timonaCount} dòng.`);
+      const msg = `Tự động đẩy dữ liệu thành công! Taza: ${result.tazaCount} dòng, Timona: ${result.timonaCount} dòng.`;
+      this.logger.log(`[CRON] ${msg}`);
+
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: new Date(),
+          crawl_type: 'handleGoogleSheetPushCron',
+          status: 'success',
+          message: msg,
+        }
+      }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
     } catch (e: any) {
       this.logger.error(`[CRON] Lỗi khi tự động đẩy dữ liệu lên Google Sheets: ${e.message}`, e.stack);
+      await this.prisma.crawlLog.create({
+        data: {
+          crawl_date: new Date(),
+          crawl_type: 'handleGoogleSheetPushCron',
+          status: 'failed',
+          error_message: e.message,
+        }
+      }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
     }
   }
 }

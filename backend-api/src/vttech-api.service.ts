@@ -18,6 +18,7 @@ interface VttechSession {
   lastErrorAt: number;
   loginByUsernamePromise: Promise<boolean> | null;
   lock: Promise<void> | null;
+  forbiddenEndpoints?: Set<string>;
 }
 
 @Injectable()
@@ -27,7 +28,7 @@ export class VttechApiService implements OnModuleInit {
   private sessions: VttechSession[] = [];
   private currentSessionIndex = 0;
   private globalLastUsedAt = 0;
-  private readonly GLOBAL_MIN_DELAY = 1000; // 1s giữa bất kỳ call nào
+  private readonly GLOBAL_MIN_DELAY = 200; // 200ms giữa bất kỳ call nào
   private readonly LOGIN_TIMEOUT = 45000; // 45s timeout cho login
   private baseUrl: string;
   private logCallback: ((msg: string) => void) | null = null;
@@ -170,7 +171,8 @@ export class VttechApiService implements OnModuleInit {
     return {
       username: u, password: p,
       token: null, secretKey: null, cookies: [], xsrfToken: null,
-      lastUsedAt: 0, errorCount: 0, lastErrorAt: 0, loginByUsernamePromise: null, lock: null
+      lastUsedAt: 0, errorCount: 0, lastErrorAt: 0, loginByUsernamePromise: null, lock: null,
+      forbiddenEndpoints: new Set<string>()
     };
   }
 
@@ -206,13 +208,21 @@ export class VttechApiService implements OnModuleInit {
     }
   }
 
-  private getBestSession(): VttechSession {
+  private getBestSession(page?: string): VttechSession {
     if (this.sessions.length === 0) throw new Error('No sessions available');
     
     const now = Date.now();
     // Lọc bỏ những tài khoản bị lỗi quá nhiều (ví dụ > 5 lỗi liên tiếp trong vòng 15 phút qua) để tránh nghẽn
     const activeSessions = this.sessions.filter(s => s.errorCount <= 5 || (now - s.lastErrorAt > 900000));
-    const sessionsToUse = activeSessions.length > 0 ? activeSessions : this.sessions;
+    let sessionsToUse = activeSessions.length > 0 ? activeSessions : this.sessions;
+
+    // Lọc bỏ session đã bị forbidden cho endpoint này
+    if (page) {
+      const allowedSessions = sessionsToUse.filter(s => !s.forbiddenEndpoints?.has(page));
+      if (allowedSessions.length > 0) {
+        sessionsToUse = allowedSessions;
+      }
+    }
 
     // Tìm session rảnh (không bị lock) và dùng lâu nhất
     const idleSessions = sessionsToUse.filter(s => !s.lock).sort((a, b) => a.lastUsedAt - b.lastUsedAt);
@@ -229,7 +239,7 @@ export class VttechApiService implements OnModuleInit {
     
     // 1. Per-session delay
     const sessionElapsed = now - session.lastUsedAt;
-    const sessionMinDelay = 2000; 
+    const sessionMinDelay = 500; 
     if (sessionElapsed < sessionMinDelay) {
       await new Promise(r => setTimeout(r, sessionMinDelay - sessionElapsed));
     }
@@ -536,7 +546,13 @@ export class VttechApiService implements OnModuleInit {
   }
 
   async callHandler(page: string, handler: string, data: any, username?: string) {
-    const session = username ? (this.sessions.find(s => s.username === username) || this.getBestSession()) : this.getBestSession();
+    const session = username ? (this.sessions.find(s => s.username === username) || this.getBestSession(page)) : this.getBestSession(page);
+    
+    if (session.forbiddenEndpoints?.has(page)) {
+      // Cập nhật lastUsedAt để tránh bị chọn liên tục trong round robin khi bị forbidden
+      session.lastUsedAt = Date.now();
+      return null;
+    }
     
     return this.withSessionLock(session, async () => {
       let retryCount = 0;
@@ -582,17 +598,45 @@ export class VttechApiService implements OnModuleInit {
           } as any);
 
           // Check for 302 or 401/400 that indicates session issues
+          const location = response.headers ? response.headers['location'] : undefined;
+          const isPermissionDenied = response.status === 302 && location && 
+                                     (location.includes('index.html') || location === '/' || location.includes('Dashboard'));
+
+          if (isPermissionDenied) {
+            this.log(`🚫 [Loicansua] [${session.username}] Permission Denied for ${page}?handler=${handler} (Redirected to ${location}). Skipping.`);
+            // Tránh đưa các endpoint khách hàng vào blacklist vì lỗi quyền truy cập phụ thuộc vào từng khách hàng cụ thể
+            if (!page.startsWith('/Customer/')) {
+              if (!session.forbiddenEndpoints) {
+                session.forbiddenEndpoints = new Set<string>();
+              }
+              session.forbiddenEndpoints.add(page);
+            }
+            return null;
+          }
+
           const isSessionIssue = response.status === 302 || response.status === 401 || response.status === 400 || 
                                  (typeof response.data === 'string' && 
                                   (response.data.includes('<!DOCTYPE html>') || 
                                    response.data.includes('<title>VTTech Solution</title>') ||
                                    response.data.includes('sys_SecretKey')));
 
-          if (isSessionIssue) {
+           if (isSessionIssue) {
             const reason = response.status === 302 ? 'Redirect' : 
                            response.status === 400 ? 'Bad Request/Token' : 
                            typeof response.data === 'string' && response.data.includes('<title>') ? 'Login Page Redirect' : 'Session Expired';
             
+            if (retryCount > 0) {
+              this.log(`🚫 [Loicansua] [${session.username}] Permanent ${reason} detected (likely Permission Denied) for ${page}?handler=${handler}. Skipping.`);
+              // Tránh đưa các endpoint khách hàng vào blacklist vì lỗi quyền truy cập phụ thuộc vào từng khách hàng cụ thể
+              if (!page.startsWith('/Customer/')) {
+                if (!session.forbiddenEndpoints) {
+                  session.forbiddenEndpoints = new Set<string>();
+                }
+                session.forbiddenEndpoints.add(page);
+              }
+              return null;
+            }
+
             this.log(`⚠️ [Loicansua] [${session.username}] ${reason} detected. Retrying ${retryCount + 1}/${maxRetries}...`);
             
             if (typeof response.data === 'string' && response.data.trim().startsWith('<') && retryCount === maxRetries) {
