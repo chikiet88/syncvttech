@@ -175,6 +175,34 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
             this.logger.warn(`⚠️ Lỗi khôi phục session từ Redis: ${e.message}`);
         }
     }
+    async reloadSessionFromRedis(session) {
+        try {
+            const redis = await this.syncQueue.client;
+            if (!redis)
+                return;
+            const cached = await redis.get(`vttech:session:${session.username}`);
+            if (cached) {
+                try {
+                    const data = JSON.parse(cached);
+                    if (data.token && data.token !== session.token) {
+                        session.token = data.token;
+                        session.secretKey = data.secretKey || null;
+                        session.cookies = data.cookies || [];
+                        session.xsrfToken = data.xsrfToken || null;
+                        session.lastUsedAt = data.lastUsedAt || 0;
+                        this.logger.log(`🔄 [VttechApiService] Đã cập nhật session cho ${session.username} từ Redis.`);
+                    }
+                }
+                catch (pe) {
+                    this.logger.warn(`⚠️ Lỗi parse session JSON khi reload cho ${session.username}: ${pe.message}`);
+                }
+            }
+            session.lastLoadedAt = Date.now();
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ Lỗi reload session từ Redis cho ${session.username}: ${e.message}`);
+        }
+    }
     async saveSessionToRedis(session) {
         try {
             const redis = await this.syncQueue.client;
@@ -529,6 +557,9 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
     }
     async callHandler(page, handler, data, username) {
         const session = username ? (this.sessions.find(s => s.username === username) || this.getBestSession(page)) : this.getBestSession(page);
+        if (!session.lastLoadedAt || Date.now() - session.lastLoadedAt > 30000) {
+            await this.reloadSessionFromRedis(session);
+        }
         if (session.forbiddenEndpoints?.has(page)) {
             session.lastUsedAt = Date.now();
             return null;
@@ -567,17 +598,19 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                         session
                     });
                     const location = response.headers ? response.headers['location'] : undefined;
-                    const isPermissionDenied = response.status === 302 && location &&
+                    const isRedirectToHome = response.status === 302 && location &&
                         (location.includes('index.html') || location === '/' || location.includes('Dashboard'));
-                    if (isPermissionDenied) {
-                        this.log(`🚫 [Loicansua] [${session.username}] Permission Denied for ${page}?handler=${handler} (Redirected to ${location}). Skipping.`);
-                        if (!page.startsWith('/Customer/')) {
-                            if (!session.forbiddenEndpoints) {
-                                session.forbiddenEndpoints = new Set();
+                    if (isRedirectToHome) {
+                        if (retryCount > 0) {
+                            this.log(`🚫 [Loicansua] [${session.username}] Permanent Permission Denied for ${page}?handler=${handler} (Redirected to ${location}). Skipping.`);
+                            if (!page.startsWith('/Customer/')) {
+                                if (!session.forbiddenEndpoints) {
+                                    session.forbiddenEndpoints = new Set();
+                                }
+                                session.forbiddenEndpoints.add(page);
                             }
-                            session.forbiddenEndpoints.add(page);
+                            return null;
                         }
-                        return null;
                     }
                     const isSessionIssue = response.status === 302 || response.status === 401 || response.status === 400 ||
                         (typeof response.data === 'string' &&
@@ -599,6 +632,7 @@ let VttechApiService = VttechApiService_1 = class VttechApiService {
                             return null;
                         }
                         this.log(`⚠️ [Loicansua] [${session.username}] ${reason} detected. Retrying ${retryCount + 1}/${maxRetries}...`);
+                        await this.reloadSessionFromRedis(session);
                         if (typeof response.data === 'string' && response.data.trim().startsWith('<') && retryCount === maxRetries) {
                             this.log(`❌ [Loicansua] [${session.username}] Final attempt failed. HTML snippet: ${response.data.trim().slice(0, 200)}`);
                         }

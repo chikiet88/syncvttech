@@ -394,6 +394,118 @@ export class ExcelExportService {
       { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
     );
 
+    // 6. Push daily combined sheets for the last 7 days of the synced range
+    try {
+      const parseLocal = (dStr: string) => {
+        const separator = dStr.includes('/') ? '/' : '-';
+        const parts = dStr.split(separator);
+        if (parts.length === 3) {
+          if (parts[0].length === 4) {
+            return new Date(dStr);
+          } else {
+            const [d, m, y] = parts;
+            return new Date(`${y}-${m}-${d}`);
+          }
+        }
+        return new Date(dStr);
+      };
+
+      const start = parseLocal(dateFromStr);
+      const end = parseLocal(dateToStr);
+      const days: string[] = [];
+      let curr = new Date(start);
+      curr.setHours(12, 0, 0, 0);
+      const targetEnd = new Date(end);
+      targetEnd.setHours(12, 0, 0, 0);
+
+      while (curr <= targetEnd) {
+        const yyyy = curr.getFullYear();
+        const mm = String(curr.getMonth() + 1).padStart(2, '0');
+        const dd = String(curr.getDate()).padStart(2, '0');
+        days.push(`${yyyy}-${mm}-${dd}`);
+        curr.setDate(curr.getDate() + 1);
+      }
+
+      // Giới hạn tối đa 7 ngày gần nhất để tối ưu hiệu suất và dung lượng
+      const dailyDays = days.slice(-7);
+
+      if (dailyDays.length > 0) {
+        const metaResponse = await axios.get(
+          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const existingSheets = metaResponse.data.sheets || [];
+        const sheetTitles = existingSheets.map((s: any) => s.properties.title);
+
+        const addSheetRequests: any[] = [];
+        for (const dateStr of dailyDays) {
+          const parts = dateStr.split('-');
+          const dailySheetTitle = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : dateStr;
+          
+          if (!sheetTitles.includes(dailySheetTitle)) {
+            addSheetRequests.push({
+              addSheet: {
+                properties: {
+                  title: dailySheetTitle,
+                },
+              },
+            });
+          }
+        }
+
+        if (addSheetRequests.length > 0) {
+          this.logger.log(`Creating ${addSheetRequests.length} daily sheets...`);
+          await axios.post(
+            `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+            { requests: addSheetRequests },
+            { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const clearRanges: string[] = [];
+        const updateData: any[] = [];
+
+        for (const dateStr of dailyDays) {
+          const parts = dateStr.split('-');
+          const dailySheetTitle = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : dateStr;
+          
+          const dailyCombinedRows = [
+            ...tazaRows.filter(row => row.appointment_date === dailySheetTitle),
+            ...timonaRows.filter(row => row.appointment_date === dailySheetTitle)
+          ];
+          
+          const dailyValues = [headers, ...dailyCombinedRows.map(formatRowData)];
+          
+          clearRanges.push(`'${dailySheetTitle}'!A:Z`);
+          updateData.push({
+            range: `'${dailySheetTitle}'!A1`,
+            values: dailyValues
+          });
+        }
+
+        if (clearRanges.length > 0) {
+          this.logger.log(`Clearing daily sheets: ${clearRanges.join(', ')}`);
+          await axios.post(
+            `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`,
+            { ranges: clearRanges },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          this.logger.log(`Writing data to daily sheets...`);
+          await axios.post(
+            `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`,
+            {
+              valueInputOption: 'USER_ENTERED',
+              data: updateData
+            },
+            { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    } catch (e: any) {
+      this.logger.error(`Failed to push daily combined sheets: ${e.message}`, e.stack);
+    }
+
     return {
       tazaCount: tazaRows.length,
       timonaCount: timonaRows.length,
@@ -444,9 +556,20 @@ export class ExcelExportService {
     return response.data.access_token;
   }
 
-  @Cron('0 0 4,23 * * *', {
+  @Cron('0 0 22 * * *', {
     timeZone: 'Asia/Ho_Chi_Minh',
   })
+  async handleGoogleSheetPushCron22() {
+    await this.handleGoogleSheetPushCron();
+  }
+
+  @Cron('0 30 23 * * *', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+  })
+  async handleGoogleSheetPushCron2330() {
+    await this.handleGoogleSheetPushCron();
+  }
+
   async handleGoogleSheetPushCron() {
     const config = await this.prisma.cronConfig.findUnique({ where: { id: 'handleGoogleSheetPushCron' } }).catch(() => null);
     if (config && !config.enabled) {
@@ -456,9 +579,8 @@ export class ExcelExportService {
 
     this.logger.log('[CRON] Bắt đầu tự động đẩy dữ liệu báo cáo lịch hẹn lên Google Sheets...');
     try {
-      const now = new Date();
-      // Format: YYYY-MM-DD
-      const toStr = now.toISOString().split('T')[0];
+      // Format: YYYY-MM-DD in Asia/Ho_Chi_Minh timezone
+      const toStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
       // Từ ngày 01/01/2026 đến nay
       const fromStr = '2026-01-01';
 

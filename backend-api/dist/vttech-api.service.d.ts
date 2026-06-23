@@ -14,6 +14,7 @@ interface VttechSession {
     loginByUsernamePromise: Promise<boolean> | null;
     lock: Promise<void> | null;
     forbiddenEndpoints?: Set<string>;
+    lastLoadedAt?: number;
 }
 export declare class VttechApiService implements OnModuleInit {
     private configService;
@@ -30,6 +31,7 @@ export declare class VttechApiService implements OnModuleInit {
     constructor(configService: ConfigService, syncQueue: Queue);
     onModuleInit(): Promise<void>;
     private loadSessionsFromRedis;
+    private reloadSessionFromRedis;
     private saveSessionToRedis;
     private createNewSession;
     private updateSessionCookies;

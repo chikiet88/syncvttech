@@ -378,7 +378,13 @@ export class SyncService implements OnModuleInit {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const dateStr = yesterday.toISOString().split('T')[0];
-    await this.syncByRange(dateStr, dateStr);
+    
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const dateFromStr = thirtyDaysAgo.toISOString().split('T')[0];
+    
+    this.logger.log(`[CRON] Khởi chạy đồng bộ hàng ngày (30 ngày qua: từ ${dateFromStr} đến ${dateStr})...`);
+    await this.syncByRange(dateFromStr, dateStr);
 
     // Đồng bộ 30 ngày lịch hẹn trước để đảm bảo 100% lịch hẹn trước
     this.logger.log('[CRON] Khởi chạy đồng bộ sâu 30 ngày lịch hẹn trước (daily deep sync)...');
@@ -433,21 +439,27 @@ export class SyncService implements OnModuleInit {
       this.logger.log('🚫 [CRON] handleFrequentSync bị vô hiệu hóa trong cấu hình.');
       return;
     }
-    const today = new Date().toISOString().split('T')[0];
-    this.logger.log(`[CRON] Bắt đầu đồng bộ định kỳ 20p cho ngày ${today}`);
-    // Sync current day without PBX but with detail workers
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    this.logger.log(`[CRON] Bắt đầu đồng bộ định kỳ 20p cho 2 ngày qua: từ ${yesterdayStr} đến ${todayStr}`);
+    // Sync current day and yesterday without PBX but with detail workers
     try {
       if (this.syncStatus.isSyncing) {
         this.addLog('⏩ Đồng bộ định kỳ 20p bỏ qua do hệ thống đang bận.');
         return;
       }
-      await this.syncByRange(today, today, false, false, true);
+      await this.syncByRange(yesterdayStr, todayStr, false, false, true);
       await this.prisma.crawlLog.create({
         data: {
           crawl_date: new Date(),
           crawl_type: 'handleFrequentSync',
           status: 'success',
-          message: `Đồng bộ nhanh ngày hiện tại (${today}) thành công`,
+          message: `Đồng bộ nhanh từ ${yesterdayStr} đến ${todayStr} thành công`,
         }
       }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
     } catch (e: any) {
@@ -1082,11 +1094,20 @@ export class SyncService implements OnModuleInit {
           let daySales = 0;
           let dayRevenue = 0;
           try {
-            const [revData, payData, depData] = await Promise.all([
-              this.vttechApi.getRevenueByBranch(dateStr, dateStr, branch.id).then((r: any) => this.ensureArray(r)),
-              this.vttechApi.getPaymentByBranch(dateStr, dateStr, branch.id).then((r: any) => this.ensureArray(r)),
-              this.vttechApi.getDepositByBranch(dateStr, dateStr, branch.id).then((r: any) => this.ensureArray(r)),
+            const [rawRev, rawPay, rawDep] = await Promise.all([
+              this.vttechApi.getRevenueByBranch(dateStr, dateStr, branch.id),
+              this.vttechApi.getPaymentByBranch(dateStr, dateStr, branch.id),
+              this.vttechApi.getDepositByBranch(dateStr, dateStr, branch.id),
             ]);
+
+            // Kiểm tra nếu có bất kỳ nguồn dữ liệu nào trả về null (lỗi session/redirect)
+            if (rawRev === null || rawPay === null || rawDep === null) {
+              throw new Error(`Nhận được dữ liệu null từ API VTTech (Rev: ${rawRev === null}, Pay: ${rawPay === null}, Dep: ${rawDep === null}). Bỏ qua đồng bộ chi nhánh này để tránh xóa dữ liệu.`);
+            }
+
+            const revData = this.ensureArray(rawRev);
+            const payData = this.ensureArray(rawPay);
+            const depData = this.ensureArray(rawDep);
 
             // 1. Khử trùng dữ liệu thô THÔNG MINH (Invoice + Amount)
             const deduplicatedMap = new Map<string, any>();
@@ -1242,6 +1263,10 @@ export class SyncService implements OnModuleInit {
 
       if (dataItems.length > 0) {
         this.addLog(`  📥 Nhận được ${dataItems.length} khách hàng từ bản ghi thứ ${start} (Type: ${type})`);
+        
+        // Cập nhật message để hiển thị số lượng bản ghi đã xử lý lên UI
+        const baseMsg = this.syncStatus.message.split(' (Đã quét')[0];
+        this.syncStatus.message = `${baseMsg} (Đã quét ${start + dataItems.length} KH loại ${type})`;
         for (const c of dataItems) {
           try {
             const id = parseInt(c.CustID || c.ID || c.id);
@@ -1392,6 +1417,9 @@ export class SyncService implements OnModuleInit {
     // this.logger.log(`  📥 [Appointment] Branch ${branchId}: Got ${dataItems.length} records.`);
 
     if (dataItems.length > 0) {
+      // Cập nhật message để hiển thị số lượng lịch hẹn đã quét
+      const baseMsg = this.syncStatus.message.split(' (Đã quét')[0];
+      this.syncStatus.message = `${baseMsg} (Đã quét ${dataItems.length} lịch hẹn)`;
       for (const a of dataItems) {
         try {
           const id = parseInt(a.ID || a.ScheduleID || a.id || a.AppID);

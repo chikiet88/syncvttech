@@ -19,6 +19,7 @@ interface VttechSession {
   loginByUsernamePromise: Promise<boolean> | null;
   lock: Promise<void> | null;
   forbiddenEndpoints?: Set<string>;
+  lastLoadedAt?: number;
 }
 
 @Injectable()
@@ -147,6 +148,32 @@ export class VttechApiService implements OnModuleInit {
       }
     } catch (e) {
       this.logger.warn(`⚠️ Lỗi khôi phục session từ Redis: ${e.message}`);
+    }
+  }
+
+  private async reloadSessionFromRedis(session: VttechSession) {
+    try {
+      const redis = await (this.syncQueue as any).client;
+      if (!redis) return;
+      const cached = await redis.get(`vttech:session:${session.username}`);
+      if (cached) {
+        try {
+          const data = JSON.parse(cached);
+          if (data.token && data.token !== session.token) {
+            session.token = data.token;
+            session.secretKey = data.secretKey || null;
+            session.cookies = data.cookies || [];
+            session.xsrfToken = data.xsrfToken || null;
+            session.lastUsedAt = data.lastUsedAt || 0;
+            this.logger.log(`🔄 [VttechApiService] Đã cập nhật session cho ${session.username} từ Redis.`);
+          }
+        } catch (pe: any) {
+          this.logger.warn(`⚠️ Lỗi parse session JSON khi reload cho ${session.username}: ${pe.message}`);
+        }
+      }
+      session.lastLoadedAt = Date.now();
+    } catch (e: any) {
+      this.logger.warn(`⚠️ Lỗi reload session từ Redis cho ${session.username}: ${e.message}`);
     }
   }
 
@@ -548,6 +575,11 @@ export class VttechApiService implements OnModuleInit {
   async callHandler(page: string, handler: string, data: any, username?: string) {
     const session = username ? (this.sessions.find(s => s.username === username) || this.getBestSession(page)) : this.getBestSession(page);
     
+    // Reload session from Redis if cache is older than 30 seconds
+    if (!session.lastLoadedAt || Date.now() - session.lastLoadedAt > 30000) {
+      await this.reloadSessionFromRedis(session);
+    }
+    
     if (session.forbiddenEndpoints?.has(page)) {
       // Cập nhật lastUsedAt để tránh bị chọn liên tục trong round robin khi bị forbidden
       session.lastUsedAt = Date.now();
@@ -599,19 +631,23 @@ export class VttechApiService implements OnModuleInit {
 
           // Check for 302 or 401/400 that indicates session issues
           const location = response.headers ? response.headers['location'] : undefined;
-          const isPermissionDenied = response.status === 302 && location && 
-                                     (location.includes('index.html') || location === '/' || location.includes('Dashboard'));
+          const isRedirectToHome = response.status === 302 && location && 
+                                   (location.includes('index.html') || location === '/' || location.includes('Dashboard'));
 
-          if (isPermissionDenied) {
-            this.log(`🚫 [Loicansua] [${session.username}] Permission Denied for ${page}?handler=${handler} (Redirected to ${location}). Skipping.`);
-            // Tránh đưa các endpoint khách hàng vào blacklist vì lỗi quyền truy cập phụ thuộc vào từng khách hàng cụ thể
-            if (!page.startsWith('/Customer/')) {
-              if (!session.forbiddenEndpoints) {
-                session.forbiddenEndpoints = new Set<string>();
+          if (isRedirectToHome) {
+            if (retryCount > 0) {
+              // Đã re-login ở lần thử trước nhưng vẫn bị redirect -> lỗi quyền truy cập thực sự
+              this.log(`🚫 [Loicansua] [${session.username}] Permanent Permission Denied for ${page}?handler=${handler} (Redirected to ${location}). Skipping.`);
+              // Tránh đưa các endpoint khách hàng vào blacklist vì lỗi quyền truy cập phụ thuộc vào từng khách hàng cụ thể
+              if (!page.startsWith('/Customer/')) {
+                if (!session.forbiddenEndpoints) {
+                  session.forbiddenEndpoints = new Set<string>();
+                }
+                session.forbiddenEndpoints.add(page);
               }
-              session.forbiddenEndpoints.add(page);
+              return null;
             }
-            return null;
+            // Nếu retryCount === 0, coi như lỗi session hết hạn để nhảy xuống phần retry & re-login bên dưới
           }
 
           const isSessionIssue = response.status === 302 || response.status === 401 || response.status === 400 || 
@@ -638,6 +674,9 @@ export class VttechApiService implements OnModuleInit {
             }
 
             this.log(`⚠️ [Loicansua] [${session.username}] ${reason} detected. Retrying ${retryCount + 1}/${maxRetries}...`);
+            
+            // Reload from Redis to see if another worker refreshed the session already
+            await this.reloadSessionFromRedis(session);
             
             if (typeof response.data === 'string' && response.data.trim().startsWith('<') && retryCount === maxRetries) {
               this.log(`❌ [Loicansua] [${session.username}] Final attempt failed. HTML snippet: ${response.data.trim().slice(0, 200)}`);

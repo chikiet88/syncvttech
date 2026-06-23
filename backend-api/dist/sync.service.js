@@ -380,7 +380,11 @@ let SyncService = SyncService_1 = class SyncService {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         const dateStr = yesterday.toISOString().split('T')[0];
-        await this.syncByRange(dateStr, dateStr);
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const dateFromStr = thirtyDaysAgo.toISOString().split('T')[0];
+        this.logger.log(`[CRON] Khởi chạy đồng bộ hàng ngày (30 ngày qua: từ ${dateFromStr} đến ${dateStr})...`);
+        await this.syncByRange(dateFromStr, dateStr);
         this.logger.log('[CRON] Khởi chạy đồng bộ sâu 30 ngày lịch hẹn trước (daily deep sync)...');
         await this.syncFutureAppointments(30).catch(err => {
             this.logger.error(`Lỗi đồng bộ lịch hẹn trước 30 ngày: ${err.message}`);
@@ -430,20 +434,24 @@ let SyncService = SyncService_1 = class SyncService {
             this.logger.log('🚫 [CRON] handleFrequentSync bị vô hiệu hóa trong cấu hình.');
             return;
         }
-        const today = new Date().toISOString().split('T')[0];
-        this.logger.log(`[CRON] Bắt đầu đồng bộ định kỳ 20p cho ngày ${today}`);
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        this.logger.log(`[CRON] Bắt đầu đồng bộ định kỳ 20p cho 2 ngày qua: từ ${yesterdayStr} đến ${todayStr}`);
         try {
             if (this.syncStatus.isSyncing) {
                 this.addLog('⏩ Đồng bộ định kỳ 20p bỏ qua do hệ thống đang bận.');
                 return;
             }
-            await this.syncByRange(today, today, false, false, true);
+            await this.syncByRange(yesterdayStr, todayStr, false, false, true);
             await this.prisma.crawlLog.create({
                 data: {
                     crawl_date: new Date(),
                     crawl_type: 'handleFrequentSync',
                     status: 'success',
-                    message: `Đồng bộ nhanh ngày hiện tại (${today}) thành công`,
+                    message: `Đồng bộ nhanh từ ${yesterdayStr} đến ${todayStr} thành công`,
                 }
             }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
         }
@@ -990,11 +998,17 @@ let SyncService = SyncService_1 = class SyncService {
                     let daySales = 0;
                     let dayRevenue = 0;
                     try {
-                        const [revData, payData, depData] = await Promise.all([
-                            this.vttechApi.getRevenueByBranch(dateStr, dateStr, branch.id).then((r) => this.ensureArray(r)),
-                            this.vttechApi.getPaymentByBranch(dateStr, dateStr, branch.id).then((r) => this.ensureArray(r)),
-                            this.vttechApi.getDepositByBranch(dateStr, dateStr, branch.id).then((r) => this.ensureArray(r)),
+                        const [rawRev, rawPay, rawDep] = await Promise.all([
+                            this.vttechApi.getRevenueByBranch(dateStr, dateStr, branch.id),
+                            this.vttechApi.getPaymentByBranch(dateStr, dateStr, branch.id),
+                            this.vttechApi.getDepositByBranch(dateStr, dateStr, branch.id),
                         ]);
+                        if (rawRev === null || rawPay === null || rawDep === null) {
+                            throw new Error(`Nhận được dữ liệu null từ API VTTech (Rev: ${rawRev === null}, Pay: ${rawPay === null}, Dep: ${rawDep === null}). Bỏ qua đồng bộ chi nhánh này để tránh xóa dữ liệu.`);
+                        }
+                        const revData = this.ensureArray(rawRev);
+                        const payData = this.ensureArray(rawPay);
+                        const depData = this.ensureArray(rawDep);
                         const deduplicatedMap = new Map();
                         [...revData, ...payData, ...depData].forEach(item => {
                             const financialKey = `${item.doc_code || 'none'}-${item.CustomerID || '0'}-${item.PriceDiscounted || 0}`;
@@ -1130,6 +1144,8 @@ let SyncService = SyncService_1 = class SyncService {
             const dataItems = this.ensureArray(res);
             if (dataItems.length > 0) {
                 this.addLog(`  📥 Nhận được ${dataItems.length} khách hàng từ bản ghi thứ ${start} (Type: ${type})`);
+                const baseMsg = this.syncStatus.message.split(' (Đã quét')[0];
+                this.syncStatus.message = `${baseMsg} (Đã quét ${start + dataItems.length} KH loại ${type})`;
                 for (const c of dataItems) {
                     try {
                         const id = parseInt(c.CustID || c.ID || c.id);
@@ -1265,6 +1281,8 @@ let SyncService = SyncService_1 = class SyncService {
         }
         const dataItems = this.ensureArray(res);
         if (dataItems.length > 0) {
+            const baseMsg = this.syncStatus.message.split(' (Đã quét')[0];
+            this.syncStatus.message = `${baseMsg} (Đã quét ${dataItems.length} lịch hẹn)`;
             for (const a of dataItems) {
                 try {
                     const id = parseInt(a.ID || a.ScheduleID || a.id || a.AppID);

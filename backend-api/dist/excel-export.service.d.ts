@@ -11,5 +11,7 @@ export declare class ExcelExportService {
         url: string;
     }>;
     private getGoogleSheetsAccessToken;
+    handleGoogleSheetPushCron22(): Promise<void>;
+    handleGoogleSheetPushCron2330(): Promise<void>;
     handleGoogleSheetPushCron(): Promise<void>;
 }

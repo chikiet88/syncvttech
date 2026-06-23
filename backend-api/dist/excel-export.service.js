@@ -367,6 +367,88 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
         this.logger.log(`Clearing and writing ${timonaRows.length} rows to Timona sheet`);
         await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Timona!A:Z:clear`, {}, { headers: { Authorization: `Bearer ${token}` } });
         await axios_1.default.put(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Timona!A1?valueInputOption=USER_ENTERED`, { values: timonaValues }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+        try {
+            const parseLocal = (dStr) => {
+                const separator = dStr.includes('/') ? '/' : '-';
+                const parts = dStr.split(separator);
+                if (parts.length === 3) {
+                    if (parts[0].length === 4) {
+                        return new Date(dStr);
+                    }
+                    else {
+                        const [d, m, y] = parts;
+                        return new Date(`${y}-${m}-${d}`);
+                    }
+                }
+                return new Date(dStr);
+            };
+            const start = parseLocal(dateFromStr);
+            const end = parseLocal(dateToStr);
+            const days = [];
+            let curr = new Date(start);
+            curr.setHours(12, 0, 0, 0);
+            const targetEnd = new Date(end);
+            targetEnd.setHours(12, 0, 0, 0);
+            while (curr <= targetEnd) {
+                const yyyy = curr.getFullYear();
+                const mm = String(curr.getMonth() + 1).padStart(2, '0');
+                const dd = String(curr.getDate()).padStart(2, '0');
+                days.push(`${yyyy}-${mm}-${dd}`);
+                curr.setDate(curr.getDate() + 1);
+            }
+            const dailyDays = days.slice(-7);
+            if (dailyDays.length > 0) {
+                const metaResponse = await axios_1.default.get(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, { headers: { Authorization: `Bearer ${token}` } });
+                const existingSheets = metaResponse.data.sheets || [];
+                const sheetTitles = existingSheets.map((s) => s.properties.title);
+                const addSheetRequests = [];
+                for (const dateStr of dailyDays) {
+                    const parts = dateStr.split('-');
+                    const dailySheetTitle = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : dateStr;
+                    if (!sheetTitles.includes(dailySheetTitle)) {
+                        addSheetRequests.push({
+                            addSheet: {
+                                properties: {
+                                    title: dailySheetTitle,
+                                },
+                            },
+                        });
+                    }
+                }
+                if (addSheetRequests.length > 0) {
+                    this.logger.log(`Creating ${addSheetRequests.length} daily sheets...`);
+                    await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, { requests: addSheetRequests }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+                }
+                const clearRanges = [];
+                const updateData = [];
+                for (const dateStr of dailyDays) {
+                    const parts = dateStr.split('-');
+                    const dailySheetTitle = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : dateStr;
+                    const dailyCombinedRows = [
+                        ...tazaRows.filter(row => row.appointment_date === dailySheetTitle),
+                        ...timonaRows.filter(row => row.appointment_date === dailySheetTitle)
+                    ];
+                    const dailyValues = [headers, ...dailyCombinedRows.map(formatRowData)];
+                    clearRanges.push(`'${dailySheetTitle}'!A:Z`);
+                    updateData.push({
+                        range: `'${dailySheetTitle}'!A1`,
+                        values: dailyValues
+                    });
+                }
+                if (clearRanges.length > 0) {
+                    this.logger.log(`Clearing daily sheets: ${clearRanges.join(', ')}`);
+                    await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`, { ranges: clearRanges }, { headers: { Authorization: `Bearer ${token}` } });
+                    this.logger.log(`Writing data to daily sheets...`);
+                    await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
+                        valueInputOption: 'USER_ENTERED',
+                        data: updateData
+                    }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+                }
+            }
+        }
+        catch (e) {
+            this.logger.error(`Failed to push daily combined sheets: ${e.message}`, e.stack);
+        }
         return {
             tazaCount: tazaRows.length,
             timonaCount: timonaRows.length,
@@ -408,6 +490,12 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
         });
         return response.data.access_token;
     }
+    async handleGoogleSheetPushCron22() {
+        await this.handleGoogleSheetPushCron();
+    }
+    async handleGoogleSheetPushCron2330() {
+        await this.handleGoogleSheetPushCron();
+    }
     async handleGoogleSheetPushCron() {
         const config = await this.prisma.cronConfig.findUnique({ where: { id: 'handleGoogleSheetPushCron' } }).catch(() => null);
         if (config && !config.enabled) {
@@ -416,8 +504,7 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
         }
         this.logger.log('[CRON] Bắt đầu tự động đẩy dữ liệu báo cáo lịch hẹn lên Google Sheets...');
         try {
-            const now = new Date();
-            const toStr = now.toISOString().split('T')[0];
+            const toStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
             const fromStr = '2026-01-01';
             this.logger.log(`[CRON] Khoảng ngày tự động đẩy: ${fromStr} -> ${toStr}`);
             const result = await this.pushToGoogleSheet(fromStr, toStr);
@@ -447,13 +534,21 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
 };
 exports.ExcelExportService = ExcelExportService;
 __decorate([
-    (0, schedule_1.Cron)('0 0 4,23 * * *', {
+    (0, schedule_1.Cron)('0 0 22 * * *', {
         timeZone: 'Asia/Ho_Chi_Minh',
     }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
-], ExcelExportService.prototype, "handleGoogleSheetPushCron", null);
+], ExcelExportService.prototype, "handleGoogleSheetPushCron22", null);
+__decorate([
+    (0, schedule_1.Cron)('0 30 23 * * *', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+    }),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], ExcelExportService.prototype, "handleGoogleSheetPushCron2330", null);
 exports.ExcelExportService = ExcelExportService = ExcelExportService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService])
