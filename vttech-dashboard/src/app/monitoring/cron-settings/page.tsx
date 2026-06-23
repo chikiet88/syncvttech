@@ -265,7 +265,7 @@ export default function CronSettingsPage() {
       case 'handleStaleTasksCron': return '0 */10 * * * * (Mỗi 10 phút)'
       case 'handleQueueCleanupCron': return '0 0 * * * * (Mỗi 1 giờ)'
       case 'handleDailyReporting': return '0 0 8,20 * * * (08:00 & 20:00 hàng ngày)'
-      case 'handleGoogleSheetPushCron': return '0 0 4,23 * * * (04:00 & 23:00 hàng ngày)'
+      case 'handleGoogleSheetPushCron': return '22:00 & 23:30 hàng ngày'
       
       // Các tab cron jobs
       case 'syncTabGeneralInfo': return 'Chạy theo Đồng bộ hàng ngày (00:00)'

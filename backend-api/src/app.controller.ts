@@ -273,7 +273,7 @@ export class AppController {
         id: 'handleGoogleSheetPushCron',
         name: 'Tự động đẩy báo cáo lịch hẹn lên Google Sheets',
         enabled: true,
-        description: 'Tự động tổng hợp và đẩy báo cáo lịch hẹn tháng hiện tại lên Google Sheets lúc 04:00 và 23:00 hàng ngày (Giờ Việt Nam).',
+        description: 'Tự động tổng hợp và đẩy báo cáo lịch hẹn tháng hiện tại lên Google Sheets lúc 22:00 và 23:30 hàng ngày (Giờ Việt Nam).',
       },
       {
         id: 'syncTabGeneralInfo',
