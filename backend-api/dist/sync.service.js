@@ -313,6 +313,9 @@ let SyncService = SyncService_1 = class SyncService {
         }
         return resolvedId;
     }
+    getVietnamDateString(date = new Date()) {
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(date);
+    }
     parseDate(dateValue) {
         if (!dateValue)
             return null;
@@ -379,10 +382,10 @@ let SyncService = SyncService_1 = class SyncService {
         }
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const dateStr = yesterday.toISOString().split('T')[0];
+        const dateStr = this.getVietnamDateString(yesterday);
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const dateFromStr = thirtyDaysAgo.toISOString().split('T')[0];
+        const dateFromStr = this.getVietnamDateString(thirtyDaysAgo);
         this.logger.log(`[CRON] Khởi chạy đồng bộ hàng ngày (30 ngày qua: từ ${dateFromStr} đến ${dateStr})...`);
         await this.syncByRange(dateFromStr, dateStr);
         this.logger.log('[CRON] Khởi chạy đồng bộ sâu 30 ngày lịch hẹn trước (daily deep sync)...');
@@ -435,10 +438,10 @@ let SyncService = SyncService_1 = class SyncService {
             return;
         }
         const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
+        const todayStr = this.getVietnamDateString(today);
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const yesterdayStr = this.getVietnamDateString(yesterday);
         this.logger.log(`[CRON] Bắt đầu đồng bộ định kỳ 20p cho 2 ngày qua: từ ${yesterdayStr} đến ${todayStr}`);
         try {
             if (this.syncStatus.isSyncing) {
@@ -491,7 +494,7 @@ let SyncService = SyncService_1 = class SyncService {
             for (let i = 1; i <= daysAhead; i++) {
                 const nextDay = new Date(today);
                 nextDay.setDate(today.getDate() + i);
-                dates.push(nextDay.toISOString().split('T')[0]);
+                dates.push(this.getVietnamDateString(nextDay));
             }
             this.addLog(`🔮 Đồng bộ lịch hẹn trước cho các ngày: ${dates.join(', ')}`);
             const loggedIn = await this.vttechApi.login();
@@ -843,14 +846,14 @@ let SyncService = SyncService_1 = class SyncService {
         if (start <= end) {
             let currentDay = new Date(start);
             while (currentDay <= end) {
-                days.push(currentDay.toISOString().split('T')[0]);
+                days.push(this.getVietnamDateString(currentDay));
                 currentDay.setDate(currentDay.getDate() + 1);
             }
         }
         else {
             let currentDay = new Date(start);
             while (currentDay >= end) {
-                days.push(currentDay.toISOString().split('T')[0]);
+                days.push(this.getVietnamDateString(currentDay));
                 currentDay.setDate(currentDay.getDate() - 1);
             }
         }
@@ -945,14 +948,14 @@ let SyncService = SyncService_1 = class SyncService {
             if (start <= end) {
                 let curr = new Date(start);
                 while (curr <= end) {
-                    days.push(curr.toISOString().split('T')[0]);
+                    days.push(this.getVietnamDateString(curr));
                     curr.setDate(curr.getDate() + 1);
                 }
             }
             else {
                 let curr = new Date(start);
                 while (curr >= end) {
-                    days.push(curr.toISOString().split('T')[0]);
+                    days.push(this.getVietnamDateString(curr));
                     curr.setDate(curr.getDate() - 1);
                 }
             }
@@ -2077,7 +2080,7 @@ let SyncService = SyncService_1 = class SyncService {
                     const items = this.ensureArray(services);
                     for (const s of items) {
                         const sDate = this.parseDate(s.Created || s.Date);
-                        const isToday = syncDate && sDate && sDate.toISOString().split('T')[0] === syncDate;
+                        const isToday = syncDate && sDate && this.getVietnamDateString(sDate) === syncDate;
                         if (isToday)
                             stats.services++;
                         const sId = parseInt(s.ID || s.id);
@@ -2113,7 +2116,7 @@ let SyncService = SyncService_1 = class SyncService {
                     const items = this.ensureArray(treatments);
                     for (const t of items) {
                         const tDate = this.parseDate(t.Date || t.Created);
-                        const tDateStr = tDate ? tDate.toISOString().split('T')[0] : null;
+                        const tDateStr = tDate ? this.getVietnamDateString(tDate) : null;
                         const isToday = syncDate && tDateStr === syncDate;
                         if (isToday)
                             stats.treatments++;

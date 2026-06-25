@@ -11,11 +11,18 @@ async function main() {
   try {
     await excelExportService.handleGoogleSheetPushCron();
     console.log('✅ Chạy hoàn tất handleGoogleSheetPushCron!');
+    process.exit(0);
   } catch (error: any) {
     console.error('❌ Lỗi khi chạy cron job:', error.message, error.stack);
+    process.exit(1);
   } finally {
-    await app.close();
+    try {
+      await app.close();
+    } catch {}
   }
 }
 
-main().catch(console.error);
+main().catch(err => {
+  console.error('❌ Lỗi khởi tạo ứng dụng:', err);
+  process.exit(1);
+});

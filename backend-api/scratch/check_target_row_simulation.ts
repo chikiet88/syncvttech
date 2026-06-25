@@ -50,9 +50,10 @@ async function main() {
     where: {
       AND: whereAndConditions
     },
-    orderBy: {
-      appointment_date: 'asc'
-    }
+    orderBy: [
+      { appointment_date: 'asc' },
+      { id: 'asc' }
+    ]
   });
 
   console.log(`Total Taza sheet rows fetched: ${appointments.length}`);

@@ -60,7 +60,7 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async getFormattedAppointmentsData(dateFromStr, dateToStr, branchId, sortOrder = 'asc') {
+    async getFormattedAppointmentsData(dateFromStr, dateToStr, branchId, sortOrder = 'asc', allAppointments = false) {
         const parseDate = (dStr, isEnd) => {
             if (!dStr)
                 return new Date();
@@ -125,28 +125,30 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
                 },
             });
         }
-        whereAndConditions.push({
-            OR: [
-                { status_name: { contains: 'Ra Về', mode: 'insensitive' } },
-                {
-                    AND: [
-                        { OR: [{ status_name: null }, { status_name: '' }] },
-                        { OR: [{ status: 2 }, { status: 4 }] }
-                    ]
-                }
-            ]
-        });
-        whereAndConditions.push({
-            OR: [
-                { type_name: { contains: 'tư vấn', mode: 'insensitive' } },
-                {
-                    AND: [
-                        { OR: [{ type_name: null }, { type_name: '' }] },
-                        { service_name: { contains: 'tư vấn', mode: 'insensitive' } }
-                    ]
-                }
-            ]
-        });
+        if (!allAppointments) {
+            whereAndConditions.push({
+                OR: [
+                    { status_name: { contains: 'Ra Về', mode: 'insensitive' } },
+                    {
+                        AND: [
+                            { OR: [{ status_name: null }, { status_name: '' }] },
+                            { OR: [{ status: 2 }, { status: 4 }] }
+                        ]
+                    }
+                ]
+            });
+            whereAndConditions.push({
+                OR: [
+                    { type_name: { contains: 'tư vấn', mode: 'insensitive' } },
+                    {
+                        AND: [
+                            { OR: [{ type_name: null }, { type_name: '' }] },
+                            { service_name: { contains: 'tư vấn', mode: 'insensitive' } }
+                        ]
+                    }
+                ]
+            });
+        }
         where.AND = whereAndConditions;
         const [appointments, services, groups] = await Promise.all([
             this.prisma.appointment.findMany({
@@ -159,9 +161,10 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
                     },
                     branch: true,
                 },
-                orderBy: {
-                    appointment_date: sortOrder,
-                },
+                orderBy: [
+                    { appointment_date: sortOrder },
+                    { id: sortOrder }
+                ],
             }),
             this.prisma.service.findMany({ select: { id: true, name: true, group_id: true } }),
             this.prisma.serviceGroup.findMany({ select: { id: true, name: true } }),
@@ -280,8 +283,8 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
         const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
         return buffer;
     }
-    async pushToGoogleSheet(dateFromStr, dateToStr) {
-        this.logger.log(`Pushing appointments to Google Sheets for range: ${dateFromStr} to ${dateToStr}`);
+    async pushToGoogleSheet(dateFromStr, dateToStr, spreadsheetId = '1pjsiXsQYYpS6ebn4erJxfa3PAHZHURvAdXxeQkSy-Bg', allAppointments = true) {
+        this.logger.log(`Pushing appointments to Google Sheets for range: ${dateFromStr} to ${dateToStr} (ID: ${spreadsheetId})`);
         let clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
         let privateKey = process.env.GOOGLE_PRIVATE_KEY;
         if (!clientEmail || !privateKey) {
@@ -332,9 +335,21 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
             throw new Error('Google Service Account credentials are not configured. Please set GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_SERVICE_ACCOUNT_KEY_PATH in .env');
         }
         const token = await this.getGoogleSheetsAccessToken(clientEmail, privateKey);
-        const tazaRows = await this.getFormattedAppointmentsData(dateFromStr, dateToStr, 'taza', 'asc');
-        const timonaRows = await this.getFormattedAppointmentsData(dateFromStr, dateToStr, 'timona', 'asc');
-        const spreadsheetId = '1G_R_JeKOQhvKj_F_fXmfSfsgIupYyJmgvq22s2Jk7GU';
+        const readSheetCodes = async (sheetName) => {
+            try {
+                this.logger.log(`Reading existing codes from ${sheetName} sheet...`);
+                const response = await axios_1.default.get(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A:A`, { headers: { Authorization: `Bearer ${token}` } });
+                const rows = response.data.values || [];
+                const codes = rows.slice(1).map((r) => r[0]).filter(Boolean);
+                return new Set(codes);
+            }
+            catch (err) {
+                this.logger.error(`Failed to read sheet codes for ${sheetName}: ${err.message}`);
+                return new Set();
+            }
+        };
+        const tazaRows = await this.getFormattedAppointmentsData(dateFromStr, dateToStr, 'taza', 'asc', allAppointments);
+        const timonaRows = await this.getFormattedAppointmentsData(dateFromStr, dateToStr, 'timona', 'asc', allAppointments);
         const headers = [
             'Mã lịch hẹn',
             'MLH&KH',
@@ -359,99 +374,133 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
             row.sale_time_date,
             row.source_name,
         ];
+        const tazaExistingCodes = await readSheetCodes('Taza');
+        const timonaExistingCodes = await readSheetCodes('Timona');
+        const newTazaRows = tazaRows.filter(row => !tazaExistingCodes.has(row.vttech_code));
+        const newTimonaRows = timonaRows.filter(row => !timonaExistingCodes.has(row.vttech_code));
         const tazaValues = [headers, ...tazaRows.map(formatRowData)];
         const timonaValues = [headers, ...timonaRows.map(formatRowData)];
-        this.logger.log(`Clearing and writing ${tazaRows.length} rows to Taza sheet`);
-        await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Taza!A:Z:clear`, {}, { headers: { Authorization: `Bearer ${token}` } });
-        await axios_1.default.put(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Taza!A1?valueInputOption=USER_ENTERED`, { values: tazaValues }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
-        this.logger.log(`Clearing and writing ${timonaRows.length} rows to Timona sheet`);
-        await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Timona!A:Z:clear`, {}, { headers: { Authorization: `Bearer ${token}` } });
-        await axios_1.default.put(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Timona!A1?valueInputOption=USER_ENTERED`, { values: timonaValues }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+        const newTazaValues = newTazaRows.map(formatRowData);
+        const newTimonaValues = newTimonaRows.map(formatRowData);
         try {
-            const parseLocal = (dStr) => {
-                const separator = dStr.includes('/') ? '/' : '-';
-                const parts = dStr.split(separator);
-                if (parts.length === 3) {
-                    if (parts[0].length === 4) {
-                        return new Date(dStr);
+            this.logger.log('Checking spreadsheet sheets metadata...');
+            const metaResponse = await axios_1.default.get(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, { headers: { Authorization: `Bearer ${token}` } });
+            const existingSheets = metaResponse.data.sheets || [];
+            const tazaSheet = existingSheets.find((s) => s.properties.title === 'Taza');
+            const timonaSheet = existingSheets.find((s) => s.properties.title === 'Timona');
+            const batchRequests = [];
+            const tazaTargetRowCount = tazaExistingCodes.size === 0
+                ? Math.max(tazaRows.length + 1000, 1000)
+                : Math.max(tazaExistingCodes.size + newTazaRows.length + 1000, 1000);
+            const timonaTargetRowCount = timonaExistingCodes.size === 0
+                ? Math.max(timonaRows.length + 1000, 1000)
+                : Math.max(timonaExistingCodes.size + newTimonaRows.length + 1000, 1000);
+            if (!tazaSheet) {
+                batchRequests.push({
+                    addSheet: {
+                        properties: {
+                            title: 'Taza',
+                            gridProperties: { rowCount: tazaTargetRowCount }
+                        }
                     }
-                    else {
-                        const [d, m, y] = parts;
-                        return new Date(`${y}-${m}-${d}`);
-                    }
-                }
-                return new Date(dStr);
-            };
-            const start = parseLocal(dateFromStr);
-            const end = parseLocal(dateToStr);
-            const days = [];
-            let curr = new Date(start);
-            curr.setHours(12, 0, 0, 0);
-            const targetEnd = new Date(end);
-            targetEnd.setHours(12, 0, 0, 0);
-            while (curr <= targetEnd) {
-                const yyyy = curr.getFullYear();
-                const mm = String(curr.getMonth() + 1).padStart(2, '0');
-                const dd = String(curr.getDate()).padStart(2, '0');
-                days.push(`${yyyy}-${mm}-${dd}`);
-                curr.setDate(curr.getDate() + 1);
+                });
             }
-            const dailyDays = days.slice(-7);
-            if (dailyDays.length > 0) {
-                const metaResponse = await axios_1.default.get(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, { headers: { Authorization: `Bearer ${token}` } });
-                const existingSheets = metaResponse.data.sheets || [];
-                const sheetTitles = existingSheets.map((s) => s.properties.title);
-                const addSheetRequests = [];
-                for (const dateStr of dailyDays) {
-                    const parts = dateStr.split('-');
-                    const dailySheetTitle = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : dateStr;
-                    if (!sheetTitles.includes(dailySheetTitle)) {
-                        addSheetRequests.push({
-                            addSheet: {
-                                properties: {
-                                    title: dailySheetTitle,
-                                },
+            else {
+                const currentRows = tazaSheet.properties.gridProperties?.rowCount || 0;
+                if (currentRows < tazaTargetRowCount) {
+                    this.logger.log(`Resizing Taza sheet from ${currentRows} to ${tazaTargetRowCount} rows`);
+                    batchRequests.push({
+                        updateSheetProperties: {
+                            properties: {
+                                sheetId: tazaSheet.properties.sheetId,
+                                gridProperties: { rowCount: tazaTargetRowCount }
                             },
-                        });
-                    }
-                }
-                if (addSheetRequests.length > 0) {
-                    this.logger.log(`Creating ${addSheetRequests.length} daily sheets...`);
-                    await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, { requests: addSheetRequests }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
-                }
-                const clearRanges = [];
-                const updateData = [];
-                for (const dateStr of dailyDays) {
-                    const parts = dateStr.split('-');
-                    const dailySheetTitle = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : dateStr;
-                    const dailyCombinedRows = [
-                        ...tazaRows.filter(row => row.appointment_date === dailySheetTitle),
-                        ...timonaRows.filter(row => row.appointment_date === dailySheetTitle)
-                    ];
-                    const dailyValues = [headers, ...dailyCombinedRows.map(formatRowData)];
-                    clearRanges.push(`'${dailySheetTitle}'!A:Z`);
-                    updateData.push({
-                        range: `'${dailySheetTitle}'!A1`,
-                        values: dailyValues
+                            fields: 'gridProperties.rowCount'
+                        }
                     });
                 }
-                if (clearRanges.length > 0) {
-                    this.logger.log(`Clearing daily sheets: ${clearRanges.join(', ')}`);
-                    await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`, { ranges: clearRanges }, { headers: { Authorization: `Bearer ${token}` } });
-                    this.logger.log(`Writing data to daily sheets...`);
-                    await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
-                        valueInputOption: 'USER_ENTERED',
-                        data: updateData
-                    }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+            }
+            if (!timonaSheet) {
+                batchRequests.push({
+                    addSheet: {
+                        properties: {
+                            title: 'Timona',
+                            gridProperties: { rowCount: timonaTargetRowCount }
+                        }
+                    }
+                });
+            }
+            else {
+                const currentRows = timonaSheet.properties.gridProperties?.rowCount || 0;
+                if (currentRows < timonaTargetRowCount) {
+                    this.logger.log(`Resizing Timona sheet from ${currentRows} to ${timonaTargetRowCount} rows`);
+                    batchRequests.push({
+                        updateSheetProperties: {
+                            properties: {
+                                sheetId: timonaSheet.properties.sheetId,
+                                gridProperties: { rowCount: timonaTargetRowCount }
+                            },
+                            fields: 'gridProperties.rowCount'
+                        }
+                    });
                 }
             }
+            const defaultSheet = existingSheets.find((s) => s.properties.sheetId === 0 &&
+                (s.properties.title === 'Trang tính1' || s.properties.title === 'Sheet1'));
+            if (defaultSheet && (tazaSheet || timonaSheet || batchRequests.length > 0)) {
+                batchRequests.push({
+                    deleteSheet: {
+                        sheetId: defaultSheet.properties.sheetId
+                    }
+                });
+            }
+            if (batchRequests.length > 0) {
+                this.logger.log(`Initializing and resizing sheets on Google Spreadsheet...`);
+                await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, { requests: batchRequests }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+            }
         }
-        catch (e) {
-            this.logger.error(`Failed to push daily combined sheets: ${e.message}`, e.stack);
+        catch (metadataError) {
+            this.logger.error(`Failed to ensure sheet structure or resize: ${metadataError.message}`, metadataError.stack);
+        }
+        const writeInChunks = async (sheetName, allValues) => {
+            const CHUNK_SIZE = 10000;
+            for (let i = 0; i < allValues.length; i += CHUNK_SIZE) {
+                const chunk = allValues.slice(i, i + CHUNK_SIZE);
+                const startRow = i + 1;
+                const range = `${sheetName}!A${startRow}`;
+                this.logger.log(`Writing ${chunk.length} rows to ${range}`);
+                await axios_1.default.put(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, { values: chunk }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+            }
+        };
+        const appendInChunks = async (sheetName, allValues) => {
+            const CHUNK_SIZE = 10000;
+            for (let i = 0; i < allValues.length; i += CHUNK_SIZE) {
+                const chunk = allValues.slice(i, i + CHUNK_SIZE);
+                this.logger.log(`Appending ${chunk.length} rows to ${sheetName}`);
+                await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:append?valueInputOption=USER_ENTERED`, { values: chunk }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+            }
+        };
+        if (tazaExistingCodes.size === 0) {
+            this.logger.log(`Clearing and writing all ${tazaRows.length} rows to Taza sheet`);
+            await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Taza!A:Z:clear`, {}, { headers: { Authorization: `Bearer ${token}` } });
+            await writeInChunks('Taza', tazaValues);
+        }
+        else {
+            this.logger.log(`Appending ${newTazaRows.length} new rows to Taza sheet`);
+            await appendInChunks('Taza', newTazaValues);
+        }
+        if (timonaExistingCodes.size === 0) {
+            this.logger.log(`Clearing and writing all ${timonaRows.length} rows to Timona sheet`);
+            await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Timona!A:Z:clear`, {}, { headers: { Authorization: `Bearer ${token}` } });
+            await writeInChunks('Timona', timonaValues);
+        }
+        else {
+            this.logger.log(`Appending ${newTimonaRows.length} new rows to Timona sheet`);
+            await appendInChunks('Timona', newTimonaValues);
         }
         return {
-            tazaCount: tazaRows.length,
-            timonaCount: timonaRows.length,
+            tazaCount: tazaExistingCodes.size === 0 ? tazaRows.length : newTazaRows.length,
+            timonaCount: timonaExistingCodes.size === 0 ? timonaRows.length : newTimonaRows.length,
             url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
         };
     }
@@ -502,33 +551,66 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
             this.logger.log('[CRON] handleGoogleSheetPushCron bị vô hiệu hóa trong cấu hình.');
             return;
         }
-        this.logger.log('[CRON] Bắt đầu tự động đẩy dữ liệu báo cáo lịch hẹn lên Google Sheets...');
+        this.logger.log(`[CRON] Bắt đầu tự động đẩy dữ liệu báo cáo lịch hẹn lên Google Sheets...`);
         try {
             const toStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
-            const fromStr = '2026-01-01';
-            this.logger.log(`[CRON] Khoảng ngày tự động đẩy: ${fromStr} -> ${toStr}`);
-            const result = await this.pushToGoogleSheet(fromStr, toStr);
-            const msg = `Tự động đẩy dữ liệu thành công! Taza: ${result.tazaCount} dòng, Timona: ${result.timonaCount} dòng.`;
-            this.logger.log(`[CRON] ${msg}`);
-            await this.prisma.crawlLog.create({
-                data: {
-                    crawl_date: new Date(),
-                    crawl_type: 'handleGoogleSheetPushCron',
-                    status: 'success',
-                    message: msg,
-                }
-            }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
+            const oldSheetId = '1G_R_JeKOQhvKj_F_fXmfSfsgIupYyJmgvq22s2Jk7GU';
+            const oldFromStr = '2026-01-01';
+            this.logger.log(`[CRON] [Old Sheet] Khoảng ngày tự động đẩy: ${oldFromStr} -> ${toStr}`);
+            try {
+                const resultOld = await this.pushToGoogleSheet(oldFromStr, toStr, oldSheetId, false);
+                const msgOld = `[Old Sheet] Đẩy dữ liệu thành công! Taza: ${resultOld.tazaCount} dòng, Timona: ${resultOld.timonaCount} dòng.`;
+                this.logger.log(`[CRON] ${msgOld}`);
+                await this.prisma.crawlLog.create({
+                    data: {
+                        crawl_date: new Date(),
+                        crawl_type: 'handleGoogleSheetPushCron_Old',
+                        status: 'success',
+                        message: msgOld,
+                    }
+                }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho Old Sheet: ${err.message}`));
+            }
+            catch (errOld) {
+                this.logger.error(`[CRON] [Old Sheet] Lỗi khi tự động đẩy dữ liệu: ${errOld.message}`, oldSheetId, errOld.stack);
+                await this.prisma.crawlLog.create({
+                    data: {
+                        crawl_date: new Date(),
+                        crawl_type: 'handleGoogleSheetPushCron_Old',
+                        status: 'failed',
+                        error_message: errOld.message,
+                    }
+                }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho Old Sheet: ${err.message}`));
+            }
+            const newSheetId = '1pjsiXsQYYpS6ebn4erJxfa3PAHZHURvAdXxeQkSy-Bg';
+            const newFromStr = '2019-01-01';
+            this.logger.log(`[CRON] [New Sheet] Khoảng ngày tự động đẩy: ${newFromStr} -> ${toStr}`);
+            try {
+                const resultNew = await this.pushToGoogleSheet(newFromStr, toStr, newSheetId, true);
+                const msgNew = `[New Sheet] Đẩy dữ liệu thành công! Taza: ${resultNew.tazaCount} dòng, Timona: ${resultNew.timonaCount} dòng.`;
+                this.logger.log(`[CRON] ${msgNew}`);
+                await this.prisma.crawlLog.create({
+                    data: {
+                        crawl_date: new Date(),
+                        crawl_type: 'handleGoogleSheetPushCron_New',
+                        status: 'success',
+                        message: msgNew,
+                    }
+                }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho New Sheet: ${err.message}`));
+            }
+            catch (errNew) {
+                this.logger.error(`[CRON] [New Sheet] Lỗi khi tự động đẩy dữ liệu: ${errNew.message}`, newSheetId, errNew.stack);
+                await this.prisma.crawlLog.create({
+                    data: {
+                        crawl_date: new Date(),
+                        crawl_type: 'handleGoogleSheetPushCron_New',
+                        status: 'failed',
+                        error_message: errNew.message,
+                    }
+                }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho New Sheet: ${err.message}`));
+            }
         }
         catch (e) {
-            this.logger.error(`[CRON] Lỗi khi tự động đẩy dữ liệu lên Google Sheets: ${e.message}`, e.stack);
-            await this.prisma.crawlLog.create({
-                data: {
-                    crawl_date: new Date(),
-                    crawl_type: 'handleGoogleSheetPushCron',
-                    status: 'failed',
-                    error_message: e.message,
-                }
-            }).catch(err => this.logger.error(`Lỗi ghi crawlLog: ${err.message}`));
+            this.logger.error(`[CRON] Lỗi chung khi tự động đẩy dữ liệu lên Google Sheets: ${e.message}`, e.stack);
         }
     }
 };

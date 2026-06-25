@@ -48,6 +48,7 @@ export declare class SyncService implements OnModuleInit {
     private parseCommaId;
     private resolveAppointmentService;
     private resolveCreatedById;
+    private getVietnamDateString;
     private parseDate;
     private formatDate;
     handleDailySync(): Promise<void>;

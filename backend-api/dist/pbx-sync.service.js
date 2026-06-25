@@ -34,7 +34,7 @@ let PbxSyncService = PbxSyncService_1 = class PbxSyncService {
         }
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const dateStr = yesterday.toISOString().split('T')[0];
+        const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(yesterday);
         await this.syncExtensions();
         await this.syncPbxEmployees();
         await this.syncCdr(dateStr, dateStr);

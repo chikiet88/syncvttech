@@ -61,7 +61,7 @@ async function run() {
     const token = await getGoogleSheetsAccessToken(creds.client_email, creds.private_key);
     console.log('Access token retrieved successfully! Token prefix:', token.slice(0, 15));
 
-    const spreadsheetId = '1G_R_JeKOQhvKj_F_fXmfSfsgIupYyJmgvq22s2Jk7GU';
+    const spreadsheetId = '1pjsiXsQYYpS6ebn4erJxfa3PAHZHURvAdXxeQkSy-Bg';
     
     // Read the first 15 rows from Taza
     console.log('Reading sheet Taza...');

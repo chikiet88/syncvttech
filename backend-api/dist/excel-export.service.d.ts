@@ -3,9 +3,9 @@ export declare class ExcelExportService {
     private prisma;
     private readonly logger;
     constructor(prisma: PrismaService);
-    getFormattedAppointmentsData(dateFromStr: string, dateToStr: string, branchId?: string, sortOrder?: 'asc' | 'desc'): Promise<any[]>;
+    getFormattedAppointmentsData(dateFromStr: string, dateToStr: string, branchId?: string, sortOrder?: 'asc' | 'desc', allAppointments?: boolean): Promise<any[]>;
     exportAppointmentsToExcel(dateFromStr: string, dateToStr: string, branchId?: string): Promise<Buffer>;
-    pushToGoogleSheet(dateFromStr: string, dateToStr: string): Promise<{
+    pushToGoogleSheet(dateFromStr: string, dateToStr: string, spreadsheetId?: string, allAppointments?: boolean): Promise<{
         tazaCount: number;
         timonaCount: number;
         url: string;
