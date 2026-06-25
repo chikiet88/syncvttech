@@ -374,80 +374,129 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
             row.sale_time_date,
             row.source_name,
         ];
-        const tazaExistingCodes = await readSheetCodes('Taza');
-        const timonaExistingCodes = await readSheetCodes('Timona');
-        const newTazaRows = tazaRows.filter(row => !tazaExistingCodes.has(row.vttech_code));
-        const newTimonaRows = timonaRows.filter(row => !timonaExistingCodes.has(row.vttech_code));
-        const tazaValues = [headers, ...tazaRows.map(formatRowData)];
-        const timonaValues = [headers, ...timonaRows.map(formatRowData)];
-        const newTazaValues = newTazaRows.map(formatRowData);
-        const newTimonaValues = newTimonaRows.map(formatRowData);
+        const targets = [];
+        const getRowYear = (row) => {
+            if (row.appointment_date) {
+                const parts = row.appointment_date.split('-');
+                if (parts.length === 3 && parts[2].length === 4) {
+                    return parts[2];
+                }
+            }
+            return new Date().getFullYear().toString();
+        };
+        if (!allAppointments) {
+            const tazaExistingCodes = await readSheetCodes('Taza');
+            const timonaExistingCodes = await readSheetCodes('Timona');
+            const newTazaRows = tazaRows.filter(row => !tazaExistingCodes.has(row.vttech_code));
+            const newTimonaRows = timonaRows.filter(row => !timonaExistingCodes.has(row.vttech_code));
+            targets.push({
+                sheetName: 'Taza',
+                allRows: tazaRows,
+                existingCodes: tazaExistingCodes,
+                newRows: newTazaRows,
+            });
+            targets.push({
+                sheetName: 'Timona',
+                allRows: timonaRows,
+                existingCodes: timonaExistingCodes,
+                newRows: newTimonaRows,
+            });
+        }
+        else {
+            const tazaYears = tazaRows.map(getRowYear);
+            const timonaYears = timonaRows.map(getRowYear);
+            const allYears = [...new Set([...tazaYears, ...timonaYears])].sort();
+            this.logger.log(`Detected years for splitting: ${allYears.join(', ')}`);
+            for (const year of allYears) {
+                const tazaYearRows = tazaRows.filter(row => getRowYear(row) === year);
+                const timonaYearRows = timonaRows.filter(row => getRowYear(row) === year);
+                const tazaYearExistingCodes = await readSheetCodes(`Taza_${year}`);
+                const timonaYearExistingCodes = await readSheetCodes(`Timona_${year}`);
+                const newTazaYearRows = tazaYearRows.filter(row => !tazaYearExistingCodes.has(row.vttech_code));
+                const newTimonaYearRows = timonaYearRows.filter(row => !timonaYearExistingCodes.has(row.vttech_code));
+                targets.push({
+                    sheetName: `Taza_${year}`,
+                    allRows: tazaYearRows,
+                    existingCodes: tazaYearExistingCodes,
+                    newRows: newTazaYearRows,
+                });
+                targets.push({
+                    sheetName: `Timona_${year}`,
+                    allRows: timonaYearRows,
+                    existingCodes: timonaYearExistingCodes,
+                    newRows: newTimonaYearRows,
+                });
+            }
+        }
+        const writeInChunks = async (sheetName, allValues) => {
+            const CHUNK_SIZE = 10000;
+            for (let i = 0; i < allValues.length; i += CHUNK_SIZE) {
+                const chunk = allValues.slice(i, i + CHUNK_SIZE);
+                const startRow = i + 1;
+                const range = `'${sheetName}'!A${startRow}`;
+                this.logger.log(`Writing ${chunk.length} rows to ${range}`);
+                await axios_1.default.put(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`, { values: chunk }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+            }
+        };
+        const appendInChunks = async (sheetName, allValues) => {
+            const CHUNK_SIZE = 10000;
+            for (let i = 0; i < allValues.length; i += CHUNK_SIZE) {
+                const chunk = allValues.slice(i, i + CHUNK_SIZE);
+                this.logger.log(`Appending ${chunk.length} rows to ${sheetName}`);
+                const range = `'${sheetName}'!A1:append`;
+                await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`, { values: chunk }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+            }
+        };
         try {
             this.logger.log('Checking spreadsheet sheets metadata...');
             const metaResponse = await axios_1.default.get(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, { headers: { Authorization: `Bearer ${token}` } });
             const existingSheets = metaResponse.data.sheets || [];
-            const tazaSheet = existingSheets.find((s) => s.properties.title === 'Taza');
-            const timonaSheet = existingSheets.find((s) => s.properties.title === 'Timona');
             const batchRequests = [];
-            const tazaTargetRowCount = tazaExistingCodes.size === 0
-                ? Math.max(tazaRows.length + 1000, 1000)
-                : Math.max(tazaExistingCodes.size + newTazaRows.length + 1000, 1000);
-            const timonaTargetRowCount = timonaExistingCodes.size === 0
-                ? Math.max(timonaRows.length + 1000, 1000)
-                : Math.max(timonaExistingCodes.size + newTimonaRows.length + 1000, 1000);
-            if (!tazaSheet) {
-                batchRequests.push({
-                    addSheet: {
-                        properties: {
-                            title: 'Taza',
-                            gridProperties: { rowCount: tazaTargetRowCount }
-                        }
-                    }
-                });
-            }
-            else {
-                const currentRows = tazaSheet.properties.gridProperties?.rowCount || 0;
-                if (currentRows < tazaTargetRowCount) {
-                    this.logger.log(`Resizing Taza sheet from ${currentRows} to ${tazaTargetRowCount} rows`);
+            for (const target of targets) {
+                const sheet = existingSheets.find((s) => s.properties.title === target.sheetName);
+                const targetRowCount = target.existingCodes.size === 0
+                    ? Math.max(target.allRows.length + 1000, 1000)
+                    : Math.max(target.existingCodes.size + target.newRows.length + 1000, 1000);
+                if (!sheet) {
+                    this.logger.log(`Scheduling creation of sheet "${target.sheetName}" with ${targetRowCount} rows and 10 columns`);
                     batchRequests.push({
-                        updateSheetProperties: {
+                        addSheet: {
                             properties: {
-                                sheetId: tazaSheet.properties.sheetId,
-                                gridProperties: { rowCount: tazaTargetRowCount }
-                            },
-                            fields: 'gridProperties.rowCount'
+                                title: target.sheetName,
+                                gridProperties: {
+                                    rowCount: targetRowCount,
+                                    columnCount: 10
+                                }
+                            }
                         }
                     });
                 }
-            }
-            if (!timonaSheet) {
-                batchRequests.push({
-                    addSheet: {
-                        properties: {
-                            title: 'Timona',
-                            gridProperties: { rowCount: timonaTargetRowCount }
-                        }
+                else {
+                    const currentRows = sheet.properties.gridProperties?.rowCount || 0;
+                    const currentCols = sheet.properties.gridProperties?.columnCount || 0;
+                    const needResizeRows = currentRows < targetRowCount;
+                    const needResizeCols = currentCols !== 10;
+                    if (needResizeRows || needResizeCols) {
+                        this.logger.log(`Resizing sheet "${target.sheetName}": rows ${currentRows} -> ${Math.max(currentRows, targetRowCount)}, cols ${currentCols} -> 10`);
+                        batchRequests.push({
+                            updateSheetProperties: {
+                                properties: {
+                                    sheetId: sheet.properties.sheetId,
+                                    gridProperties: {
+                                        rowCount: Math.max(currentRows, targetRowCount),
+                                        columnCount: 10
+                                    }
+                                },
+                                fields: 'gridProperties.rowCount,gridProperties.columnCount'
+                            }
+                        });
                     }
-                });
-            }
-            else {
-                const currentRows = timonaSheet.properties.gridProperties?.rowCount || 0;
-                if (currentRows < timonaTargetRowCount) {
-                    this.logger.log(`Resizing Timona sheet from ${currentRows} to ${timonaTargetRowCount} rows`);
-                    batchRequests.push({
-                        updateSheetProperties: {
-                            properties: {
-                                sheetId: timonaSheet.properties.sheetId,
-                                gridProperties: { rowCount: timonaTargetRowCount }
-                            },
-                            fields: 'gridProperties.rowCount'
-                        }
-                    });
                 }
             }
             const defaultSheet = existingSheets.find((s) => s.properties.sheetId === 0 &&
                 (s.properties.title === 'Trang tính1' || s.properties.title === 'Sheet1'));
-            if (defaultSheet && (tazaSheet || timonaSheet || batchRequests.length > 0)) {
+            const hasOtherSheets = existingSheets.some((s) => s.properties.sheetId !== 0) || batchRequests.length > 0;
+            if (defaultSheet && hasOtherSheets) {
                 batchRequests.push({
                     deleteSheet: {
                         sheetId: defaultSheet.properties.sheetId
@@ -462,45 +511,36 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
         catch (metadataError) {
             this.logger.error(`Failed to ensure sheet structure or resize: ${metadataError.message}`, metadataError.stack);
         }
-        const writeInChunks = async (sheetName, allValues) => {
-            const CHUNK_SIZE = 10000;
-            for (let i = 0; i < allValues.length; i += CHUNK_SIZE) {
-                const chunk = allValues.slice(i, i + CHUNK_SIZE);
-                const startRow = i + 1;
-                const range = `${sheetName}!A${startRow}`;
-                this.logger.log(`Writing ${chunk.length} rows to ${range}`);
-                await axios_1.default.put(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, { values: chunk }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+        let totalTazaCount = 0;
+        let totalTimonaCount = 0;
+        for (const target of targets) {
+            const isTaza = target.sheetName.toLowerCase().startsWith('taza');
+            const countAdded = target.existingCodes.size === 0 ? target.allRows.length : target.newRows.length;
+            if (isTaza) {
+                totalTazaCount += countAdded;
             }
-        };
-        const appendInChunks = async (sheetName, allValues) => {
-            const CHUNK_SIZE = 10000;
-            for (let i = 0; i < allValues.length; i += CHUNK_SIZE) {
-                const chunk = allValues.slice(i, i + CHUNK_SIZE);
-                this.logger.log(`Appending ${chunk.length} rows to ${sheetName}`);
-                await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:append?valueInputOption=USER_ENTERED`, { values: chunk }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+            else {
+                totalTimonaCount += countAdded;
             }
-        };
-        if (tazaExistingCodes.size === 0) {
-            this.logger.log(`Clearing and writing all ${tazaRows.length} rows to Taza sheet`);
-            await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Taza!A:Z:clear`, {}, { headers: { Authorization: `Bearer ${token}` } });
-            await writeInChunks('Taza', tazaValues);
-        }
-        else {
-            this.logger.log(`Appending ${newTazaRows.length} new rows to Taza sheet`);
-            await appendInChunks('Taza', newTazaValues);
-        }
-        if (timonaExistingCodes.size === 0) {
-            this.logger.log(`Clearing and writing all ${timonaRows.length} rows to Timona sheet`);
-            await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Timona!A:Z:clear`, {}, { headers: { Authorization: `Bearer ${token}` } });
-            await writeInChunks('Timona', timonaValues);
-        }
-        else {
-            this.logger.log(`Appending ${newTimonaRows.length} new rows to Timona sheet`);
-            await appendInChunks('Timona', newTimonaValues);
+            const values = [headers, ...target.allRows.map(formatRowData)];
+            const newValues = target.newRows.map(formatRowData);
+            if (target.existingCodes.size === 0) {
+                this.logger.log(`Clearing and writing all ${target.allRows.length} rows to ${target.sheetName}`);
+                const rangeToClear = `'${target.sheetName}'!A:Z`;
+                await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(rangeToClear)}:clear`, {}, { headers: { Authorization: `Bearer ${token}` } });
+                await writeInChunks(target.sheetName, values);
+            }
+            else if (target.newRows.length > 0) {
+                this.logger.log(`Appending ${target.newRows.length} new rows to ${target.sheetName}`);
+                await appendInChunks(target.sheetName, newValues);
+            }
+            else {
+                this.logger.log(`No new rows to append for ${target.sheetName}`);
+            }
         }
         return {
-            tazaCount: tazaExistingCodes.size === 0 ? tazaRows.length : newTazaRows.length,
-            timonaCount: timonaExistingCodes.size === 0 ? timonaRows.length : newTimonaRows.length,
+            tazaCount: totalTazaCount,
+            timonaCount: totalTimonaCount,
             url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
         };
     }
