@@ -357,6 +357,7 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
                 const metaRes = await axios_1.default.get(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, { headers: { Authorization: `Bearer ${token}` } });
                 const allSheets = metaRes.data.sheets || [];
                 const backupRequests = [];
+                let insertIndex = 2;
                 for (const sourceName of ['Taza', 'Timona']) {
                     const sourceSheet = allSheets.find((s) => s.properties.title === sourceName);
                     if (!sourceSheet) {
@@ -369,13 +370,15 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
                         this.logger.log(`[Backup] Deleting existing backup "${backupName}" (ID=${existingBackup.properties.sheetId})`);
                         backupRequests.push({ deleteSheet: { sheetId: existingBackup.properties.sheetId } });
                     }
-                    this.logger.log(`[Backup] Duplicating "${sourceName}" (ID=${sourceSheet.properties.sheetId}) -> "${backupName}"`);
+                    this.logger.log(`[Backup] Duplicating "${sourceName}" (ID=${sourceSheet.properties.sheetId}) -> "${backupName}" at index ${insertIndex}`);
                     backupRequests.push({
                         duplicateSheet: {
                             sourceSheetId: sourceSheet.properties.sheetId,
                             newSheetName: backupName,
+                            insertSheetIndex: insertIndex,
                         }
                     });
+                    insertIndex++;
                 }
                 if (backupRequests.length > 0) {
                     await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, { requests: backupRequests }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });

@@ -375,6 +375,7 @@ export class ExcelExportService {
         const allSheets = metaRes.data.sheets || [];
         const backupRequests: any[] = [];
 
+        let insertIndex = 2; // After Taza (0) and Timona (1)
         for (const sourceName of ['Taza', 'Timona']) {
           const sourceSheet = allSheets.find((s: any) => s.properties.title === sourceName);
           if (!sourceSheet) {
@@ -389,13 +390,15 @@ export class ExcelExportService {
             backupRequests.push({ deleteSheet: { sheetId: existingBackup.properties.sheetId } });
           }
 
-          this.logger.log(`[Backup] Duplicating "${sourceName}" (ID=${sourceSheet.properties.sheetId}) -> "${backupName}"`);
+          this.logger.log(`[Backup] Duplicating "${sourceName}" (ID=${sourceSheet.properties.sheetId}) -> "${backupName}" at index ${insertIndex}`);
           backupRequests.push({
             duplicateSheet: {
               sourceSheetId: sourceSheet.properties.sheetId,
               newSheetName: backupName,
+              insertSheetIndex: insertIndex,
             }
           });
+          insertIndex++;
         }
 
         if (backupRequests.length > 0) {
