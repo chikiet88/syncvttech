@@ -5,7 +5,7 @@ export declare class ExcelExportService {
     constructor(prisma: PrismaService);
     getFormattedAppointmentsData(dateFromStr: string, dateToStr: string, branchId?: string, sortOrder?: 'asc' | 'desc', allAppointments?: boolean): Promise<any[]>;
     exportAppointmentsToExcel(dateFromStr: string, dateToStr: string, branchId?: string): Promise<Buffer>;
-    pushToGoogleSheet(dateFromStr: string, dateToStr: string, spreadsheetId?: string, allAppointments?: boolean): Promise<{
+    pushToGoogleSheet(dateFromStr: string, dateToStr: string, spreadsheetId?: string, allAppointments?: boolean, shouldDuplicateBackup?: boolean): Promise<{
         tazaCount: number;
         timonaCount: number;
         url: string;
@@ -13,5 +13,5 @@ export declare class ExcelExportService {
     private getGoogleSheetsAccessToken;
     handleGoogleSheetPushCron22(): Promise<void>;
     handleGoogleSheetPushCron2330(): Promise<void>;
-    handleGoogleSheetPushCron(): Promise<void>;
+    handleGoogleSheetPushCron(shouldDuplicateBackup?: boolean): Promise<void>;
 }

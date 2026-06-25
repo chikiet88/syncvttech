@@ -9,7 +9,7 @@ async function main() {
   
   console.log('🔄 Bắt đầu kích hoạt handleGoogleSheetPushCron()...');
   try {
-    await excelExportService.handleGoogleSheetPushCron();
+    await excelExportService.handleGoogleSheetPushCron(true);
     console.log('✅ Chạy hoàn tất handleGoogleSheetPushCron!');
     process.exit(0);
   } catch (error: any) {

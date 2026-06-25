@@ -283,8 +283,9 @@ export class ExcelExportService {
     dateToStr: string,
     spreadsheetId: string = '1pjsiXsQYYpS6ebn4erJxfa3PAHZHURvAdXxeQkSy-Bg',
     allAppointments = true,
+    shouldDuplicateBackup = false,
   ): Promise<{ tazaCount: number, timonaCount: number, url: string }> {
-    this.logger.log(`Pushing appointments to Google Sheets for range: ${dateFromStr} to ${dateToStr} (ID: ${spreadsheetId})`);
+    this.logger.log(`Pushing appointments to Google Sheets for range: ${dateFromStr} to ${dateToStr} (ID: ${spreadsheetId}, backup: ${shouldDuplicateBackup})`);
 
     // 1. Get credentials
     let clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
@@ -359,7 +360,58 @@ export class ExcelExportService {
       }
     };
 
-    // 3. Fetch data for Taza and Timona from Database
+    // 3. Backup: Duplicate sheets with _DDMM suffix before syncing (only for old sheet)
+    if (shouldDuplicateBackup && !allAppointments) {
+      try {
+        const now = new Date();
+        const vnDate = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit' }).format(now);
+        const ddmm = vnDate.replace('/', ''); // e.g. "2606"
+        this.logger.log(`[Backup] Creating snapshot sheets with suffix _${ddmm}...`);
+
+        const metaRes = await axios.get(
+          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const allSheets = metaRes.data.sheets || [];
+        const backupRequests: any[] = [];
+
+        for (const sourceName of ['Taza', 'Timona']) {
+          const sourceSheet = allSheets.find((s: any) => s.properties.title === sourceName);
+          if (!sourceSheet) {
+            this.logger.warn(`[Backup] Sheet "${sourceName}" not found, skipping backup.`);
+            continue;
+          }
+
+          const backupName = `${sourceName}_${ddmm}`;
+          const existingBackup = allSheets.find((s: any) => s.properties.title === backupName);
+          if (existingBackup) {
+            this.logger.log(`[Backup] Deleting existing backup "${backupName}" (ID=${existingBackup.properties.sheetId})`);
+            backupRequests.push({ deleteSheet: { sheetId: existingBackup.properties.sheetId } });
+          }
+
+          this.logger.log(`[Backup] Duplicating "${sourceName}" (ID=${sourceSheet.properties.sheetId}) -> "${backupName}"`);
+          backupRequests.push({
+            duplicateSheet: {
+              sourceSheetId: sourceSheet.properties.sheetId,
+              newSheetName: backupName,
+            }
+          });
+        }
+
+        if (backupRequests.length > 0) {
+          await axios.post(
+            `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+            { requests: backupRequests },
+            { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+          );
+          this.logger.log(`[Backup] Snapshot _${ddmm} created successfully!`);
+        }
+      } catch (backupError: any) {
+        this.logger.error(`[Backup] Failed to duplicate backup sheets: ${backupError.message}`, backupError.stack);
+      }
+    }
+
+    // 4. Fetch data for Taza and Timona from Database
     const tazaRows = await this.getFormattedAppointmentsData(dateFromStr, dateToStr, 'taza', 'asc', allAppointments);
     const timonaRows = await this.getFormattedAppointmentsData(dateFromStr, dateToStr, 'timona', 'asc', allAppointments);
 
@@ -480,9 +532,9 @@ export class ExcelExportService {
       for (let i = 0; i < allValues.length; i += CHUNK_SIZE) {
         const chunk = allValues.slice(i, i + CHUNK_SIZE);
         this.logger.log(`Appending ${chunk.length} rows to ${sheetName}`);
-        const range = `'${sheetName}'!A1:append`;
+        const range = `'${sheetName}'!A1`;
         await axios.post(
-          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`,
           { values: chunk },
           { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
         );
@@ -597,6 +649,30 @@ export class ExcelExportService {
         await writeInChunks(target.sheetName, values);
       } else if (target.newRows.length > 0) {
         this.logger.log(`Appending ${target.newRows.length} new rows to ${target.sheetName}`);
+
+        // Auto-resize sheet before append to avoid 400 error
+        try {
+          const sheetMeta = await axios.get(
+            `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const sheetInfo = (sheetMeta.data.sheets || []).find((s: any) => s.properties.title === target.sheetName);
+          if (sheetInfo) {
+            const currentRows = sheetInfo.properties.gridProperties?.rowCount || 0;
+            const neededRows = target.existingCodes.size + target.newRows.length + 100;
+            if (currentRows < neededRows) {
+              this.logger.log(`Auto-resizing "${target.sheetName}": ${currentRows} -> ${neededRows} rows`);
+              await axios.post(
+                `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+                { requests: [{ updateSheetProperties: { properties: { sheetId: sheetInfo.properties.sheetId, gridProperties: { rowCount: neededRows, columnCount: 10 } }, fields: 'gridProperties.rowCount,gridProperties.columnCount' } }] },
+                { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+              );
+            }
+          }
+        } catch (resizeErr: any) {
+          this.logger.error(`Auto-resize failed for "${target.sheetName}": ${resizeErr.message}`);
+        }
+
         await appendInChunks(target.sheetName, newValues);
       } else {
         this.logger.log(`No new rows to append for ${target.sheetName}`);
@@ -657,24 +733,24 @@ export class ExcelExportService {
     timeZone: 'Asia/Ho_Chi_Minh',
   })
   async handleGoogleSheetPushCron22() {
-    await this.handleGoogleSheetPushCron();
+    await this.handleGoogleSheetPushCron(true);
   }
 
   @Cron('0 30 23 * * *', {
     timeZone: 'Asia/Ho_Chi_Minh',
   })
   async handleGoogleSheetPushCron2330() {
-    await this.handleGoogleSheetPushCron();
+    await this.handleGoogleSheetPushCron(false);
   }
 
-  async handleGoogleSheetPushCron() {
+  async handleGoogleSheetPushCron(shouldDuplicateBackup = false) {
     const config = await this.prisma.cronConfig.findUnique({ where: { id: 'handleGoogleSheetPushCron' } }).catch(() => null);
     if (config && !config.enabled) {
       this.logger.log('[CRON] handleGoogleSheetPushCron bị vô hiệu hóa trong cấu hình.');
       return;
     }
 
-    this.logger.log(`[CRON] Bắt đầu tự động đẩy dữ liệu báo cáo lịch hẹn lên Google Sheets...`);
+    this.logger.log(`[CRON] Bắt đầu tự động đẩy dữ liệu báo cáo lịch hẹn lên Google Sheets (backup: ${shouldDuplicateBackup})...`);
     try {
       // Format: YYYY-MM-DD in Asia/Ho_Chi_Minh timezone
       const toStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
@@ -684,7 +760,7 @@ export class ExcelExportService {
       const oldFromStr = '2026-01-01';
       this.logger.log(`[CRON] [Old Sheet] Khoảng ngày tự động đẩy: ${oldFromStr} -> ${toStr}`);
       try {
-        const resultOld = await this.pushToGoogleSheet(oldFromStr, toStr, oldSheetId, false);
+        const resultOld = await this.pushToGoogleSheet(oldFromStr, toStr, oldSheetId, false, shouldDuplicateBackup);
         const msgOld = `[Old Sheet] Đẩy dữ liệu thành công! Taza: ${resultOld.tazaCount} dòng, Timona: ${resultOld.timonaCount} dòng.`;
         this.logger.log(`[CRON] ${msgOld}`);
         
