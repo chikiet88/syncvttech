@@ -23,6 +23,7 @@ const pbx_sync_service_1 = require("./pbx-sync.service");
 const mcp_controller_1 = require("./mcp/mcp.controller");
 const mcp_service_1 = require("./mcp/mcp.service");
 const excel_export_service_1 = require("./excel-export.service");
+const gsheet_report_service_1 = require("./gsheet-report.service");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -68,6 +69,7 @@ exports.AppModule = AppModule = __decorate([
             pbx_sync_service_1.PbxSyncService,
             mcp_service_1.McpService,
             excel_export_service_1.ExcelExportService,
+            gsheet_report_service_1.GsheetReportService,
         ],
     })
 ], AppModule);

@@ -677,33 +677,6 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
                     }
                 }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho Old Sheet: ${err.message}`));
             }
-            const newSheetId = '1pjsiXsQYYpS6ebn4erJxfa3PAHZHURvAdXxeQkSy-Bg';
-            const newFromStr = '2019-01-01';
-            this.logger.log(`[CRON] [New Sheet] Khoảng ngày tự động đẩy: ${newFromStr} -> ${toStr}`);
-            try {
-                const resultNew = await this.pushToGoogleSheet(newFromStr, toStr, newSheetId, true);
-                const msgNew = `[New Sheet] Đẩy dữ liệu thành công! Taza: ${resultNew.tazaCount} dòng, Timona: ${resultNew.timonaCount} dòng.`;
-                this.logger.log(`[CRON] ${msgNew}`);
-                await this.prisma.crawlLog.create({
-                    data: {
-                        crawl_date: new Date(),
-                        crawl_type: 'handleGoogleSheetPushCron_New',
-                        status: 'success',
-                        message: msgNew,
-                    }
-                }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho New Sheet: ${err.message}`));
-            }
-            catch (errNew) {
-                this.logger.error(`[CRON] [New Sheet] Lỗi khi tự động đẩy dữ liệu: ${errNew.message}`, newSheetId, errNew.stack);
-                await this.prisma.crawlLog.create({
-                    data: {
-                        crawl_date: new Date(),
-                        crawl_type: 'handleGoogleSheetPushCron_New',
-                        status: 'failed',
-                        error_message: errNew.message,
-                    }
-                }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho New Sheet: ${err.message}`));
-            }
         }
         catch (e) {
             this.logger.error(`[CRON] Lỗi chung khi tự động đẩy dữ liệu lên Google Sheets: ${e.message}`, e.stack);

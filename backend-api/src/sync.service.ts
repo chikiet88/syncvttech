@@ -2298,18 +2298,22 @@ export class SyncService implements OnModuleInit {
             if (isToday) stats.services++;
             const sId = parseInt(s.ID || s.id);
             if (!sId) continue;
+            const servicePrice = this.parseNumber(s.Price || s.Price_Root);
+            const serviceTotal = this.parseNumber(s.Price_Discounted !== undefined ? s.Price_Discounted : (s.PriceDiscounted !== undefined ? s.PriceDiscounted : (s.Total || s.Amount || 0)));
+            const serviceDiscount = this.parseNumber(s.Discount_Amount || s.DiscountAmount || s.Discount_Amount_Doctor || 0);
+
             await this.prisma.customerServiceTab.upsert({
               where: { customer_id_service_id: { customer_id: customerId, service_id: sId } },
               update: { 
                 service_name: s.ServiceName || '', quantity: parseInt(s.Quantity) || 1, 
-                price: this.parseNumber(s.Price || s.Price_Root), total: this.parseNumber(s.Total || s.Amount), 
+                price: servicePrice, total: serviceTotal, discount: serviceDiscount,
                 branch_id: branchId || parseInt(s.BranchID) || null, status: s.StatusName || '',
                 created_at: this.parseDate(s.Created || s.Date)
               },
               create: { 
                 customer_id: customerId, service_id: sId, service_name: s.ServiceName || '', 
-                quantity: parseInt(s.Quantity) || 1, price: this.parseNumber(s.Price || s.Price_Root), 
-                total: this.parseNumber(s.Total || s.Amount), branch_id: branchId || parseInt(s.BranchID) || null,
+                quantity: parseInt(s.Quantity) || 1, price: servicePrice, 
+                total: serviceTotal, discount: serviceDiscount, branch_id: branchId || parseInt(s.BranchID) || null,
                 status: s.StatusName || '', created_at: this.parseDate(s.Created || s.Date)
               }
             });

@@ -1,0 +1,220 @@
+<div class="container-fluid py-0 px-0 mt-3"> <div class="row m-0 px-2"> <div class="col-12 px-0"> <div class="card card-plain"> <div class="vtcardheader card-header p-0"> <div class=left> <h6 class="mb-0 fw-bold">Ngu&#x1ED3;n kh&#xE1;ch h&#xE0;ng - Nh&#xF3;m</h6> <p class="text-sm mb-0">Danh s&#xE1;ch</p> </div> <div class=right> <button class="btn bg-gradient-primary btn-sm mb-0 setting_projectclosure" onclick="return AddNewGroupType()">Th&#xEA;m nh&#xF3;m</button> </div> </div> <div class="card-body p-0 my-3"> <div class="p-0 mobile-responsive"> <table class="table vt-table mb-0" id=dtGroupType><thead><tr><th>Lo&#x1EA1;i</th><th>Ng&#x1B0;&#x1EDD;i s&#x1EED;a</th><th class="no-sort setting_projectclosure" style=width:40px>X&#xF3;a</th></tr></thead><tbody id=dtGroupTypeBody> </tbody></table> </div> </div> </div> </div> </div> <div class="tksoure_ChildMain px-2"> <div class="card card-plain"> <div class="vtcardheader card-header p-0"> <div class=left> <h6 class="mb-0 fw-bold">Ngu&#x1ED3;n kh&#xE1;ch h&#xE0;ng</h6> <p class="text-sm mb-0"> Chi ti&#x1EBF;t </p> </div> <div class=right> <button class="btn bg-gradient-primary btn-sm mb-0 setting_projectclosure" onclick="event.preventDefault();return AddNewTicketSource()">Th&#xEA;m ngu&#x1ED3;n</button> </div> </div> <div class="card-body p-0"> <div class="m-0 my-3"> <table class="table vt-table mb-0" id=dtContentType><thead><tr><th class=d-none>ID</th><th style=width:40px>#</th><th>Ngu&#x1ED3;n kh&#xE1;ch h&#xE0;ng</th><th>Ng&#x1B0;&#x1EDD;i s&#x1EED;a</th><th>N&#x1ED9;i dung</th><th>Chi ti&#x1EBF;t</th><th>Ng&#x1B0;&#x1EDD;i s&#x1EED;a</th><th>N&#x1ED9;i dung</th><th class="no-sort setting_projectclosure" style=width:40px>X&#xF3;a</th></tr></thead><tbody id=dtContentTypeBody> </tbody></table> </div> </div> </div> </div> </div><script>var data_group_type;var data_type;var CurrentGroupTypeID=0;let DataEmp={};$(document).ready(function(){LoadTicketSourceAjax();$('#dtGroupTypeBody').on('click','.btnEditType',function(){let ID=Number($(this).closest('tr')[0].getAttribute('data-id'));EditGroupType(ID);CurrentGroupTypeID=ID;});$('#dtGroupTypeBody').on('click','.buttonDeleteClass',function(){let ID=$(this).attr('data-id');DeleteSourceCat(ID)});$('#dtContentType tbody').on('click','.btnEditType',function(){let ID=Number($(this).closest('tr')[0].childNodes[0].innerHTML);EditTicketSource(ID);});$('#dtContentType tbody').on('click','.buttonDeleteClass',function(){let ID=$(this).attr('data-id');TS_DeleteTicketSourceDetail(ID)});$('#dtContentType tbody').on('click','.addNewTypeDetail',function(){let Type=Number($(this).closest('tr')[0].childNodes[0].innerHTML);TS_AddNewTypeDetail(Type);});$('#dtContentType tbody').on('click','.btnEditTypeDetal',function(){let ID=$(this).attr('data-id')??$(this).attr('data-id');let Type=Number($(this).closest('tr')[0].childNodes[0].innerHTML);TS_EditTypeDetail(Type,ID);});});function LoadTicketSourceAjax(){Master_IndexDB_Reads(_Session_Data,[_Session_Employee],function(data){DataEmp=data[0];AjaxLoad(url="/Marketing/TicketSourceList/?handler=LoadData",data={},async=true,error=function(){notiError_SW();},success=function(result){if(result!=""){data_group_type=result["Table"];data_type=result["Table1"];Render_Table_Group_Type(data_group_type,'dtGroupTypeBody');TriggerClick_GroupType();}});});}
+function Render_Table_Group_Type(data,id){var myNode=document.getElementById(id);if(myNode!=null){myNode.innerHTML='';let stringContent='';let total=0;if(data&&data.length>0){for(var i=0;i<data.length;i++){let item=data[i];stringContent+=`<tr class="rowMaster" data-id="${item.ID}">
+
+                        <td class="">
+
+                            <div class="d-flex align-items-center ms-2">
+
+                                <div class="icon icon-shape icon-sm me-3 bg-gradient-dark shadow text-center rounded-2 text-center" title="Quantity">
+
+                                    <h6 class="text-white mt-2">
+
+                                        ${Number(item.TotalChildren)}
+
+                                    </h6>
+
+                                </div>
+
+                                <div class="d-flex flex-column btnEditType cursor-pointer" style="width:fit-content!important;">
+
+                                    <p class="text-dark cursor-pointer fw-bold text-sm mb-0 border-bottom border-dark" style="width:fit-content!important;padding-bottom:1.25px!important;">
+
+                                        ${item.Code}
+
+                                    </p>
+
+                                    <p class="text-dark mt-1 m-0 p-0 fw-bold cursor-pointer  text-sm mb-0 border-bottom border-dark" style="width:fit-content!important;padding-bottom:1.25px!important;">${item.Name}</p>
+
+                                </div>
+
+                            </div>
+
+                        </td>
+
+                        <td>
+
+                            <div class="d-flex ms-2">
+
+                                <div class="icon icon-shape icon-sm me-2 text-center">
+
+                                    <img class="avatar avatar-xs mt-2" src="${Fun_GetAvatar_ByID(DataEmp, item.ModifiedBy)}" onerror="Master_OnLoad_Error_Image(this)" alt="label-image">
+
+                                </div>
+
+                                <div class="d-flex flex-column">
+
+                                    <h6 class="text-dark text-sm mb-0">${Fun_GetName_ByID(DataEmp, item.ModifiedBy)}</h6>
+
+                                    <span class="text-xs">${SysDate().FUTC(item.Modified).DateText()}</span>
+
+                                </div>
+
+                            </div>
+
+                        </td>
+
+                        <td>
+
+                            <div class="setting_projectclosure">
+
+                                ${item.DeleteButton == 1 ? `<button class="buttonGrid"><svg title="Remove"data-id="${item.ID}"aria-hidden="true"class="vt-icon buttonDeleteClass"><use href="#x"></use></svg></button>` : ""}
+
+                            </div>
+
+                        </td>
+
+                    </tr>
+
+                    `
+total=total+Number(item.TotalChildren);}}
+stringContent=`<tr class="rowMaster" data-id="0">
+
+                    <td>
+
+                        <div class="d-flex ms-2">
+
+                            <div class="icon icon-shape icon-sm me-3 bg-gradient-dark rounded-2 text-center" title="Quantity">
+
+                                <h6 class="mt-2 text-white">
+
+                                    ${Number(total)}
+
+                                </h6>
+
+                            </div>
+
+                            <div class="d-flex flex-column">
+
+                                <h6 class="text-dark cursor-pointer border-bottom border-dark fw-bold text-sm mb-0" style="padding-bottom:1.5px!important;">
+
+                                    T&#x1ED5;ng
+
+                                </h6>
+
+                            </div>
+
+                        </div>
+
+                    </td>
+
+                    <td >
+
+                    </td>
+
+                    <td>
+
+                    </td>
+
+                </tr>
+
+                `
++stringContent;document.getElementById(id).innerHTML=stringContent;}
+Event_Row_Group_Type();}
+function TriggerClick_GroupType(){if($('.rowMaster[data-id="'+CurrentGroupTypeID+'"]').get(0)!=undefined)
+$('.rowMaster[data-id="'+CurrentGroupTypeID+'"]').get(0).click();}
+function Event_Row_Group_Type(){$(".rowMaster").on('click',function(event){let id=Number($(this).attr("data-id"));CurrentGroupTypeID=id;if(id==0)ViewDetail(id,1);else{ViewDetail(id,0);}
+$(this).addClass("active").siblings().removeClass("active");});}
+function ViewDetail(idDetail,all){var data=data_type;if(all==0){data=data_type.filter(word=>word["TypeCat_ID"]==idDetail);}
+Render_Table_Type(data,'dtContentTypeBody');}
+function Render_Table_Type(data,id){var myNode=document.getElementById(id);if(myNode!=null){myNode.innerHTML='';let stringContent='';if(data&&data.length>0){let idTypeGroupTmp=0;let STT=0;for(var i=0;i<data.length;i++){let item=data[i];let strTypeGroup='';if(idTypeGroupTmp!=item.ID){STT+=1;idTypeGroupTmp=item.ID;strTypeGroup=`<td rowspan="${item.RowSpan != 0 ? item.RowSpan : 1}" class="text-center">${STT}</td>
+
+                        <td rowspan="${item.RowSpan != 0 ? item.RowSpan : 1 }" class="position-relative py-1">
+
+                            <div class="my-1 btnEditType cursor-pointer">
+
+                                <a class="border-bottom border-primary text-sm cursor-pointer fw-bold " style="padding-bottom:1.25px!important;">${item.Code}</a>
+
+                                <p class="text-primary mt-1 mb-0 p-0 border-bottom border-primary text-sm cursor-pointer fw-bold" style="width:fit-content;padding-bottom:1.25px!important;">${item.Name}</p>
+
+                            </div>
+
+                            <div class="w-auto position-absolute end-2 top-6">
+
+                                <svg data-type="${item.ID}" class="vt-icon addNewTypeDetail text-primary cursor-pointer opacity-3"><use href="#plus"></use></svg>
+
+                            </div>
+
+                        </td>
+
+                        <td rowspan="${item.RowSpan != 0 ? item.RowSpan : 1 }" style="max-width:200px;">
+
+                            <div class="d-flex">
+
+                                <div class="icon icon-shape icon-sm me-2 text-center">
+
+                                    ${item.PerEditor != 0 ? `<img class="avatar avatar-xs mt-2"src="${Fun_GetAvatar_ByID(DataEmp, item.PerEditor)}"onerror="Master_OnLoad_Error_Image(this)"alt="label-image">` : ''}
+
+                                </div>
+
+                                <div class="d-flex flex-column">
+
+                                    <h6 class="text-dark text-sm mb-0">${Fun_GetName_ByID(DataEmp, item.PerEditor)}</h6>
+
+                                    <span class="text-xs">${SysDate().FUTC(item.DayEditor).DateText()}</span>
+
+                                </div>
+
+                            </div>
+
+                        </td>
+
+                        <td rowspan="${item.RowSpan != 0 ? item.RowSpan : 1 }" style="max-width:130px;">
+
+                            <span class="content_line_clamp">${item.Note}</span>
+
+                        </td>
+
+                        `}
+let tr='<td class="d-none">'+item.ID+'</td>'
++`${strTypeGroup}`
++`<td>
+
+                            <a class="border-bottom border-primary text-sm cursor-pointer fw-bold btnEditTypeDetal" data-id="${item.TypeDetailID}" style="padding-bottom:1.5px!important;">${item.TypeDetailName}</a>
+
+                        </td>`
++`<td style="max-width:200px;">
+
+                        <div class="d-flex">
+
+                            <div class="icon icon-shape icon-sm me-2 text-center">
+
+                                ${item.PerEditorDetail != 0 ? `<img class="avatar avatar-xs mt-2"src="${Fun_GetAvatar_ByID(DataEmp, item.PerEditorDetail)}"onerror="Master_OnLoad_Error_Image(this)"alt="label-image">` : ''}
+
+                            </div>
+
+                            <div class="d-flex flex-column">
+
+                                <h6 class="text-dark text-sm mb-0">${Fun_GetName_ByID(DataEmp, item.PerEditorDetail)}</h6>
+
+                                <span class="text-xs">${SysDate().FUTC(item.DayEditorDetail).DateText()}</span>
+
+                            </div>
+
+                        </div>
+
+                        </td>`
++`<td style="max-width:120px;">
+
+                            <span class="content_line_clamp">${item.NoteDetail}</span>
+
+                         </td>`
++`<td class="setting_projectclosure">
+
+                            ${TS_RenderButton(item.ID, item.TypeDetailID)}
+
+                        </td>`
+stringContent=stringContent+'<tr class="vt-number py-1" role="row">'+tr+'</tr>';}}
+document.getElementById(id).innerHTML=stringContent;}
+Checking_TabControl_Permission();}
+function TS_RenderButton(type,id){let buttons=[];if(id!=0)buttons.push(`<button class="buttonGrid" data-tab="delete_tab_customer_delete_reason"><svg data-id="${id}" class="vt-icon buttonDeleteClass"><use href="#x"></use></svg></button>`)
+return Render_Button_Grid(buttons);}
+function TS_DeleteTicketSourceDetail(id){const promise=notiConfirm();promise.then(function(){TS_ExecuteDeleteTicketSourceDetail(id);},function(){});}
+function TS_ExecuteDeleteTicketSourceDetail(id){AjaxLoad(url="/Marketing/TicketSourceList/?handler=DeleteItemDetail",data={'id':id},async=true,error=function(){notiError_SW();},success=function(result){if(result=="1"){notiSuccess();LoadTicketSourceAjax();}else{notiError_SW();}});}
+function DeleteSourceCat(id){const promise=notiConfirm();promise.then(function(){ExecuteDeleteSourceCat(id);},function(){});}
+function ExecuteDeleteSourceCat(id){AjaxLoad(url="/Marketing/TicketSourceList/?handler=DeleteGroupItem",data={'id':id},async=true,error=function(){notiError_SW();},success=function(result){if(result=="1"){notiSuccess();LoadTicketSourceAjax();}else{notiError_SW();}});}
+function AddNewTicketSource(){$("#DetailModal_Content").html('');$("#DetailModal_Content").load("/Marketing/TicketSourceDetail"+"?ver="+versionofWebApplication);$('#DetailModal').modal('show');return false;}
+function EditTicketSource(CurrentID){$("#DetailModal_Content").html('');$("#DetailModal_Content").load("/Marketing/TicketSourceDetail?CurrentID="+CurrentID+"&ver="+versionofWebApplication);$('#DetailModal').modal('show');return false;}
+function AddNewGroupType(){$("#DetailModal_Content").html('');$("#DetailModal_Content").load("/Marketing/TicketSourceCatDetail?ver="+versionofWebApplication);$('#DetailModal').modal('show');return false;}
+function EditGroupType(CurrentID){$("#DetailModal_Content").html('');$("#DetailModal_Content").load("/Marketing/TicketSourceCatDetail?CurrentID="+CurrentID+"&ver="+versionofWebApplication);$('#DetailModal').modal('show');return false;}
+function TS_AddNewTypeDetail(type){$("#DetailModal_Content").html('');$("#DetailModal_Content").load("/Marketing/TicketSourceTypeDetail?CurrentType="+type+"&ver="+versionofWebApplication);$('#DetailModal').modal('show');return false;}
+function TS_EditTypeDetail(type,id){$("#DetailModal_Content").html('');$("#DetailModal_Content").load("/Marketing/TicketSourceTypeDetail?CurrentType="+type+"&CurrentID="+id+"&ver="+versionofWebApplication);$('#DetailModal').modal('show');return false;}</script><style>#dtContentTypeBody .addNewTypeDetail:hover{opacity:1 !important}</style><script>SWCache.LoadJS_Async(["/js/comon/initialize_setting.js","/js/main.js",]);</script>

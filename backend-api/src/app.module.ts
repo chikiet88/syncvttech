@@ -15,6 +15,8 @@ import { PbxSyncService } from './pbx-sync.service';
 import { McpController } from './mcp/mcp.controller';
 import { McpService } from './mcp/mcp.service';
 import { ExcelExportService } from './excel-export.service';
+import { GsheetReportService } from './gsheet-report.service';
+
 
 @Module({
   imports: [
@@ -62,6 +64,7 @@ import { ExcelExportService } from './excel-export.service';
     PbxSyncService,
     McpService,
     ExcelExportService,
+    GsheetReportService,
   ],
 })
 export class AppModule {}

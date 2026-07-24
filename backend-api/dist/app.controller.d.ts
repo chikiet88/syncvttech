@@ -4,6 +4,7 @@ import { PbxSyncService } from './pbx-sync.service';
 import { PrismaService } from './prisma.service';
 import { VttechApiService } from './vttech-api.service';
 import { ExcelExportService } from './excel-export.service';
+import { GsheetReportService } from './gsheet-report.service';
 export declare class AppController {
     private readonly appService;
     private readonly syncService;
@@ -11,7 +12,8 @@ export declare class AppController {
     private readonly prisma;
     private readonly vttechApi;
     private readonly excelExportService;
-    constructor(appService: AppService, syncService: SyncService, pbxSync: PbxSyncService, prisma: PrismaService, vttechApi: VttechApiService, excelExportService: ExcelExportService);
+    private readonly gsheetReportService;
+    constructor(appService: AppService, syncService: SyncService, pbxSync: PbxSyncService, prisma: PrismaService, vttechApi: VttechApiService, excelExportService: ExcelExportService, gsheetReportService: GsheetReportService);
     checkLogin(user?: string, pass?: string): Promise<{
         success: boolean;
         message: string;
@@ -84,6 +86,30 @@ export declare class AppController {
         failed_items: import("@prisma/client/runtime/library").JsonValue | null;
         created_at: Date;
     }[]>;
+    getGsheetReports(limit?: string): Promise<{
+        id: number;
+        status: string;
+        created_at: Date;
+        report_date: Date;
+        total_db: number;
+        total_sheet: number;
+        diff: number;
+        report_content: string;
+    }[]>;
+    getGsheetReportDetail(id: string): Promise<{
+        id: number;
+        status: string;
+        created_at: Date;
+        report_date: Date;
+        total_db: number;
+        total_sheet: number;
+        diff: number;
+        report_content: string;
+    }>;
+    triggerGsheetSync(): Promise<{
+        message: string;
+        status: string;
+    }>;
     getSyncStatus(): Promise<{
         queueCounts: any;
         taskSummary: {

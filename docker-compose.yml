@@ -1,5 +1,6 @@
 services:
   apivttech-backend:
+    image: apivttech-apivttech-backend:latest
     build:
       context: .
       dockerfile: ./backend-api/Dockerfile
@@ -24,6 +25,7 @@ services:
       - "host.docker.internal:host-gateway"
 
   apivttech-dashboard:
+    image: apivttech-apivttech-dashboard:latest
     build:
       context: .
       dockerfile: ./vttech-dashboard/Dockerfile

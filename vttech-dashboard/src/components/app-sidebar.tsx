@@ -17,7 +17,8 @@ import {
   Stethoscope,
   Briefcase,
   PhoneCall,
-  ChevronRight
+  ChevronRight,
+  FileSpreadsheet
 } from 'lucide-react'
 
 import {
@@ -70,6 +71,7 @@ const data = {
       items: [
         { title: 'Giám sát đồng bộ', url: '/monitoring/sync', icon: Activity },
         { title: 'Log hệ thống', url: '/monitoring/crawl-logs', icon: Database },
+        { title: 'Báo cáo GSheet', url: '/monitoring/gsheet-reports', icon: FileSpreadsheet },
         { title: 'Cài đặt Cron', url: '/monitoring/cron-settings', icon: Settings },
       ],
     }

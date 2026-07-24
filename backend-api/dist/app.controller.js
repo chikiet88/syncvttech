@@ -20,6 +20,7 @@ const pbx_sync_service_1 = require("./pbx-sync.service");
 const prisma_service_1 = require("./prisma.service");
 const vttech_api_service_1 = require("./vttech-api.service");
 const excel_export_service_1 = require("./excel-export.service");
+const gsheet_report_service_1 = require("./gsheet-report.service");
 let AppController = class AppController {
     appService;
     syncService;
@@ -27,13 +28,15 @@ let AppController = class AppController {
     prisma;
     vttechApi;
     excelExportService;
-    constructor(appService, syncService, pbxSync, prisma, vttechApi, excelExportService) {
+    gsheetReportService;
+    constructor(appService, syncService, pbxSync, prisma, vttechApi, excelExportService, gsheetReportService) {
         this.appService = appService;
         this.syncService = syncService;
         this.pbxSync = pbxSync;
         this.prisma = prisma;
         this.vttechApi = vttechApi;
         this.excelExportService = excelExportService;
+        this.gsheetReportService = gsheetReportService;
     }
     async checkLogin(user, pass) {
         return this.vttechApi.checkLoginStatus();
@@ -100,6 +103,27 @@ let AppController = class AppController {
             take: take,
             orderBy: { created_at: 'desc' },
         });
+    }
+    async getGsheetReports(limit) {
+        const take = limit ? parseInt(limit) : 50;
+        return this.gsheetReportService.getReports(take);
+    }
+    async getGsheetReportDetail(id) {
+        const reportId = parseInt(id);
+        const report = await this.gsheetReportService.getReportById(reportId);
+        if (!report) {
+            throw new common_1.HttpException('Không tìm thấy báo cáo', common_1.HttpStatus.NOT_FOUND);
+        }
+        return report;
+    }
+    async triggerGsheetSync() {
+        this.gsheetReportService.compareAndPushData().catch(err => {
+            console.error('Gsheet manual sync and report failed:', err);
+        });
+        return {
+            message: 'Đã kích hoạt thủ công tiến trình đối soát và đồng bộ Google Sheets trong nền.',
+            status: 'processing'
+        };
     }
     async getSyncStatus() {
         return this.syncService.getSyncStatus();
@@ -231,6 +255,12 @@ let AppController = class AppController {
                 name: 'Tự động đẩy báo cáo lịch hẹn lên Google Sheets',
                 enabled: true,
                 description: 'Tự động tổng hợp và đẩy báo cáo lịch hẹn tháng hiện tại lên Google Sheets lúc 22:00 và 23:30 hàng ngày (Giờ Việt Nam).',
+            },
+            {
+                id: 'handleGsheetReportCron',
+                name: 'Tự động đối soát & đẩy khách hàng lên Google Sheets',
+                enabled: true,
+                description: 'Tự động chạy đối soát chênh lệch khách hàng DB vs GSheet, tạo báo cáo lưu DB và cập nhật dữ liệu mới từ 01/01/2024 lên Google Sheets lúc 7h sáng hàng ngày.',
             },
             {
                 id: 'syncTabGeneralInfo',
@@ -390,6 +420,38 @@ let AppController = class AppController {
                     message: log.message || `Đồng bộ nhánh thành công (KH: ${log.customers_count}, LH: ${log.appointments_count})`,
                 }));
             }
+            else if (config.id === 'handleGoogleSheetPushCron') {
+                const crawlLogs = await this.prisma.crawlLog.findMany({
+                    where: {
+                        crawl_type: { in: ['handleGoogleSheetPushCron', 'handleGoogleSheetPushCron_Old', 'handleGoogleSheetPushCron_New'] },
+                        status: 'success',
+                    },
+                    orderBy: { created_at: 'desc' },
+                    take: 2,
+                });
+                recentTasks = crawlLogs.map(log => ({
+                    id: log.id,
+                    completed_at: log.created_at,
+                    status: log.status,
+                    message: log.message || 'Chạy thành công',
+                }));
+            }
+            else if (config.id === 'handleGsheetReportCron') {
+                const crawlLogs = await this.prisma.crawlLog.findMany({
+                    where: {
+                        crawl_type: 'handleGsheetReportCron',
+                        status: 'success',
+                    },
+                    orderBy: { created_at: 'desc' },
+                    take: 2,
+                });
+                recentTasks = crawlLogs.map(log => ({
+                    id: log.id,
+                    completed_at: log.created_at,
+                    status: log.status,
+                    message: log.message || 'Đồng bộ & đối soát thành công',
+                }));
+            }
             else {
                 const crawlLogs = await this.prisma.crawlLog.findMany({
                     where: {
@@ -540,6 +602,26 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], AppController.prototype, "getPbxLogs", null);
 __decorate([
+    (0, common_1.Get)('monitoring/gsheet-reports'),
+    __param(0, (0, common_1.Query)('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "getGsheetReports", null);
+__decorate([
+    (0, common_1.Get)('monitoring/gsheet-reports/:id'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "getGsheetReportDetail", null);
+__decorate([
+    (0, common_1.Post)('monitoring/gsheet-reports/sync'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AppController.prototype, "triggerGsheetSync", null);
+__decorate([
     (0, common_1.Get)('sync/status'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
@@ -619,6 +701,7 @@ exports.AppController = AppController = __decorate([
         pbx_sync_service_1.PbxSyncService,
         prisma_service_1.PrismaService,
         vttech_api_service_1.VttechApiService,
-        excel_export_service_1.ExcelExportService])
+        excel_export_service_1.ExcelExportService,
+        gsheet_report_service_1.GsheetReportService])
 ], AppController);
 //# sourceMappingURL=app.controller.js.map

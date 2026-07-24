@@ -7,6 +7,8 @@ import { PbxSyncService } from './pbx-sync.service';
 import { PrismaService } from './prisma.service';
 import { VttechApiService } from './vttech-api.service';
 import { ExcelExportService } from './excel-export.service';
+import { GsheetReportService } from './gsheet-report.service';
+
 
 @Controller()
 export class AppController {
@@ -17,6 +19,7 @@ export class AppController {
     private readonly prisma: PrismaService,
     private readonly vttechApi: VttechApiService,
     private readonly excelExportService: ExcelExportService,
+    private readonly gsheetReportService: GsheetReportService,
   ) {}
 
   @Get('check-login')
@@ -125,6 +128,34 @@ export class AppController {
       take: take,
       orderBy: { created_at: 'desc' },
     });
+  }
+
+  @Get('monitoring/gsheet-reports')
+  async getGsheetReports(@Query('limit') limit?: string) {
+    const take = limit ? parseInt(limit) : 50;
+    return this.gsheetReportService.getReports(take);
+  }
+
+  @Get('monitoring/gsheet-reports/:id')
+  async getGsheetReportDetail(@Param('id') id: string) {
+    const reportId = parseInt(id);
+    const report = await this.gsheetReportService.getReportById(reportId);
+    if (!report) {
+      throw new HttpException('Không tìm thấy báo cáo', HttpStatus.NOT_FOUND);
+    }
+    return report;
+  }
+
+  @Post('monitoring/gsheet-reports/sync')
+  async triggerGsheetSync() {
+    this.gsheetReportService.compareAndPushData().catch(err => {
+      console.error('Gsheet manual sync and report failed:', err);
+    });
+
+    return {
+      message: 'Đã kích hoạt thủ công tiến trình đối soát và đồng bộ Google Sheets trong nền.',
+      status: 'processing'
+    };
   }
 
   @Get('sync/status')
@@ -274,6 +305,12 @@ export class AppController {
         name: 'Tự động đẩy báo cáo lịch hẹn lên Google Sheets',
         enabled: true,
         description: 'Tự động tổng hợp và đẩy báo cáo lịch hẹn tháng hiện tại lên Google Sheets lúc 22:00 và 23:30 hàng ngày (Giờ Việt Nam).',
+      },
+      {
+        id: 'handleGsheetReportCron',
+        name: 'Tự động đối soát & đẩy khách hàng lên Google Sheets',
+        enabled: true,
+        description: 'Tự động chạy đối soát chênh lệch khách hàng DB vs GSheet, tạo báo cáo lưu DB và cập nhật dữ liệu mới từ 01/01/2024 lên Google Sheets lúc 7h sáng hàng ngày.',
       },
       {
         id: 'syncTabGeneralInfo',
@@ -432,6 +469,36 @@ export class AppController {
             completed_at: log.created_at,
             status: log.status,
             message: log.message || `Đồng bộ nhánh thành công (KH: ${log.customers_count}, LH: ${log.appointments_count})`,
+          }));
+        } else if (config.id === 'handleGoogleSheetPushCron') {
+          const crawlLogs = await this.prisma.crawlLog.findMany({
+            where: {
+              crawl_type: { in: ['handleGoogleSheetPushCron', 'handleGoogleSheetPushCron_Old', 'handleGoogleSheetPushCron_New'] },
+              status: 'success',
+            },
+            orderBy: { created_at: 'desc' },
+            take: 2,
+          });
+          recentTasks = crawlLogs.map(log => ({
+            id: log.id,
+            completed_at: log.created_at,
+            status: log.status,
+            message: log.message || 'Chạy thành công',
+          }));
+        } else if (config.id === 'handleGsheetReportCron') {
+          const crawlLogs = await this.prisma.crawlLog.findMany({
+            where: {
+              crawl_type: 'handleGsheetReportCron',
+              status: 'success',
+            },
+            orderBy: { created_at: 'desc' },
+            take: 2,
+          });
+          recentTasks = crawlLogs.map(log => ({
+            id: log.id,
+            completed_at: log.created_at,
+            status: log.status,
+            message: log.message || 'Đồng bộ & đối soát thành công',
           }));
         } else {
           const crawlLogs = await this.prisma.crawlLog.findMany({

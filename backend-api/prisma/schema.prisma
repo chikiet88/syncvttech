@@ -759,3 +759,17 @@ model CronConfig {
   @@map("cron_configs")
 }
 
+model GsheetReport {
+  id             Int      @id @default(autoincrement())
+  report_date    DateTime @default(now())
+  status         String   @default("success")
+  total_db       Int      @default(0)
+  total_sheet    Int      @default(0)
+  diff           Int      @default(0)
+  report_content String   @db.Text
+  created_at     DateTime @default(now())
+
+  @@map("gsheet_reports")
+}
+
+

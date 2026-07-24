@@ -224,7 +224,8 @@ export class ExcelExportService {
           }
         }
       }
-      const noteWithFunnel = funnelName ? `${funnelName}\n${a.note || ''}`.trim() : (a.note || '');
+      const fullNote = funnelName ? `${funnelName}\n${a.note || ''}`.trim() : (a.note || '');
+      const noteWithFunnel = fullNote.length > 5000 ? fullNote.slice(0, 5000) + '...' : fullNote;
 
       return {
         vttech_code: a.vttech_code || '',
@@ -515,14 +516,14 @@ export class ExcelExportService {
 
     // Helper function to write large datasets in chunks (overwrites fully)
     const writeInChunks = async (sheetName: string, allValues: any[][]) => {
-      const CHUNK_SIZE = 10000;
+      const CHUNK_SIZE = 1000;
       for (let i = 0; i < allValues.length; i += CHUNK_SIZE) {
         const chunk = allValues.slice(i, i + CHUNK_SIZE);
         const startRow = i + 1;
-        const range = `'${sheetName}'!A${startRow}`;
+        const range = `${sheetName}!A${startRow}`;
         this.logger.log(`Writing ${chunk.length} rows to ${range}`);
         await axios.put(
-          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`,
           { values: chunk },
           { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
         );
@@ -531,13 +532,13 @@ export class ExcelExportService {
 
     // Helper function to append new datasets in chunks
     const appendInChunks = async (sheetName: string, allValues: any[][]) => {
-      const CHUNK_SIZE = 10000;
+      const CHUNK_SIZE = 1000;
       for (let i = 0; i < allValues.length; i += CHUNK_SIZE) {
         const chunk = allValues.slice(i, i + CHUNK_SIZE);
         this.logger.log(`Appending ${chunk.length} rows to ${sheetName}`);
-        const range = `'${sheetName}'!A1`;
+        const range = `${sheetName}!A1`;
         await axios.post(
-          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`,
+          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED`,
           { values: chunk },
           { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
         );
@@ -598,7 +599,6 @@ export class ExcelExportService {
         }
       }
 
-      // Check if default sheet (ID 0 and title is Trang tính1 or Sheet1) exists to delete it
       const defaultSheet = existingSheets.find(
         (s: any) =>
           s.properties.sheetId === 0 &&
@@ -606,14 +606,7 @@ export class ExcelExportService {
       );
 
       const hasOtherSheets = existingSheets.some((s: any) => s.properties.sheetId !== 0) || batchRequests.length > 0;
-      if (defaultSheet && hasOtherSheets) {
-        batchRequests.push({
-          deleteSheet: {
-            sheetId: defaultSheet.properties.sheetId
-          }
-        });
-      }
-
+      
       if (batchRequests.length > 0) {
         this.logger.log(`Initializing and resizing sheets on Google Spreadsheet...`);
         await axios.post(
@@ -621,6 +614,20 @@ export class ExcelExportService {
           { requests: batchRequests },
           { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
         );
+      }
+
+      // Xóa tab mặc định Sheet1 sau khi chắc chắn đã tạo các tab dữ liệu
+      if (defaultSheet && hasOtherSheets) {
+        try {
+          this.logger.log(`Deleting default empty sheet "${defaultSheet.properties.title}" (ID: 0)...`);
+          await axios.post(
+            `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+            { requests: [{ deleteSheet: { sheetId: defaultSheet.properties.sheetId } }] },
+            { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+          );
+        } catch (delErr: any) {
+          this.logger.warn(`Could not delete default sheet: ${delErr.message}`);
+        }
       }
     } catch (metadataError: any) {
       this.logger.error(`Failed to ensure sheet structure or resize: ${metadataError.message}`, metadataError.stack);
@@ -787,33 +794,34 @@ export class ExcelExportService {
         }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho Old Sheet: ${err.message}`));
       }
 
-      // 2. Đẩy file mới: Toàn bộ lịch hẹn từ 2019-01-01
-      const newSheetId = '1pjsiXsQYYpS6ebn4erJxfa3PAHZHURvAdXxeQkSy-Bg';
-      const newFromStr = '2019-01-01';
-      this.logger.log(`[CRON] [New Sheet] Khoảng ngày tự động đẩy: ${newFromStr} -> ${toStr}`);
+      // 2. Đẩy file mới năm 2026 (Sheet ID: 1Z6HrWtnH769ePrlgefuz-ls_ym0TXTOndEjx1MdF-Zo)
+      // Dữ liệu 2019-2025 giữ nguyên ở Sheet cũ: 1pjsiXsQYYpS6ebn4erJxfa3PAHZHURvAdXxeQkSy-Bg
+      const sheet2026Id = '1Z6HrWtnH769ePrlgefuz-ls_ym0TXTOndEjx1MdF-Zo';
+      const from2026Str = '2026-01-01';
+      this.logger.log(`[CRON] [Sheet 2026 Mới] Khoảng ngày tự động đẩy: ${from2026Str} -> ${toStr}`);
       try {
-        const resultNew = await this.pushToGoogleSheet(newFromStr, toStr, newSheetId, true);
-        const msgNew = `[New Sheet] Đẩy dữ liệu thành công! Taza: ${resultNew.tazaCount} dòng, Timona: ${resultNew.timonaCount} dòng.`;
-        this.logger.log(`[CRON] ${msgNew}`);
+        const result2026 = await this.pushToGoogleSheet(from2026Str, toStr, sheet2026Id, false);
+        const msg2026 = `[Sheet 2026 Mới] Đẩy dữ liệu thành công! Taza: ${result2026.tazaCount} dòng, Timona: ${result2026.timonaCount} dòng.`;
+        this.logger.log(`[CRON] ${msg2026}`);
 
         await this.prisma.crawlLog.create({
           data: {
             crawl_date: new Date(),
-            crawl_type: 'handleGoogleSheetPushCron_New',
+            crawl_type: 'handleGoogleSheetPushCron_2026',
             status: 'success',
-            message: msgNew,
+            message: msg2026,
           }
-        }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho New Sheet: ${err.message}`));
-      } catch (errNew: any) {
-        this.logger.error(`[CRON] [New Sheet] Lỗi khi tự động đẩy dữ liệu: ${errNew.message}`, newSheetId, errNew.stack);
+        }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho Sheet 2026 Mới: ${err.message}`));
+      } catch (err2026: any) {
+        this.logger.error(`[CRON] [Sheet 2026 Mới] Lỗi khi tự động đẩy dữ liệu: ${err2026.message}`, sheet2026Id, err2026.stack);
         await this.prisma.crawlLog.create({
           data: {
             crawl_date: new Date(),
-            crawl_type: 'handleGoogleSheetPushCron_New',
+            crawl_type: 'handleGoogleSheetPushCron_2026',
             status: 'failed',
-            error_message: errNew.message,
+            error_message: err2026.message,
           }
-        }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho New Sheet: ${err.message}`));
+        }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho Sheet 2026 Mới: ${err.message}`));
       }
 
     } catch (e: any) {

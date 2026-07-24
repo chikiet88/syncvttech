@@ -1,15 +1,15 @@
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
-
 async function main() {
-  console.log('=== CronConfig Records ===');
-  const configs = await prisma.cronConfig.findMany({
-    orderBy: { id: 'asc' },
-  });
-  console.log(JSON.stringify(configs, null, 2));
+  const prisma = new PrismaClient();
+  const configs = await prisma.cronConfig.findMany();
+  console.log('📋 Danh sách CronConfig trong Database:');
+  console.table(configs);
+
+  const sheetConfig = await prisma.cronConfig.findUnique({ where: { id: 'handleGoogleSheetPushCron' } });
+  console.log('📌 Config cụ thể cho handleGoogleSheetPushCron:', sheetConfig);
+
+  await prisma.$disconnect();
 }
 
-main()
-  .catch(console.error)
-  .finally(() => prisma.$disconnect());
+main().catch(console.error);

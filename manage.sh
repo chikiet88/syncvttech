@@ -197,6 +197,44 @@ sync_remote() {
     fi
 }
 
+deploy_remote_docker() {
+    REMOTE_HOST="14binhloi-100.111.97.70"
+    REMOTE_DIR="apivttech"
+
+    echo -e "\n${BLUE}🔨 Step 1/3: Building Docker images locally...${NC}"
+    docker compose build
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Docker build failed locally.${NC}"
+        return 1
+    fi
+
+    echo -e "\n${BLUE}🚀 Step 2/3: Transferring Docker images to $REMOTE_HOST...${NC}"
+    if command -v zstd &>/dev/null && ssh "$REMOTE_HOST" "command -v zstd" &>/dev/null; then
+        echo -e "${YELLOW}  (Using zstd compression for high-speed transfer)${NC}"
+        docker save apivttech-apivttech-backend:latest apivttech-apivttech-dashboard:latest | zstd -1 | ssh "$REMOTE_HOST" "zstd -d | docker load"
+    else
+        echo -e "${YELLOW}  (Using gzip compression for transfer)${NC}"
+        docker save apivttech-apivttech-backend:latest apivttech-apivttech-dashboard:latest | gzip | ssh "$REMOTE_HOST" "gunzip | docker load"
+    fi
+
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Docker image transfer failed.${NC}"
+        return 1
+    fi
+
+    echo -e "\n${BLUE}📦 Step 3/3: Updating compose config & restarting services on remote server...${NC}"
+    ssh "$REMOTE_HOST" "mkdir -p $REMOTE_DIR"
+    scp docker-compose.yml "$REMOTE_HOST:$REMOTE_DIR/docker-compose.yml"
+    ssh "$REMOTE_HOST" "cd $REMOTE_DIR && docker compose up -d"
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Build & Remote Deployment completed successfully!${NC}"
+        echo -e "${GREEN}   Services running on ports 21101 (API) and 21100 (Dashboard) at $REMOTE_HOST${NC}"
+    else
+        echo -e "${RED}❌ Remote docker compose up failed.${NC}"
+    fi
+}
+
 # Check if argument is passed, if not show menu
 if [ -n "$1" ]; then
     OPT=$1
@@ -221,6 +259,7 @@ else
         echo "12. 🐳 DOCKER: View Logs"
         echo "13. 💀 Kill Ports (5000, 5001, 21100, 21101)"
         echo "14. 📤 SYNC: Copy Project to Remote Server"
+        echo "15. 🚀 DOCKER: Build Image Local & Deploy Remote (No Code Copy)"
         echo "0. Exit"
         echo "============================================="
         echo -ne "Chọn option: "
@@ -329,6 +368,10 @@ case $OPT in
             ;;
         14)
             sync_remote
+            read -p "Press Enter to return..."
+            ;;
+        15)
+            deploy_remote_docker
             read -p "Press Enter to return..."
             ;;
         0)
