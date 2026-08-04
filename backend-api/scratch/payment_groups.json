@@ -1,0 +1,56 @@
+[
+  {
+    "ID": 3,
+    "Name": "Tiền Mặt",
+    "NameLangKey": "Sys_tien_mat",
+    "NameLangOther": ""
+  },
+  {
+    "ID": 4,
+    "Name": "Chuyển Khoản",
+    "NameLangKey": "Sys_chuyen_khoan",
+    "NameLangOther": ""
+  },
+  {
+    "ID": 5,
+    "Name": "Máy POS",
+    "NameLangKey": "Sys_may_pos",
+    "NameLangOther": ""
+  },
+  {
+    "ID": 213,
+    "Name": "Đã Thanh Toán Trừ Cọc",
+    "NameLangKey": "",
+    "NameLangOther": ""
+  },
+  {
+    "ID": 214,
+    "Name": "TM",
+    "NameLangKey": "",
+    "NameLangOther": ""
+  },
+  {
+    "ID": 215,
+    "Name": "Cà thẻ/Pos",
+    "NameLangKey": "",
+    "NameLangOther": ""
+  },
+  {
+    "ID": 216,
+    "Name": "Vay",
+    "NameLangKey": "",
+    "NameLangOther": ""
+  },
+  {
+    "ID": 217,
+    "Name": "Chuyển cọc",
+    "NameLangKey": "",
+    "NameLangOther": ""
+  },
+  {
+    "ID": 218,
+    "Name": "Cấn trừ tiền cọc",
+    "NameLangKey": "",
+    "NameLangOther": ""
+  }
+]
