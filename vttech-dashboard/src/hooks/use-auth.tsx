@@ -14,7 +14,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const HARDCODED_USERS = [
-  { username: "chikiet", password: "chikiet" },
+  { username: "admin", password: "admin" },
   { username: "tranmyduyen", password: "tranmyduyen" },
 ]
 

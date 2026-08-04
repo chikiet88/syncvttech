@@ -242,7 +242,8 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
                     }
                 }
             }
-            const noteWithFunnel = funnelName ? `${funnelName}\n${a.note || ''}`.trim() : (a.note || '');
+            const fullNote = funnelName ? `${funnelName}\n${a.note || ''}`.trim() : (a.note || '');
+            const noteWithFunnel = fullNote.length > 5000 ? fullNote.slice(0, 5000) + '...' : fullNote;
             return {
                 vttech_code: a.vttech_code || '',
                 mlh_kh: mlhKh,
@@ -470,22 +471,22 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
             }
         }
         const writeInChunks = async (sheetName, allValues) => {
-            const CHUNK_SIZE = 10000;
+            const CHUNK_SIZE = 1000;
             for (let i = 0; i < allValues.length; i += CHUNK_SIZE) {
                 const chunk = allValues.slice(i, i + CHUNK_SIZE);
                 const startRow = i + 1;
-                const range = `'${sheetName}'!A${startRow}`;
+                const range = `${sheetName}!A${startRow}`;
                 this.logger.log(`Writing ${chunk.length} rows to ${range}`);
-                await axios_1.default.put(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`, { values: chunk }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+                await axios_1.default.put(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, { values: chunk }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
             }
         };
         const appendInChunks = async (sheetName, allValues) => {
-            const CHUNK_SIZE = 10000;
+            const CHUNK_SIZE = 1000;
             for (let i = 0; i < allValues.length; i += CHUNK_SIZE) {
                 const chunk = allValues.slice(i, i + CHUNK_SIZE);
                 this.logger.log(`Appending ${chunk.length} rows to ${sheetName}`);
-                const range = `'${sheetName}'!A1`;
-                await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`, { values: chunk }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+                const range = `${sheetName}!A1`;
+                await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED`, { values: chunk }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
             }
         };
         try {
@@ -537,16 +538,18 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
             const defaultSheet = existingSheets.find((s) => s.properties.sheetId === 0 &&
                 (s.properties.title === 'Trang tính1' || s.properties.title === 'Sheet1'));
             const hasOtherSheets = existingSheets.some((s) => s.properties.sheetId !== 0) || batchRequests.length > 0;
-            if (defaultSheet && hasOtherSheets) {
-                batchRequests.push({
-                    deleteSheet: {
-                        sheetId: defaultSheet.properties.sheetId
-                    }
-                });
-            }
             if (batchRequests.length > 0) {
                 this.logger.log(`Initializing and resizing sheets on Google Spreadsheet...`);
                 await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, { requests: batchRequests }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+            }
+            if (defaultSheet && hasOtherSheets) {
+                try {
+                    this.logger.log(`Deleting default empty sheet "${defaultSheet.properties.title}" (ID: 0)...`);
+                    await axios_1.default.post(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, { requests: [{ deleteSheet: { sheetId: defaultSheet.properties.sheetId } }] }, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+                }
+                catch (delErr) {
+                    this.logger.warn(`Could not delete default sheet: ${delErr.message}`);
+                }
             }
         }
         catch (metadataError) {
@@ -676,6 +679,33 @@ let ExcelExportService = ExcelExportService_1 = class ExcelExportService {
                         error_message: errOld.message,
                     }
                 }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho Old Sheet: ${err.message}`));
+            }
+            const sheet2026Id = '1Z6HrWtnH769ePrlgefuz-ls_ym0TXTOndEjx1MdF-Zo';
+            const from2026Str = '2026-01-01';
+            this.logger.log(`[CRON] [Sheet 2026 Mới] Khoảng ngày tự động đẩy: ${from2026Str} -> ${toStr}`);
+            try {
+                const result2026 = await this.pushToGoogleSheet(from2026Str, toStr, sheet2026Id, false);
+                const msg2026 = `[Sheet 2026 Mới] Đẩy dữ liệu thành công! Taza: ${result2026.tazaCount} dòng, Timona: ${result2026.timonaCount} dòng.`;
+                this.logger.log(`[CRON] ${msg2026}`);
+                await this.prisma.crawlLog.create({
+                    data: {
+                        crawl_date: new Date(),
+                        crawl_type: 'handleGoogleSheetPushCron_2026',
+                        status: 'success',
+                        message: msg2026,
+                    }
+                }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho Sheet 2026 Mới: ${err.message}`));
+            }
+            catch (err2026) {
+                this.logger.error(`[CRON] [Sheet 2026 Mới] Lỗi khi tự động đẩy dữ liệu: ${err2026.message}`, sheet2026Id, err2026.stack);
+                await this.prisma.crawlLog.create({
+                    data: {
+                        crawl_date: new Date(),
+                        crawl_type: 'handleGoogleSheetPushCron_2026',
+                        status: 'failed',
+                        error_message: err2026.message,
+                    }
+                }).catch(err => this.logger.error(`Lỗi ghi crawlLog cho Sheet 2026 Mới: ${err.message}`));
             }
         }
         catch (e) {
