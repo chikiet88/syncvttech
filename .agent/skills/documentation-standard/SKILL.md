@@ -1,6 +1,6 @@
 ---
 name: documentation-standard
-description: Chuẩn mực đặt tên và cấu trúc tài liệu đánh giá, báo cáo tiến độ và tổng hợp tính năng cho KataCore.
+description: Chuẩn mực đặt tên và cấu trúc tài liệu đánh giá, báo cáo tiến độ và tổng hợp tính năng cho VTTech Core.
 ---
 
 # Documentation & Reporting Standard

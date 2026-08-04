@@ -1,11 +1,11 @@
 ---
 name: multi-tenant-context-standard
-description: Chuẩn mực xử lý Multi-tenant (Đa doanh nghiệp) cho KataCore. Tự động inject companyId và filter dữ liệu theo Tenant.
+description: Chuẩn mực xử lý Multi-tenant (Đa doanh nghiệp) cho VTTech Core. Tự động inject companyId và filter dữ liệu theo Tenant.
 ---
 
-# Multi-tenant Context Standard (KataCore)
+# Multi-tenant Context Standard (VTTech Core)
 
-Hệ thống KataCore hoạt động trên mô hình Multi-tenant (mỗi công ty là một tenant). Mọi dữ liệu PHẢI được phân tách theo `companyId`.
+Hệ thống VTTech Core hoạt động trên mô hình Multi-tenant (mỗi công ty là một tenant). Mọi dữ liệu PHẢI được phân tách theo `companyId`.
 
 ## 1. Backend Standard (NestJS & Prisma)
 

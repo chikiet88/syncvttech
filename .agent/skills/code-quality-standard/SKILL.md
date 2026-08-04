@@ -1,11 +1,11 @@
 ---
 name: code-quality-standard
-description: Chuẩn mực về chất lượng code, giới hạn độ dài file và quy tắc tổ chức logic cho dự án KataCore.
+description: Chuẩn mực về chất lượng code, giới hạn độ dài file và quy tắc tổ chức logic cho dự án VTTech Core.
 ---
 
-# 💎 Code Quality & Clean Structure Standard (KataCore)
+# 💎 Code Quality & Clean Structure Standard (VTTech Core)
 
-Tài liệu này định nghĩa các giới hạn và quy tắc bắt buộc để giữ cho codebase của KataCore luôn sạch sẽ, hiệu quả và dễ bảo trì.
+Tài liệu này định nghĩa các giới hạn và quy tắc bắt buộc để giữ cho codebase của VTTech Core luôn sạch sẽ, hiệu quả và dễ bảo trì.
 
 ## 1. Giới hạn độ dài (The Rule of Numbers)
 
@@ -43,4 +43,4 @@ Tài liệu này định nghĩa các giới hạn và quy tắc bắt buộc đ�
 - **Boy Scout Rule**: Luôn để lại code sạch hơn lúc bạn mới mở nó ra.
 
 ---
-_Lưu ý: Tiêu chuẩn này được áp dụng tự động cho cả AI và Lập trình viên khi làm việc trên KataCore._
+_Lưu ý: Tiêu chuẩn này được áp dụng tự động cho cả AI và Lập trình viên khi làm việc trên VTTech Core._

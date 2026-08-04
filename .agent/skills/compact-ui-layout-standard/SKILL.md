@@ -1,9 +1,9 @@
 ---
 name: compact-ui-layout-standard
-description: Chuẩn mực thiết kế giao diện tối ưu không gian (Compact/Dense Design) cho KataCore - Tối đa hóa thông tin hiển thị mà không gây rối mắt.
+description: Chuẩn mực thiết kế giao diện tối ưu không gian (Compact/Dense Design) cho VTTech Core - Tối đa hóa thông tin hiển thị mà không gây rối mắt.
 ---
 
-# Compact UI Layout Standard (KataCore)
+# Compact UI Layout Standard (VTTech Core)
 
 Hướng dẫn tối ưu hóa diện tích hiển thị, giúp người dùng nắm bắt thông tin nhanh nhất mà không cần cuộn (scroll) nhiều.
 

@@ -1,6 +1,6 @@
-# Quick View Dialog & Detail Standard (KataCore)
+# Quick View Dialog & Detail Standard (VTTech Core)
 
-Tiêu chuẩn này quy định cách triển khai tính năng "Xem nhanh" (Quick View) cho các thực thể trong hệ thống KataCore (Đơn hàng, Khách hàng, Sản phẩm, v.v.) từ giao diện bảng (`AdvancedTable`).
+Tiêu chuẩn này quy định cách triển khai tính năng "Xem nhanh" (Quick View) cho các thực thể trong hệ thống VTTech Core (Đơn hàng, Khách hàng, Sản phẩm, v.v.) từ giao diện bảng (`AdvancedTable`).
 
 ## 1. Nguyên tắc Trải nghiệm (UX)
 - **Truy cập nhanh**: Sử dụng icon `Eye` (luôn có `lucide-react`) đặt cạnh mã định danh hoặc ở cuối dòng.

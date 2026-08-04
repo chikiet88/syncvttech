@@ -1,8 +1,8 @@
 ---
-description: Tổng quan kiến trúc, phân hệ và chức năng của toàn dự án Katacore V2
+description: Tổng quan kiến trúc, phân hệ và chức năng của toàn dự án VTTech Core V2
 ---
 
-# Tổng quan Dự án Katacore V2 (RausachCore Starter)
+# Tổng quan Dự án VTTech Core V2 (RausachCore Starter)
 
 Tài liệu này tóm tắt toàn bộ cấu trúc và chức năng của hệ thống để hỗ trợ việc bảo trì và nâng cấp.
 

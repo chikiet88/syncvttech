@@ -1,9 +1,9 @@
 ---
 name: vietnamese-ux-glossary-standard
-description: Từ điển thuật ngữ chuẩn hóa cho giao diện Tiếng Việt (Vietnamese UX) trong KataCore. Đảm bảo trải nghiệm Việt hóa 100% tinh tế.
+description: Từ điển thuật ngữ chuẩn hóa cho giao diện Tiếng Việt (Vietnamese UX) trong VTTech Core. Đảm bảo trải nghiệm Việt hóa 100% tinh tế.
 ---
 
-# Vietnamese UX Glossary Standard (KataCore)
+# Vietnamese UX Glossary Standard (VTTech Core)
 
 Từ điển giúp AI Agent dịch hoặc đặt nhãn (Label), Placeholder chính xác cho người dùng Việt Nam.
 

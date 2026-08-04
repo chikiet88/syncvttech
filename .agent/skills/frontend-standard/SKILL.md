@@ -1,11 +1,11 @@
 ---
 name: frontend-standard
-description: Chuẩn mực phát triển Frontend cho KataCore - Mobile First, New York Style (Shadcn UI), Advanced Table Optimization & Compact Design.
+description: Chuẩn mực phát triển Frontend cho VTTech Core - Mobile First, New York Style (Shadcn UI), Advanced Table Optimization & Compact Design.
 ---
 
-# Frontend Development Standard (KataCore Expert)
+# Frontend Development Standard (VTTech Core Expert)
 
-Đây là chuẩn mực phát triển giao diện cho KataCore, tập trung vào trải nghiệm người dùng (UX) hiện đại, tinh tế và tối ưu cho thiết bị di động.
+Đây là chuẩn mực phát triển giao diện cho VTTech Core, tập trung vào trải nghiệm người dùng (UX) hiện đại, tinh tế và tối ưu cho thiết bị di động.
 
 ## 0. 🌍 Global Code & Local UI Standard
 

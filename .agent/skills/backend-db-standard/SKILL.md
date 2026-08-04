@@ -1,9 +1,9 @@
 ---
 name: backend-db-standard
-description: Chuẩn mực phát triển Backend và Database cho KataCore - Multi-tenant, Prisma Optimization, GraphQL Best Practices & Security.
+description: Chuẩn mực phát triển Backend và Database cho VTTech Core - Multi-tenant, Prisma Optimization, GraphQL Best Practices & Security.
 ---
 
-# 🚀 Backend & Database Standard for KataCore (High-Scale Ready)
+# 🚀 Backend & Database Standard for VTTech Core (High-Scale Ready)
 
 Tài liệu này định nghĩa các tiêu chuẩn kỹ thuật bắt buộc để hệ thống đạt quy mô **1 triệu CCU** dựa trên kiến trúc **Cell-based**.
 

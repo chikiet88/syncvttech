@@ -18,8 +18,6 @@ services:
     ports:
       - "21101:5001"
     networks:
-      - kata-cells-network
-      - rausach-network
       - taza-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -39,8 +37,6 @@ services:
     ports:
       - "21100:5000"
     networks:
-      - kata-cells-network
-      - rausach-network
       - taza-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -51,14 +47,8 @@ services:
     ports:
       - "26380:6379"
     networks:
-      - kata-cells-network
-      - rausach-network
       - taza-network
 
 networks:
-  kata-cells-network:
-    external: true
-  rausach-network:
-    external: true
   taza-network:
     external: true

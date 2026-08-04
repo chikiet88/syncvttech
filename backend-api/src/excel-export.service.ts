@@ -315,8 +315,7 @@ export class ExcelExportService {
       if (!creds) {
         const paths = [
           './google-service-account.json',
-          '../google-service-account.json',
-          '/home/kata/Coding/singleapp/env/sandboxtazagroupvn-83daf10e5feb.json'
+          '../google-service-account.json'
         ];
         for (const p of paths) {
           if (fs.existsSync(p)) {

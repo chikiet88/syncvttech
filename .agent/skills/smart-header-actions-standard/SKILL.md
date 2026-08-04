@@ -3,7 +3,7 @@ name: smart-header-actions-standard
 description: Hướng dẫn cấu trúc, tích hợp và nâng cấp hệ thống SmartHeaderActions (Header Icons & Menus).
 ---
 
-# SmartHeaderActions Standard (KataCore)
+# SmartHeaderActions Standard (VTTech Core)
 
 Hệ thống quản lý Icon và Menu (Thông báo, Giỏ hàng, Tài khoản...) trên Header dựa trên phân quyền (Role-based) và cấu hình động (Dynamic Config).
 

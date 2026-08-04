@@ -1,6 +1,6 @@
 ---
 name: ui-qa-guide-builder
-description: Chuyên gia Testing UI, quay video flow và tạo hướng dẫn sử dụng (User Guide) theo chuẩn KataCore.
+description: Chuyên gia Testing UI, quay video flow và tạo hướng dẫn sử dụng (User Guide) theo chuẩn VTTech Core.
 ---
 
 # UI QA & Guide Builder
@@ -10,7 +10,7 @@ Kỹ năng này điều phối việc kiểm thử giao diện (UI Testing) và 
 ## 0. Thông tin đăng nhập (Browser Auth)
 
 Khi sử dụng `browser_subagent` để kiểm thử trên môi trường local (`timona.localhost:3000`), hãy sử dụng tài khoản sau:
-- **Tài khoản**: `katachanneloffical@gmail.com`
+- **Tài khoản**: `qa@tazagroup.vn`
 - **Mật khẩu**: `12345678`
 
 ## 1. Trình tự thực hiện (Workflow)

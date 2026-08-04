@@ -4,7 +4,7 @@ description: Chuẩn mực phát triển Page Builder đa doanh nghiệp (Multi-
 
 # Chuẩn mực phát triển Page Builder Đa Doanh Nghiệp (Multi-tenant)
 
-KataCore là một hệ thống Single App - Multi-tenant. Do đó, tất cả các cấu phần (Component) trong Page Builder **TUYỆT ĐỐI KHÔNG ĐƯỢC Hardcode** theo tên hoặc logic riêng rẽ của bất kỳ công ty nào.
+VTTech Core là một hệ thống Single App - Multi-tenant. Do đó, tất cả các cấu phần (Component) trong Page Builder **TUYỆT ĐỐI KHÔNG ĐƯỢC Hardcode** theo tên hoặc logic riêng rẽ của bất kỳ công ty nào.
 
 Tài liệu này quy định chuẩn mực để thiết kế một Page Builder siêu tùy biến, tối ưu Bundle Size và có khả năng mở rộng không giới hạn mà không cần chạm vào Source Code.
 

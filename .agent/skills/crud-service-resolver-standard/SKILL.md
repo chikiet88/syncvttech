@@ -1,9 +1,9 @@
 ---
 name: crud-service-resolver-standard
-description: Chuẩn mực phát triển Backend và Database cho KataCore - Multi-tenant, Prisma Optimization, GraphQL Best Practices & Security.
+description: Chuẩn mực phát triển Backend và Database cho VTTech Core - Multi-tenant, Prisma Optimization, GraphQL Best Practices & Security.
 ---
 
-# CRUD Service & Resolver Standard (KataCore)
+# CRUD Service & Resolver Standard (VTTech Core)
 
 Hướng dẫn xây dựng Service và Resolver chuẩn cho NestJS + Prisma + GraphQL.
 

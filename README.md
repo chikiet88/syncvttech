@@ -1,4 +1,4 @@
-# 🚀 KataCore VTTech Engine & Analytics Dashboard
+# 🚀 VTTech Engine & Analytics Dashboard
 
 > **Hệ thống Đồng bộ Dữ liệu VTTech CRM & Dashboard Báo cáo Quản trị cho Tazagroup**
 
@@ -6,7 +6,7 @@
 
 ## 📌 Giới thiệu Tổng quan
 
-KataCore là hệ thống thu thập, đồng bộ và phân tích dữ liệu tự động từ CRM VTTech (17 chi nhánh), tổng đài PBX và Google Sheets dành riêng cho Tazagroup.
+Hệ thống thu thập, đồng bộ và phân tích dữ liệu tự động từ CRM VTTech (17 chi nhánh), tổng đài PBX và Google Sheets dành riêng cho Tazagroup.
 
 ### Thành phần chính:
 1. **`backend-api`**: NestJS Server + Prisma ORM + BullMQ Redis Queue + Cronjob Runner.
@@ -35,4 +35,4 @@ docker-compose ps
 - **Queue**: Redis (BullMQ)
 
 ---
-© 2026 Katacore Team. Developed for Tazagroup.
+© 2026 Development Team. Developed for Tazagroup.

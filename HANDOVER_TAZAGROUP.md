@@ -1,11 +1,11 @@
-# 📘 BÁO CÁO BÀN GIAO DỰ ÁN KATACORE VTTECH SYNC & DASHBOARD
+# 📘 BÁO CÁO BÀN GIAO DỰ ÁN VTTECH SYNC & DASHBOARD
 **Dành cho: Công ty TNHH Tazagroup**
 
 ---
 
 ## 1. 📌 Tổng Quan Hệ Thống
 
-Hệ thống **KataCore VTTech Engine & Analytics Dashboard** là giải pháp toàn diện được xây dựng riêng cho **Tazagroup** nhằm:
+Hệ thống **VTTech Engine & Analytics Dashboard** là giải pháp toàn diện được xây dựng riêng cho **Tazagroup** nhằm:
 - **Tự động đồng bộ thời gian thực (Real-time & Cron) và toàn vẹn 100% dữ liệu** từ hệ thống VTTech CRM (bao gồm 17 chi nhánh: Taza Skin Clinic, Timona, Hderma,...).
 - **Hệ thống PBX Call Center Sync**: Tự động cào và đồng bộ dữ liệu lịch sử cuộc gọi, file ghi âm cuộc gọi của nhân viên.
 - **Hệ thống Google Sheets Exporter**: Tự động đẩy báo cáo doanh thu, hồ sơ điều trị, lịch hẹn lên Google Sheets theo định kỳ.
@@ -133,5 +133,5 @@ Cơ sở dữ liệu PostgreSQL (qua Prisma) lưu trữ đầy đủ các bảng
 
 ---
 
-**Đơn vị phát triển bàn giao**: Katacore Team  
+**Đơn vị phát triển bàn giao**: Development Team  
 **Ngày hoàn tất bàn giao**: 04/08/2026

@@ -1,10 +1,10 @@
 ---
-description: Kiến trúc và Logic đa doanh nghiệp (Multi-tenant) của dự án KataCore
+description: Kiến trúc và Logic đa doanh nghiệp (Multi-tenant) của dự án VTTech Core
 ---
 
 # Multi-tenant Configuration & Logic Skill
 
-Workflow này lưu trữ các quy tắc và kiến thức quan trọng về cách hệ thống KataCore quản lý đa doanh nghiệp (SaaS) trên môi trường phát triển (Local) và thực tế (Production).
+Workflow này lưu trữ các quy tắc và kiến thức quan trọng về cách hệ thống VTTech Core quản lý đa doanh nghiệp (SaaS) trên môi trường phát triển (Local) và thực tế (Production).
 
 ## 1. Bản đồ Cổng (Port Mapping) - Development
 
